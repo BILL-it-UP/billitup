@@ -1,6 +1,11 @@
 import express from "express";
 import cors from "cors";
 import { db } from "./db.js";
+import authRouter from "./routes/auth.js";
+import businessRouter from "./routes/business.js";
+import customersRouter from "./routes/customers.js";
+import itemsRouter from "./routes/items.js";
+import invoicesRouter from "./routes/invoices.js";
 
 const app = express();
 app.use(cors());
@@ -10,21 +15,16 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "billitup-server", time: new Date().toISOString() });
 });
 
-// Minimal read endpoints to prove the DB wiring end-to-end.
-// Real CRUD (validation, auth, invoice numbering, tax calc) comes next.
-app.get("/api/items", (_req, res) => {
-  const items = db.prepare("SELECT * FROM items ORDER BY created_at DESC").all();
-  res.json(items);
-});
+app.use("/api/auth", authRouter);
+app.use("/api/business", businessRouter);
+app.use("/api/customers", customersRouter);
+app.use("/api/items", itemsRouter);
+app.use("/api/invoices", invoicesRouter);
 
-app.get("/api/customers", (_req, res) => {
-  const customers = db.prepare("SELECT * FROM customers ORDER BY created_at DESC").all();
-  res.json(customers);
-});
-
-app.get("/api/invoices", (_req, res) => {
-  const invoices = db.prepare("SELECT * FROM invoices ORDER BY created_at DESC").all();
-  res.json(invoices);
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: "Something went wrong" });
 });
 
 const PORT = process.env.PORT || 4000;

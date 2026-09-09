@@ -1,0 +1,137 @@
+import express from "express";
+import { db } from "../db.js";
+import { requireAuth } from "../middleware/auth.js";
+
+const router = express.Router();
+router.use(requireAuth);
+
+router.get("/", (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT invoices.*, customers.name AS customer_name
+       FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
+       WHERE invoices.business_id = ? ORDER BY invoices.created_at DESC`
+    )
+    .all(req.auth.businessId);
+  res.json(rows);
+});
+
+// Full invoice with line items + customer + business, shaped for the print/PDF view
+router.get("/:id", (req, res) => {
+  const invoice = db
+    .prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?")
+    .get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+
+  const lineItems = db
+    .prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?")
+    .all(invoice.id);
+  const customer = invoice.customer_id
+    ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id)
+    : null;
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const payments = db.prepare("SELECT * FROM payments WHERE invoice_id = ?").all(invoice.id);
+
+  res.json({ ...invoice, lineItems, customer, business, payments });
+});
+
+// Create an invoice with its line items in one call. Server computes all totals —
+// the client sends qty/rate/discount/tax_rate per line, never trusts client-side amounts.
+router.post("/", (req, res) => {
+  const { customer_id, invoice_date, due_date, terms, reference, notes, lineItems } = req.body;
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    return res.status(400).json({ error: "At least one line item is required" });
+  }
+
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const invoiceNumber = `${business.invoice_prefix || "INV-"}${String(business.next_invoice_number).padStart(6, "0")}`;
+
+  let subTotal = 0;
+  let taxTotal = 0;
+  let discountTotal = 0;
+  const computedLines = lineItems.map((line) => {
+    const qty = Number(line.qty) || 0;
+    const rate = Number(line.rate) || 0;
+    const discount = Number(line.discount) || 0;
+    const taxRate = Number(line.tax_rate) || 0;
+    const lineBase = qty * rate - discount;
+    const lineTax = lineBase * (taxRate / 100);
+    const amount = lineBase + lineTax;
+    subTotal += qty * rate;
+    discountTotal += discount;
+    taxTotal += lineTax;
+    return { ...line, qty, rate, discount, tax_rate: taxRate, amount };
+  });
+  const total = subTotal - discountTotal + taxTotal;
+
+  const insertInvoice = db.prepare(
+    `INSERT INTO invoices
+      (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, status,
+       sub_total, discount, tax_total, total, balance_due, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`
+  );
+  const insertLine = db.prepare(
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const decrementStock = db.prepare(
+    "UPDATE items SET stock_qty = stock_qty - ? WHERE id = ? AND stock_qty IS NOT NULL"
+  );
+  const bumpInvoiceNumber = db.prepare(
+    "UPDATE businesses SET next_invoice_number = next_invoice_number + 1 WHERE id = ?"
+  );
+
+  const invoiceId = db.transaction(() => {
+    const result = insertInvoice.run(
+      req.auth.businessId, customer_id || null, invoiceNumber,
+      invoice_date || new Date().toISOString().slice(0, 10), due_date || null,
+      terms || null, reference || null,
+      subTotal, discountTotal, taxTotal, total, total, notes || null
+    );
+    const id = result.lastInsertRowid;
+    for (const line of computedLines) {
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      if (business.inventory_enabled && line.item_id) {
+        decrementStock.run(line.qty, line.item_id);
+      }
+    }
+    bumpInvoiceNumber.run(req.auth.businessId);
+    return id;
+  })();
+
+  const created = db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoiceId);
+  res.status(201).json(created);
+});
+
+router.post("/:id/payments", (req, res) => {
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+
+  const { amount, mode, notes } = req.body;
+  const amt = Number(amount);
+  if (!amt || amt <= 0) return res.status(400).json({ error: "amount must be a positive number" });
+
+  db.transaction(() => {
+    db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes) VALUES (?, ?, ?, ?)")
+      .run(invoice.id, amt, mode || "cash", notes || null);
+    const newBalance = Math.max(0, invoice.balance_due - amt);
+    const newStatus = newBalance === 0 ? "paid" : "partially_paid";
+    db.prepare("UPDATE invoices SET balance_due = ?, status = ? WHERE id = ?")
+      .run(newBalance, newStatus, invoice.id);
+  })();
+
+  const updated = db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoice.id);
+  res.status(201).json(updated);
+});
+
+router.put("/:id/status", (req, res) => {
+  const { status } = req.body;
+  if (!["draft", "sent", "paid", "partially_paid", "overdue"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+  db.prepare("UPDATE invoices SET status = ? WHERE id = ? AND business_id = ?").run(status, req.params.id, req.auth.businessId);
+  const updated = db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.id);
+  res.json(updated);
+});
+
+export default router;

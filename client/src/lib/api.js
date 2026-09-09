@@ -1,0 +1,58 @@
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
+function getToken() {
+  return localStorage.getItem("billitup_token");
+}
+
+export function setSession(token, user) {
+  localStorage.setItem("billitup_token", token);
+  localStorage.setItem("billitup_user", JSON.stringify(user));
+}
+
+export function clearSession() {
+  localStorage.removeItem("billitup_token");
+  localStorage.removeItem("billitup_user");
+}
+
+export function getUser() {
+  const raw = localStorage.getItem("billitup_user");
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function request(path, { method = "GET", body } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.error || `Request failed (${res.status})`);
+  }
+  return data;
+}
+
+export const api = {
+  signup: (payload) => request("/api/auth/signup", { method: "POST", body: payload }),
+  login: (payload) => request("/api/auth/login", { method: "POST", body: payload }),
+
+  getBusiness: () => request("/api/business/me"),
+  updateBusiness: (payload) => request("/api/business/me", { method: "PUT", body: payload }),
+
+  listCustomers: () => request("/api/customers"),
+  createCustomer: (payload) => request("/api/customers", { method: "POST", body: payload }),
+
+  listItems: () => request("/api/items"),
+  createItem: (payload) => request("/api/items", { method: "POST", body: payload }),
+
+  listInvoices: () => request("/api/invoices"),
+  getInvoice: (id) => request(`/api/invoices/${id}`),
+  createInvoice: (payload) => request("/api/invoices", { method: "POST", body: payload }),
+  recordPayment: (id, payload) => request(`/api/invoices/${id}/payments`, { method: "POST", body: payload }),
+};
