@@ -55,4 +55,8 @@ export const api = {
   getInvoice: (id) => request(`/api/invoices/${id}`),
   createInvoice: (payload) => request("/api/invoices", { method: "POST", body: payload }),
   recordPayment: (id, payload) => request(`/api/invoices/${id}/payments`, { method: "POST", body: payload }),
+
+  listUsers: () => request("/api/users"),
+  createUser: (payload) => request("/api/users", { method: "POST", body: payload }),
+  deleteUser: (id) => request(`/api/users/${id}`, { method: "DELETE" }),
 };

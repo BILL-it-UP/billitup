@@ -6,6 +6,7 @@ import businessRouter from "./routes/business.js";
 import customersRouter from "./routes/customers.js";
 import itemsRouter from "./routes/items.js";
 import invoicesRouter from "./routes/invoices.js";
+import usersRouter from "./routes/users.js";
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,7 @@ app.use("/api/business", businessRouter);
 app.use("/api/customers", customersRouter);
 app.use("/api/items", itemsRouter);
 app.use("/api/invoices", invoicesRouter);
+app.use("/api/users", usersRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {

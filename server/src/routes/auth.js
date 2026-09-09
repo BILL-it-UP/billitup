@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db.js";
-import { signToken, requireAuth, requireRole } from "../middleware/auth.js";
+import { signToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -43,20 +43,6 @@ router.post("/login", (req, res) => {
     token,
     user: { id: user.id, business_id: user.business_id, role: user.role, name: user.name, email: user.email },
   });
-});
-
-// Owner/Admin creates a staff (cashier) or admin login. Not self-serve signup.
-router.post("/users", requireAuth, requireRole("owner", "admin"), (req, res) => {
-  const { name, email, password, role } = req.body;
-  if (!["admin", "cashier"].includes(role)) {
-    return res.status(400).json({ error: "role must be 'admin' or 'cashier'" });
-  }
-  const passwordHash = bcrypt.hashSync(password, 10);
-  const insertUser = db.prepare(
-    "INSERT INTO users (business_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)"
-  );
-  const result = insertUser.run(req.auth.businessId, name, email, passwordHash, role);
-  res.status(201).json({ id: result.lastInsertRowid, name, email, role });
 });
 
 export default router;

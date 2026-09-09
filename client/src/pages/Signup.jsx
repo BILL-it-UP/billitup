@@ -21,7 +21,7 @@ export default function Signup() {
     try {
       const { token, user } = await api.signup(form);
       setSession(token, user);
-      navigate("/");
+      navigate("/settings");
     } catch (err) {
       setError(err.message);
     } finally {
