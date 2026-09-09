@@ -59,4 +59,12 @@ export const api = {
   listUsers: () => request("/api/users"),
   createUser: (payload) => request("/api/users", { method: "POST", body: payload }),
   deleteUser: (id) => request(`/api/users/${id}`, { method: "DELETE" }),
+
+  listQuotes: () => request("/api/quotes"),
+  getQuote: (id) => request(`/api/quotes/${id}`),
+  createQuote: (payload) => request("/api/quotes", { method: "POST", body: payload }),
+  setQuoteStatus: (id, status) => request(`/api/quotes/${id}/status`, { method: "PUT", body: { status } }),
+  convertQuote: (id) => request(`/api/quotes/${id}/convert`, { method: "POST" }),
+
+  getReportsSummary: () => request("/api/reports/summary"),
 };

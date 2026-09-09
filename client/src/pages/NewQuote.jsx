@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 
-export default function NewInvoice() {
+export default function NewQuote() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
   const [customerId, setCustomerId] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -20,13 +21,11 @@ export default function NewInvoice() {
   const updateLine = (index, patch) => {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   };
-
   const pickItem = (index, itemId) => {
     const item = items.find((i) => String(i.id) === String(itemId));
     if (!item) return updateLine(index, { item_id: "" });
     updateLine(index, { item_id: item.id, description: item.name, rate: item.rate, tax_rate: item.tax_rate });
   };
-
   const addLine = () => setLines((prev) => [...prev, emptyLine()]);
   const removeLine = (index) => setLines((prev) => prev.filter((_, i) => i !== index));
   const { subTotal, discountTotal, taxTotal, total } = computeTotals(lines);
@@ -36,11 +35,12 @@ export default function NewInvoice() {
     setError("");
     setSaving(true);
     try {
-      const invoice = await api.createInvoice({
+      const quote = await api.createQuote({
         customer_id: customerId || null,
+        expiry_date: expiryDate || null,
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
       });
-      navigate(`/invoices/${invoice.id}`);
+      navigate(`/quotes/${quote.id}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -50,13 +50,16 @@ export default function NewInvoice() {
 
   return (
     <div>
-      <h1>New Invoice</h1>
+      <h1>New Quote</h1>
       <form onSubmit={handleSubmit}>
         <label className="block">Customer
           <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">Walk-in / no customer</option>
+            <option value="">Select a customer</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+        </label>
+        <label className="block">Valid until (optional)
+          <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
         </label>
 
         <table className="table line-item-table">
@@ -93,7 +96,7 @@ export default function NewInvoice() {
         </div>
 
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Invoice"}</button>
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Quote"}</button>
       </form>
     </div>
   );

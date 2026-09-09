@@ -78,6 +78,20 @@ input, select { display: block; width: 100%; margin-top: 4px; padding: 8px; bord
 .checkbox-label input { width: auto; margin-top: 0; }
 .staff-section { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); max-width: 720px; }
 
+/* ---- Reports ---- */
+.stat-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+.stat-tile {
+  background: white; border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; display: flex; flex-direction: column; gap: 6px;
+}
+.stat-label { font-size: 13px; color: var(--muted); }
+.stat-value { font-size: 22px; font-weight: 700; }
+.report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+@media (max-width: 720px) {
+  .stat-tiles { grid-template-columns: repeat(2, 1fr); }
+  .report-columns { grid-template-columns: 1fr; }
+}
+
 /* ---- Invoice document ---- */
 .invoice-doc {
   background: white; margin: 0 auto; border: 1px solid var(--border);

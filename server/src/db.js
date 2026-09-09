@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS businesses (
   logo_path TEXT,
   invoice_prefix TEXT DEFAULT 'INV-',
   next_invoice_number INTEGER DEFAULT 1,
+  quote_prefix TEXT DEFAULT 'QUO-',
+  next_quote_number INTEGER DEFAULT 1,
   default_paper_size TEXT DEFAULT 'A4',   -- A4 | THERMAL_3IN | THERMAL_4IN
   inventory_enabled INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
@@ -91,6 +93,36 @@ CREATE TABLE IF NOT EXISTS invoices (
 CREATE TABLE IF NOT EXISTS invoice_line_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  item_id INTEGER REFERENCES items(id),
+  description TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 1,
+  rate REAL NOT NULL DEFAULT 0,
+  discount REAL DEFAULT 0,
+  tax_rate REAL DEFAULT 0,
+  amount REAL NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS quotes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  customer_id INTEGER REFERENCES customers(id),
+  quote_number TEXT NOT NULL,
+  quote_date TEXT NOT NULL,
+  expiry_date TEXT,
+  reference TEXT,
+  status TEXT DEFAULT 'draft',    -- draft | sent | accepted | declined | converted
+  sub_total REAL DEFAULT 0,
+  discount REAL DEFAULT 0,
+  tax_total REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  notes TEXT,
+  converted_invoice_id INTEGER REFERENCES invoices(id),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS quote_line_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
   item_id INTEGER REFERENCES items(id),
   description TEXT NOT NULL,
   qty REAL NOT NULL DEFAULT 1,
