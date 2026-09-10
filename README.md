@@ -21,6 +21,12 @@ Built to work with whatever's actually at the counter: A4 printers, and 3-inch/4
 - **Database:** SQLite by default (zero-config self-hosting); Postgres-ready for larger deployments
 - **Deployment:** Docker Compose — one command to self-host
 
+## Data & updates
+
+By default the SQLite database lives at `server/data/billitup.sqlite`. If you update by re-extracting a new release into the same folder, that's *inside* the folder being overwritten — depending on how your zip/extraction tool handles an existing folder, an update can end up wiping your data.
+
+To avoid that, copy `server/.env.example` to `server/.env` and point `BILLITUP_DB_PATH` somewhere outside the project folder (the target folder is created automatically if it doesn't exist). Once set, your data lives there permanently and future updates never touch it.
+
 ## Status
 
 Early scaffold — see `/docs` (or the project's planning docs) for the current feature spec. Not yet ready for production use.

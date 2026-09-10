@@ -25,6 +25,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     name, business_type, address, phone, email, website, gstin,
     invoice_prefix, quote_prefix, credit_note_prefix, default_paper_size, inventory_enabled,
     smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
+    logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
+    terms_and_conditions, signature_data_url, signature_name,
   } = req.body;
 
   db.prepare(
@@ -47,7 +49,16 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       smtp_user = COALESCE(?, smtp_user),
       smtp_pass = COALESCE(?, smtp_pass),
       smtp_from_name = COALESCE(?, smtp_from_name),
-      smtp_from_email = COALESCE(?, smtp_from_email)
+      smtp_from_email = COALESCE(?, smtp_from_email),
+      logo_data_url = COALESCE(?, logo_data_url),
+      bank_account_name = COALESCE(?, bank_account_name),
+      bank_name = COALESCE(?, bank_name),
+      bank_account_number = COALESCE(?, bank_account_number),
+      bank_ifsc = COALESCE(?, bank_ifsc),
+      bank_upi_id = COALESCE(?, bank_upi_id),
+      terms_and_conditions = COALESCE(?, terms_and_conditions),
+      signature_data_url = COALESCE(?, signature_data_url),
+      signature_name = COALESCE(?, signature_name)
     WHERE id = ?`
   ).run(
     name, business_type, address, phone, email, website, gstin,
@@ -56,6 +67,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     smtp_host, smtp_port === undefined || smtp_port === "" ? smtp_port : Number(smtp_port),
     smtp_secure === undefined ? undefined : (smtp_secure ? 1 : 0),
     smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
+    logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
+    terms_and_conditions, signature_data_url, signature_name,
     req.auth.businessId
   );
 

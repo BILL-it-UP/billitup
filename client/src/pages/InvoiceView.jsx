@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
+import DocumentBrandHeader from "../components/DocumentBrandHeader";
+import DocumentFooter from "../components/DocumentFooter";
 
 // Paper size presets: id -> { label, @page CSS size, content width for the on-screen/print preview }
 const PAPER_SIZES = {
@@ -86,19 +88,10 @@ function FullInvoice({ invoice }) {
   const { business, customer, lineItems } = invoice;
   return (
     <>
-      <div className="invoice-header">
-        <div>
-          <h2>{business.name}</h2>
-          {business.address && <p>{business.address}</p>}
-          {business.phone && <p>{business.phone}</p>}
-          {business.email && <p>{business.email}</p>}
-          {business.gstin && <p>GSTIN: {business.gstin}</p>}
-        </div>
-        <div className="invoice-meta">
-          <h3>#{invoice.invoice_number}</h3>
-          <p>Balance Due: ₹{Number(invoice.balance_due).toFixed(2)}</p>
-        </div>
-      </div>
+      <DocumentBrandHeader
+        business={business} docLabel="Invoice" docNumber={invoice.invoice_number}
+        headline={{ label: "Balance Due", value: `₹${Number(invoice.balance_due).toFixed(2)}` }}
+      />
 
       <div className="invoice-parties">
         <div>
@@ -108,14 +101,14 @@ function FullInvoice({ invoice }) {
           {customer?.gstin && <p>GSTIN: {customer.gstin}</p>}
         </div>
         <div className="invoice-dates">
-          <p>Invoice Date: {invoice.invoice_date}</p>
-          {invoice.terms && <p>Terms: {invoice.terms}</p>}
-          {invoice.due_date && <p>Due Date: {invoice.due_date}</p>}
-          {invoice.reference && <p>Reference: {invoice.reference}</p>}
+          <div><span>Invoice Date :</span><span>{invoice.invoice_date}</span></div>
+          {invoice.terms && <div><span>Terms :</span><span>{invoice.terms}</span></div>}
+          {invoice.due_date && <div><span>Due Date :</span><span>{invoice.due_date}</span></div>}
+          {invoice.reference && <div><span>Reference :</span><span>{invoice.reference}</span></div>}
         </div>
       </div>
 
-      <table className="table">
+      <table className="table doc-line-items">
         <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>
         <tbody>
           {lineItems.map((line, i) => (
@@ -133,10 +126,12 @@ function FullInvoice({ invoice }) {
         <div><span>Discount</span><span>-₹{Number(invoice.discount).toFixed(2)}</span></div>
         <div><span>Tax</span><span>₹{Number(invoice.tax_total).toFixed(2)}</span></div>
         <div className="grand-total"><span>Total</span><span>₹{Number(invoice.total).toFixed(2)}</span></div>
-        <div><span>Balance Due</span><span>₹{Number(invoice.balance_due).toFixed(2)}</span></div>
+        <div className="doc-balance-due-row"><span>Balance Due</span><span>₹{Number(invoice.balance_due).toFixed(2)}</span></div>
       </div>
 
       {invoice.notes && <p className="invoice-notes">{invoice.notes}</p>}
+
+      <DocumentFooter business={business} total={invoice.total} />
     </>
   );
 }
@@ -166,6 +161,12 @@ function ReceiptInvoice({ invoice }) {
       <div className="receipt-line-detail"><span>Sub Total</span><span>₹{Number(invoice.sub_total).toFixed(2)}</span></div>
       <div className="receipt-line-detail"><span>Tax</span><span>₹{Number(invoice.tax_total).toFixed(2)}</span></div>
       <div className="receipt-line-detail receipt-total"><span>Total</span><span>₹{Number(invoice.total).toFixed(2)}</span></div>
+      {business.bank_upi_id && (
+        <>
+          <div className="receipt-divider" />
+          <div className="receipt-center">Pay via UPI: {business.bank_upi_id}</div>
+        </>
+      )}
       <div className="receipt-divider" />
       <div className="receipt-center">Thank you!</div>
     </div>

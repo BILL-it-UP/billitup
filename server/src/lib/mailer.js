@@ -11,6 +11,7 @@
 
 import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
+import { amountToWords } from "./numberToWords.js";
 
 export class SmtpNotConfiguredError extends Error {
   constructor() {
@@ -31,9 +32,15 @@ export function buildTransport(business) {
   });
 }
 
-// Renders a simple, clean A4-ish document (invoice, quote, or credit note all
-// share the same shape: header/parties/line-items/totals) into a PDF buffer.
-export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = [], business, party, partyLabel, lineItems, totals, notes }) {
+function dataUrlToBuffer(dataUrl) {
+  const match = /^data:image\/\w+;base64,(.+)$/.exec(dataUrl || "");
+  return match ? Buffer.from(match[1], "base64") : null;
+}
+
+// Renders a document (invoice, quote, or credit note all share the same
+// shape: branding header/parties/line-items/totals/footer) into a PDF
+// buffer, mirroring the on-screen print layout as closely as pdfkit allows.
+export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = [], business, party, partyLabel, lineItems, totals, notes, headlineLabel = "Total", headlineValue }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 40 });
     const chunks = [];
@@ -41,35 +48,55 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    doc.fontSize(16).text(business.name || "Business", { continued: false });
+    const headerTop = doc.y;
+    let logoBottom = headerTop;
+    const logoBuffer = dataUrlToBuffer(business.logo_data_url);
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, 40, headerTop, { fit: [140, 50] });
+        logoBottom = headerTop + 55;
+      } catch {
+        // Unsupported image format (pdfkit only handles PNG/JPEG) — skip the
+        // logo rather than fail the whole document.
+        logoBottom = headerTop;
+      }
+    }
+
+    doc.fontSize(16).text(business.name || "Business", 40, logoBottom);
     doc.fontSize(9).fillColor("#555");
-    if (business.address) doc.text(business.address);
-    if (business.phone) doc.text(business.phone);
-    if (business.gstin) doc.text(`GSTIN: ${business.gstin}`);
+    if (business.address) doc.text(business.address, 40);
+    if (business.phone) doc.text(business.phone, 40);
+    if (business.email) doc.text(business.email, 40);
+    if (business.gstin) doc.text(`GSTIN: ${business.gstin}`, 40);
+    doc.fillColor("#000");
+    const leftBottom = doc.y;
+
+    doc.fontSize(14).text(`${docLabel} #${docNumber}`, 350, headerTop, { width: 205, align: "right" });
+    doc.fontSize(9).fillColor("#555").text(`Date: ${docDate}`, 350, doc.y, { width: 205, align: "right" });
+    for (const line of extraMeta) doc.text(line, 350, doc.y, { width: 205, align: "right" });
+    if (headlineValue) {
+      doc.fontSize(10).fillColor("#555").text(headlineLabel, 350, doc.y + 6, { width: 205, align: "right" });
+      doc.fontSize(16).fillColor("#000").text(headlineValue, 350, doc.y, { width: 205, align: "right" });
+    }
     doc.fillColor("#000");
 
-    doc.moveUp(business.gstin ? 4 : business.phone ? 3 : 2);
-    doc.fontSize(14).text(`${docLabel} #${docNumber}`, { align: "right" });
-    doc.fontSize(9).fillColor("#555").text(`Date: ${docDate}`, { align: "right" });
-    for (const line of extraMeta) doc.text(line, { align: "right" });
-    doc.fillColor("#000");
-    doc.moveDown(1.5);
+    doc.y = Math.max(leftBottom, doc.y) + 20;
 
-    doc.fontSize(10).text(partyLabel, { underline: true });
+    doc.fontSize(10).text(partyLabel, 40, doc.y, { underline: true });
     doc.text(party?.name || "—");
     if (party?.billing_address) doc.text(party.billing_address);
     doc.moveDown(1);
 
     const tableTop = doc.y;
+    doc.rect(40, tableTop, 520, 20).fill("#2b2f38");
     const cols = [40, 220, 60, 80, 80, 80];
     const headers = ["#", "Description", "Qty", "Rate", "Discount", "Amount"];
     let x = 40;
-    doc.fontSize(9).fillColor("#555");
-    headers.forEach((h, i) => { doc.text(h, x, tableTop, { width: cols[i] }); x += cols[i]; });
+    doc.fillColor("#fff").fontSize(9);
+    headers.forEach((h, i) => { doc.text(h, x + 4, tableTop + 6, { width: cols[i] - 4 }); x += cols[i]; });
     doc.fillColor("#000");
-    doc.moveTo(40, tableTop + 14).lineTo(560, tableTop + 14).strokeColor("#ddd").stroke();
 
-    let y = tableTop + 20;
+    let y = tableTop + 26;
     lineItems.forEach((line, i) => {
       x = 40;
       const cells = [String(i + 1), line.description, String(line.qty), `Rs ${Number(line.rate).toFixed(2)}`, `Rs ${Number(line.discount).toFixed(2)}`, `Rs ${Number(line.amount).toFixed(2)}`];
@@ -91,9 +118,48 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       y += 16;
     });
 
+    doc.y = y + 10;
+    doc.fontSize(9).fillColor("#555").text(`Total In Words: ${amountToWords(totals.total)}`, 40);
+    doc.fillColor("#000");
+
     if (notes) {
-      doc.moveDown(2);
+      doc.moveDown(1);
       doc.fontSize(9).fillColor("#555").text(notes);
+      doc.fillColor("#000");
+    }
+
+    const hasBankDetails = business.bank_account_name || business.bank_account_number || business.bank_ifsc || business.bank_upi_id;
+    if (hasBankDetails) {
+      doc.moveDown(1.5);
+      doc.fontSize(9).fillColor("#000");
+      if (business.bank_account_name) doc.text(`Account Name: ${business.bank_account_name}`);
+      if (business.bank_name) doc.text(`Bank: ${business.bank_name}`);
+      if (business.bank_account_number) doc.text(`Account Number: ${business.bank_account_number}`);
+      if (business.bank_ifsc) doc.text(`IFSC Code: ${business.bank_ifsc}`);
+      if (business.bank_upi_id) doc.text(`UPI: ${business.bank_upi_id}`);
+    }
+
+    if (business.terms_and_conditions) {
+      doc.moveDown(1);
+      doc.fontSize(10).text("Terms & Conditions", { underline: true });
+      doc.fontSize(8).fillColor("#555").text(business.terms_and_conditions);
+      doc.fillColor("#000");
+    }
+
+    if (business.signature_data_url || business.signature_name) {
+      doc.moveDown(2);
+      const sigTop = doc.y;
+      const sigX = 400;
+      const sigBuffer = dataUrlToBuffer(business.signature_data_url);
+      let lineY = sigTop + 20;
+      let imageDrawn = false;
+      if (sigBuffer) {
+        try { doc.image(sigBuffer, sigX, sigTop, { fit: [140, 40] }); lineY = sigTop + 44; imageDrawn = true; } catch { /* skip unsupported image */ }
+      }
+      if (!imageDrawn) {
+        doc.moveTo(sigX, lineY).lineTo(sigX + 140, lineY).strokeColor("#000").stroke();
+      }
+      doc.fontSize(9).text(`Authorized Signature${business.signature_name ? ` — ${business.signature_name}` : ""}`, sigX, lineY + 6, { width: 160 });
     }
 
     doc.end();

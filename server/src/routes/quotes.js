@@ -149,6 +149,7 @@ router.post("/:id/send", async (req, res) => {
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Quote", docNumber: quote.quote_number, docDate: quote.quote_date,
       extraMeta: quote.expiry_date ? [`Valid Until: ${quote.expiry_date}`] : [],
+      headlineLabel: "Total", headlineValue: `Rs ${Number(quote.total).toFixed(2)}`,
       business, party: customer, partyLabel: "To", lineItems, totals: quote, notes: quote.notes,
     });
     await sendDocumentEmail({

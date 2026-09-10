@@ -3,11 +3,18 @@
 // keep queries simple/portable where practical to make that migration easier.
 
 import Database from "better-sqlite3";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.BILLITUP_DB_PATH || path.join(__dirname, "..", "data", "billitup.sqlite");
+
+// Make sure the folder exists — matters when BILLITUP_DB_PATH points somewhere
+// that hasn't been created yet (e.g. a fresh location outside the app folder,
+// see .env.example: keeping the database outside the folder that update zips
+// get extracted into is what stops re-installing an update from wiping data).
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 export const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
@@ -45,6 +52,18 @@ CREATE TABLE IF NOT EXISTS businesses (
   smtp_pass TEXT,
   smtp_from_name TEXT,
   smtp_from_email TEXT,
+  -- Invoice branding & payment details — printed on every invoice/quote/credit
+  -- note (paper and PDF). logo/signature are stored as data: URLs so a small
+  -- self-hosted install doesn't need a separate file-upload/static-serving path.
+  logo_data_url TEXT,
+  bank_account_name TEXT,
+  bank_name TEXT,
+  bank_account_number TEXT,
+  bank_ifsc TEXT,
+  bank_upi_id TEXT,
+  terms_and_conditions TEXT,
+  signature_data_url TEXT,
+  signature_name TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 

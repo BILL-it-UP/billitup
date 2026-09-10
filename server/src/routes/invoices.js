@@ -150,7 +150,7 @@ router.post("/:id/send", async (req, res) => {
   try {
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: invoice.invoice_date,
-      extraMeta: [`Balance Due: Rs ${Number(invoice.balance_due).toFixed(2)}`],
+      headlineLabel: "Balance Due", headlineValue: `Rs ${Number(invoice.balance_due).toFixed(2)}`,
       business, party: customer, partyLabel: "Bill To", lineItems, totals: invoice, notes: invoice.notes,
     });
     await sendDocumentEmail({

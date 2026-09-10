@@ -114,6 +114,7 @@ router.post("/:id/send", async (req, res) => {
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Credit Note", docNumber: creditNote.credit_note_number, docDate: creditNote.credit_note_date,
       extraMeta: creditNote.reason ? [`Reason: ${creditNote.reason}`] : [],
+      headlineLabel: "Total Credit", headlineValue: `Rs ${Number(creditNote.total).toFixed(2)}`,
       business, party: customer, partyLabel: "To", lineItems, totals: creditNote, notes: creditNote.notes,
     });
     await sendDocumentEmail({

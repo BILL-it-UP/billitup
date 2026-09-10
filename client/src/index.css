@@ -44,7 +44,8 @@ button:disabled { opacity: 0.6; cursor: default; }
 
 label { display: block; margin-bottom: 12px; font-size: 14px; color: var(--muted); }
 label.block { max-width: 320px; }
-input, select { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+input, select, textarea { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+textarea { resize: vertical; }
 
 .auth-page { display: flex; justify-content: center; padding-top: 60px; }
 .auth-card { background: white; padding: 32px; border-radius: 10px; width: 360px; border: 1px solid var(--border); }
@@ -80,6 +81,8 @@ input, select { display: block; width: 100%; margin-top: 4px; padding: 8px; bord
 .checkbox-label { display: flex; align-items: center; gap: 8px; }
 .checkbox-label input { width: auto; margin-top: 0; }
 .staff-section { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); max-width: 720px; }
+.logo-preview-row { display: flex; align-items: center; gap: 12px; margin: -4px 0 16px; }
+.logo-preview { max-height: 60px; max-width: 200px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: white; }
 
 /* ---- Reports ---- */
 .stat-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
@@ -97,18 +100,42 @@ input, select { display: block; width: 100%; margin-top: 4px; padding: 8px; bord
   .report-columns { grid-template-columns: 1fr; }
 }
 
-/* ---- Invoice document ---- */
+/* ---- Invoice / Quote / Credit Note document ---- */
 .invoice-doc {
   background: white; margin: 0 auto; border: 1px solid var(--border);
 }
-.invoice-doc.invoice-full { padding: 20mm; }
+.invoice-doc.invoice-full { padding: 16mm 14mm; }
 .invoice-doc.invoice-receipt { padding: 3mm; font-family: "Courier New", monospace; font-size: 12px; }
 
-.invoice-header { display: flex; justify-content: space-between; margin-bottom: 24px; }
-.invoice-meta { text-align: right; }
-.invoice-parties { display: flex; justify-content: space-between; margin-bottom: 24px; font-size: 14px; }
-.invoice-dates { text-align: right; }
+.doc-brand-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
+.doc-brand-left h2 { margin: 8px 0 6px; font-size: 20px; }
+.doc-brand-left p { margin: 0 0 2px; font-size: 13px; color: var(--muted); }
+.doc-logo { max-height: 56px; max-width: 220px; display: block; object-fit: contain; }
+.doc-brand-right { text-align: right; flex-shrink: 0; }
+.doc-brand-right h3 { margin: 0 0 10px; font-size: 15px; color: var(--muted); font-weight: 600; }
+.doc-headline-label { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.doc-headline-value { display: block; font-size: 22px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+.doc-brand-right p { margin: 4px 0 0; font-size: 12px; }
+
+.invoice-parties { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 24px; font-size: 14px; }
+.invoice-dates { min-width: 220px; }
+.invoice-dates div { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; font-size: 13px; }
+.invoice-dates span:first-child { color: var(--muted); }
 .invoice-notes { margin-top: 24px; font-size: 13px; color: var(--muted); }
+
+.doc-line-items thead tr { background: #2b2f38; }
+.doc-line-items thead th { color: white; font-weight: 600; padding: 10px 8px; border-bottom: none; }
+.totals-box .doc-balance-due-row { background: #f3f4f6; font-weight: 700; margin: 4px -8px 0; padding: 8px; }
+
+.doc-amount-words { font-size: 13px; margin: 20px 0 0; }
+.doc-footer { margin-top: 28px; font-size: 13px; }
+.doc-footer-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.doc-footer-section p { margin: 2px 0; }
+.doc-footer-section h4 { margin: 0 0 8px; font-size: 14px; }
+.doc-terms { white-space: pre-wrap; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.doc-signature { margin-top: 32px; text-align: right; font-size: 13px; }
+.doc-signature-img { max-height: 48px; max-width: 180px; display: inline-block; margin-bottom: 4px; }
+.doc-signature-line { border-top: 1px solid var(--ink); width: 180px; margin-left: auto; margin-bottom: 6px; }
 
 .receipt-center { text-align: center; }
 .receipt-divider { border-top: 1px dashed #999; margin: 6px 0; }

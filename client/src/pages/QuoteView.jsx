@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
+import DocumentBrandHeader from "../components/DocumentBrandHeader";
+import DocumentFooter from "../components/DocumentFooter";
 
 export default function QuoteView() {
   const { id } = useParams();
@@ -48,17 +50,10 @@ export default function QuoteView() {
       </div>
 
       <div className="invoice-doc invoice-full" style={{ width: "210mm" }}>
-        <div className="invoice-header">
-          <div>
-            <h2>{business.name}</h2>
-            {business.address && <p>{business.address}</p>}
-            {business.phone && <p>{business.phone}</p>}
-            {business.gstin && <p>GSTIN: {business.gstin}</p>}
-          </div>
-          <div className="invoice-meta">
-            <h3>Quote #{quote.quote_number}</h3>
-          </div>
-        </div>
+        <DocumentBrandHeader
+          business={business} docLabel="Quote" docNumber={quote.quote_number}
+          headline={{ label: "Total", value: `₹${Number(quote.total).toFixed(2)}` }}
+        />
 
         <div className="invoice-parties">
           <div>
@@ -67,12 +62,12 @@ export default function QuoteView() {
             {customer?.billing_address && <p>{customer.billing_address}</p>}
           </div>
           <div className="invoice-dates">
-            <p>Quote Date: {quote.quote_date}</p>
-            {quote.expiry_date && <p>Valid Until: {quote.expiry_date}</p>}
+            <div><span>Quote Date :</span><span>{quote.quote_date}</span></div>
+            {quote.expiry_date && <div><span>Valid Until :</span><span>{quote.expiry_date}</span></div>}
           </div>
         </div>
 
-        <table className="table">
+        <table className="table doc-line-items">
           <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>
           <tbody>
             {lineItems.map((line, i) => (
@@ -93,6 +88,8 @@ export default function QuoteView() {
         </div>
 
         {quote.notes && <p className="invoice-notes">{quote.notes}</p>}
+
+        <DocumentFooter business={business} total={quote.total} />
       </div>
     </div>
   );

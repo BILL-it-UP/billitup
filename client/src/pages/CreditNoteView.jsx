@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
+import DocumentBrandHeader from "../components/DocumentBrandHeader";
+import DocumentFooter from "../components/DocumentFooter";
 
 export default function CreditNoteView() {
   const { id } = useParams();
@@ -24,18 +26,11 @@ export default function CreditNoteView() {
       </div>
 
       <div className="invoice-doc invoice-full" style={{ width: "210mm" }}>
-        <div className="invoice-header">
-          <div>
-            <h2>{business.name}</h2>
-            {business.address && <p>{business.address}</p>}
-            {business.phone && <p>{business.phone}</p>}
-            {business.gstin && <p>GSTIN: {business.gstin}</p>}
-          </div>
-          <div className="invoice-meta">
-            <h3>Credit Note #{creditNote.credit_note_number}</h3>
-            {invoice && <p>Against Invoice: {invoice.invoice_number}</p>}
-          </div>
-        </div>
+        <DocumentBrandHeader
+          business={business} docLabel="Credit Note" docNumber={creditNote.credit_note_number}
+          headline={{ label: "Total Credit", value: `₹${Number(creditNote.total).toFixed(2)}` }}
+          extraMeta={invoice ? [`Against Invoice: ${invoice.invoice_number}`] : []}
+        />
 
         <div className="invoice-parties">
           <div>
@@ -44,12 +39,12 @@ export default function CreditNoteView() {
             {customer?.billing_address && <p>{customer.billing_address}</p>}
           </div>
           <div className="invoice-dates">
-            <p>Date: {creditNote.credit_note_date}</p>
-            {creditNote.reason && <p>Reason: {creditNote.reason}</p>}
+            <div><span>Date :</span><span>{creditNote.credit_note_date}</span></div>
+            {creditNote.reason && <div><span>Reason :</span><span>{creditNote.reason}</span></div>}
           </div>
         </div>
 
-        <table className="table">
+        <table className="table doc-line-items">
           <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>
           <tbody>
             {lineItems.map((line, i) => (
@@ -75,6 +70,8 @@ export default function CreditNoteView() {
             <Link to={`/invoices/${invoice.id}`}>View original invoice {invoice.invoice_number} →</Link>
           </p>
         )}
+
+        <DocumentFooter business={business} total={creditNote.total} />
       </div>
     </div>
   );

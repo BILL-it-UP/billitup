@@ -85,9 +85,117 @@ export default function Settings() {
         <button type="submit">Save</button>
       </form>
 
+      <InvoiceBrandingSettings business={business} setBusiness={setBusiness} />
+
       <EmailSettings business={business} setBusiness={setBusiness} />
 
       {user?.role === "owner" && <StaffManagement />}
+    </div>
+  );
+}
+
+// Reads a chosen file into a data: URL, rejecting anything too large to keep
+// in the database sensibly (logos/signatures are small images, not photos).
+function readFileAsDataUrl(file, maxBytes, onError) {
+  return new Promise((resolve) => {
+    if (file.size > maxBytes) {
+      onError(`That file is too large (max ${Math.round(maxBytes / 1024)}KB). Try a smaller image.`);
+      return resolve(null);
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => { onError("Couldn't read that file."); resolve(null); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function InvoiceBrandingSettings({ business, setBusiness }) {
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSavedMsg("");
+    setSaving(true);
+    try {
+      const updated = await api.updateBusiness(business);
+      setBusiness(updated);
+      setSavedMsg("Saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file, 500 * 1024, setError);
+    if (dataUrl) setBusiness({ ...business, logo_data_url: dataUrl });
+  };
+
+  const handleSignatureChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file, 300 * 1024, setError);
+    if (dataUrl) setBusiness({ ...business, signature_data_url: dataUrl });
+  };
+
+  return (
+    <div className="staff-section">
+      <h2>Invoice Branding &amp; Payment Details</h2>
+      <p className="muted">Shown on every invoice, quote, and credit note — logo, bank/UPI details for getting paid, and your standard terms.</p>
+      <form onSubmit={handleSave} className="settings-form">
+        <label>Logo
+          <input type="file" accept="image/*" onChange={handleLogoChange} />
+        </label>
+        {business.logo_data_url && (
+          <div className="logo-preview-row">
+            <img src={business.logo_data_url} alt="Logo preview" className="logo-preview" />
+            <button type="button" className="link-btn" onClick={() => setBusiness({ ...business, logo_data_url: "" })}>Remove logo</button>
+          </div>
+        )}
+
+        <label>Bank account name
+          <input value={business.bank_account_name || ""} onChange={(e) => setBusiness({ ...business, bank_account_name: e.target.value })} />
+        </label>
+        <label>Bank name
+          <input value={business.bank_name || ""} onChange={(e) => setBusiness({ ...business, bank_name: e.target.value })} />
+        </label>
+        <label>Account number
+          <input value={business.bank_account_number || ""} onChange={(e) => setBusiness({ ...business, bank_account_number: e.target.value })} />
+        </label>
+        <label>IFSC code
+          <input value={business.bank_ifsc || ""} onChange={(e) => setBusiness({ ...business, bank_ifsc: e.target.value })} />
+        </label>
+        <label>UPI ID
+          <input value={business.bank_upi_id || ""} onChange={(e) => setBusiness({ ...business, bank_upi_id: e.target.value })} placeholder="yourname@bank" />
+        </label>
+
+        <label>Terms &amp; Conditions
+          <textarea rows={5} value={business.terms_and_conditions || ""} onChange={(e) => setBusiness({ ...business, terms_and_conditions: e.target.value })} placeholder="e.g. Payment due within 15 days. Late payments may attract interest." />
+        </label>
+
+        <label>Authorized signatory name
+          <input value={business.signature_name || ""} onChange={(e) => setBusiness({ ...business, signature_name: e.target.value })} />
+        </label>
+        <label>Signature image (optional — scanned/photo of a signature)
+          <input type="file" accept="image/*" onChange={handleSignatureChange} />
+        </label>
+        {business.signature_data_url && (
+          <div className="logo-preview-row">
+            <img src={business.signature_data_url} alt="Signature preview" className="logo-preview" />
+            <button type="button" className="link-btn" onClick={() => setBusiness({ ...business, signature_data_url: "" })}>Remove signature</button>
+          </div>
+        )}
+
+        {error && <p className="error">{error}</p>}
+        {savedMsg && <p className="muted">{savedMsg}</p>}
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save branding & payment details"}</button>
+      </form>
     </div>
   );
 }
