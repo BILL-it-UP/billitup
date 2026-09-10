@@ -60,6 +60,7 @@ export const api = {
   listUsers: () => request("/api/users"),
   createUser: (payload) => request("/api/users", { method: "POST", body: payload }),
   deleteUser: (id) => request(`/api/users/${id}`, { method: "DELETE" }),
+  listLoginEvents: () => request("/api/users/login-events"),
 
   listQuotes: () => request("/api/quotes"),
   getQuote: (id) => request(`/api/quotes/${id}`),

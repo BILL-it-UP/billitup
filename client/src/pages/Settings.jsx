@@ -259,13 +259,30 @@ function EmailSettings({ business, setBusiness }) {
   );
 }
 
+// Login timestamps are stored as ISO strings — render them in the viewer's
+// own locale/timezone rather than showing raw ISO text.
+function formatDateTime(iso) {
+  if (!iso) return "Never";
+  const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
 function StaffManagement() {
   const [users, setUsers] = useState([]);
+  const [loginEvents, setLoginEvents] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "cashier" });
   const [error, setError] = useState("");
 
   const load = () => api.listUsers().then(setUsers);
   useEffect(() => { load(); }, []);
+
+  const toggleHistory = () => {
+    const next = !showHistory;
+    setShowHistory(next);
+    if (next && loginEvents.length === 0) api.listLoginEvents().then(setLoginEvents);
+  };
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -302,16 +319,38 @@ function StaffManagement() {
       {error && <p className="error">{error}</p>}
 
       <table className="table">
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th /></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Last Login</th><th /></tr></thead>
         <tbody>
           {users.map((u) => (
             <tr key={u.id}>
               <td>{u.name}</td><td>{u.email}</td><td>{u.role}</td>
+              <td>{formatDateTime(u.last_login_at)}</td>
               <td>{u.role !== "owner" && <button className="link-btn" onClick={() => handleRemove(u.id)}>Remove</button>}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      <button type="button" className="link-btn" onClick={toggleHistory}>
+        {showHistory ? "Hide recent login activity" : "Show recent login activity"}
+      </button>
+      {showHistory && (
+        <table className="table">
+          <thead><tr><th>Name</th><th>Role</th><th>Logged in at</th><th>IP address</th></tr></thead>
+          <tbody>
+            {loginEvents.length === 0 && (
+              <tr><td colSpan={4} className="muted">No login activity recorded yet.</td></tr>
+            )}
+            {loginEvents.map((ev) => (
+              <tr key={ev.id}>
+                <td>{ev.name}</td><td>{ev.role}</td>
+                <td>{formatDateTime(ev.logged_in_at)}</td>
+                <td>{ev.ip_address || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

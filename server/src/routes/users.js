@@ -9,7 +9,27 @@ router.use(requireAuth, requireRole("owner", "admin"));
 // List staff logins for the business (never returns password hashes)
 router.get("/", (req, res) => {
   const rows = db
-    .prepare("SELECT id, name, email, role, created_at FROM users WHERE business_id = ? ORDER BY created_at")
+    .prepare("SELECT id, name, email, role, last_login_at, created_at FROM users WHERE business_id = ? ORDER BY created_at")
+    .all(req.auth.businessId);
+  res.json(rows);
+});
+
+// Recent login activity across the business — who logged in, when, and from
+// where. Owner/Admin only (same gate as the rest of this router), so a
+// business can see its own login history without any separate "master"
+// tooling — useful on its own today, and the same shape a future admin
+// dashboard could reuse.
+router.get("/login-events", (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT login_events.id, login_events.logged_in_at, login_events.ip_address, login_events.user_agent,
+              users.id AS user_id, users.name, users.email, users.role
+       FROM login_events
+       JOIN users ON users.id = login_events.user_id
+       WHERE login_events.business_id = ?
+       ORDER BY login_events.logged_in_at DESC
+       LIMIT 100`
+    )
     .all(req.auth.businessId);
   res.json(rows);
 });

@@ -74,7 +74,20 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'owner',   -- owner | admin | cashier
+  last_login_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- One row per successful login — lets an owner see who's actually using the
+-- system and from where, and gives us something to look at later if someone
+-- reports "I can't get in" or "someone else is in my account".
+CREATE TABLE IF NOT EXISTS login_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  ip_address TEXT,
+  user_agent TEXT,
+  logged_in_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -214,3 +227,55 @@ CREATE TABLE IF NOT EXISTS payments (
   notes TEXT
 );
 `);
+
+// --- Migrations for existing databases -------------------------------------
+//
+// CREATE TABLE IF NOT EXISTS above only helps on a brand-new database — it's
+// a no-op for a table that already exists, so it does NOT add new columns to
+// a database someone already has on disk. That didn't matter before, because
+// every local install used to get wiped on every update. Now that the data
+// lives outside the update folder (see .env.example) and persists across
+// updates, every column added after someone's first install needs to be
+// added here too, or their existing database silently falls out of sync with
+// the code and things break (missing column errors, or a feature that
+// quietly can't store anything).
+//
+// ensureColumn is safe to call every time the server starts: it checks
+// whether the column already exists before trying to add it, so re-running
+// it on a database that's already up to date does nothing.
+function ensureColumn(table, column, ddl) {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!existing.some((col) => col.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+
+// businesses — every column added after the very first release
+ensureColumn("businesses", "quote_prefix", "quote_prefix TEXT DEFAULT 'QUO-'");
+ensureColumn("businesses", "next_quote_number", "next_quote_number INTEGER DEFAULT 1");
+ensureColumn("businesses", "credit_note_prefix", "credit_note_prefix TEXT DEFAULT 'CN-'");
+ensureColumn("businesses", "next_credit_note_number", "next_credit_note_number INTEGER DEFAULT 1");
+ensureColumn("businesses", "default_paper_size", "default_paper_size TEXT DEFAULT 'A4'");
+ensureColumn("businesses", "inventory_enabled", "inventory_enabled INTEGER DEFAULT 0");
+ensureColumn("businesses", "smtp_host", "smtp_host TEXT");
+ensureColumn("businesses", "smtp_port", "smtp_port INTEGER");
+ensureColumn("businesses", "smtp_secure", "smtp_secure INTEGER DEFAULT 0");
+ensureColumn("businesses", "smtp_user", "smtp_user TEXT");
+ensureColumn("businesses", "smtp_pass", "smtp_pass TEXT");
+ensureColumn("businesses", "smtp_from_name", "smtp_from_name TEXT");
+ensureColumn("businesses", "smtp_from_email", "smtp_from_email TEXT");
+ensureColumn("businesses", "logo_data_url", "logo_data_url TEXT");
+ensureColumn("businesses", "bank_account_name", "bank_account_name TEXT");
+ensureColumn("businesses", "bank_name", "bank_name TEXT");
+ensureColumn("businesses", "bank_account_number", "bank_account_number TEXT");
+ensureColumn("businesses", "bank_ifsc", "bank_ifsc TEXT");
+ensureColumn("businesses", "bank_upi_id", "bank_upi_id TEXT");
+ensureColumn("businesses", "terms_and_conditions", "terms_and_conditions TEXT");
+ensureColumn("businesses", "signature_data_url", "signature_data_url TEXT");
+ensureColumn("businesses", "signature_name", "signature_name TEXT");
+
+// items
+ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");
+
+// users
+ensureColumn("users", "last_login_at", "last_login_at TEXT");

@@ -48,6 +48,16 @@ router.post("/login", (req, res) => {
   if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
+
+  // Record the login: last_login_at on the user for a quick glance in Staff
+  // Management, and a login_events row so there's a history to look back at
+  // if someone ever needs to figure out who logged in, when, and from where.
+  const now = new Date().toISOString();
+  db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(now, user.id);
+  db.prepare(
+    "INSERT INTO login_events (user_id, business_id, ip_address, user_agent, logged_in_at) VALUES (?, ?, ?, ?, ?)"
+  ).run(user.id, user.business_id, req.ip || null, req.headers["user-agent"] || null, now);
+
   const token = signToken(user);
   res.json({
     token,
