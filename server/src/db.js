@@ -135,6 +135,8 @@ CREATE TABLE IF NOT EXISTS invoices (
   due_date TEXT,
   terms TEXT,
   reference TEXT,
+  subject TEXT,                   -- one-line "what this invoice is for", shown under the invoice meta
+  gstin TEXT,                     -- customer's GSTIN as of this invoice — usually copied from the customer record, editable per-invoice for a customer with more than one GST registration
   status TEXT DEFAULT 'draft',    -- draft | sent | paid | partially_paid | overdue
   sub_total REAL DEFAULT 0,
   discount REAL DEFAULT 0,
@@ -324,6 +326,8 @@ ensureColumn("users", "last_login_at", "last_login_at TEXT");
 // and the client-facing share link)
 ensureColumn("invoices", "public_token", "public_token TEXT");
 ensureColumn("invoices", "recurring_invoice_id", "recurring_invoice_id INTEGER REFERENCES recurring_invoices(id)");
+ensureColumn("invoices", "subject", "subject TEXT");
+ensureColumn("invoices", "gstin", "gstin TEXT");
 
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the

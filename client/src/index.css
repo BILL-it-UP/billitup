@@ -99,10 +99,27 @@ textarea { resize: vertical; }
 .report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
 .low-stock-alert { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 16px; margin-bottom: 32px; }
 .low-stock-alert h2 { margin-top: 0; }
+.panel { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.panel h2 { margin-top: 0; }
 @media (max-width: 720px) {
   .stat-tiles { grid-template-columns: repeat(2, 1fr); }
   .report-columns { grid-template-columns: 1fr; }
 }
+
+/* ---- Receivables split ---- */
+.receivables-split { display: flex; gap: 32px; margin-bottom: 12px; }
+.receivables-split > div { display: flex; flex-direction: column; gap: 2px; }
+.receivables-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--border); }
+.receivables-bar-current { background: var(--accent); }
+.receivables-bar-overdue { background: #b3261e; }
+
+/* ---- Cash flow chart ---- */
+.cash-flow-chart { display: flex; align-items: flex-end; gap: 14px; height: 160px; padding-top: 8px; }
+.cash-flow-bar { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; height: 100%; }
+.cash-flow-bar-track { flex: 1; width: 100%; max-width: 36px; display: flex; align-items: flex-end; }
+.cash-flow-bar-fill { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; }
+.cash-flow-value { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cash-flow-label { font-size: 12px; color: var(--muted); }
 
 /* ---- Invoice / Quote / Credit Note document ---- */
 .invoice-doc {
@@ -125,6 +142,7 @@ textarea { resize: vertical; }
 .invoice-dates div { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; font-size: 13px; }
 .invoice-dates span:first-child { color: var(--muted); }
 .invoice-notes { margin-top: 24px; font-size: 13px; color: var(--muted); }
+.invoice-subject { margin: -8px 0 20px; font-size: 13px; }
 
 .doc-line-items thead tr { background: #2b2f38; }
 .doc-line-items thead th { color: white; font-weight: 600; padding: 10px 8px; border-bottom: none; }

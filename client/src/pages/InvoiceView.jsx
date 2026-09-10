@@ -114,7 +114,7 @@ export function FullInvoice({ invoice }) {
           <strong>Bill To</strong>
           <p>{customer?.name || "Walk-in customer"}</p>
           {customer?.billing_address && <p>{customer.billing_address}</p>}
-          {customer?.gstin && <p>GSTIN: {customer.gstin}</p>}
+          {(invoice.gstin || customer?.gstin) && <p>GSTIN: {invoice.gstin || customer.gstin}</p>}
         </div>
         <div className="invoice-dates">
           <div><span>Invoice Date :</span><span>{invoice.invoice_date}</span></div>
@@ -123,6 +123,8 @@ export function FullInvoice({ invoice }) {
           {invoice.reference && <div><span>Reference :</span><span>{invoice.reference}</span></div>}
         </div>
       </div>
+
+      {invoice.subject && <p className="invoice-subject"><strong>Subject:</strong> {invoice.subject}</p>}
 
       <table className="table doc-line-items">
         <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>

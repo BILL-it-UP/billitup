@@ -42,7 +42,7 @@ router.get("/:id", (req, res) => {
 // Create an invoice with its line items in one call. Server computes all totals —
 // the client sends qty/rate/discount/tax_rate per line, never trusts client-side amounts.
 router.post("/", (req, res) => {
-  const { customer_id, invoice_date, due_date, terms, reference, notes, lineItems } = req.body;
+  const { customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
@@ -70,9 +70,9 @@ router.post("/", (req, res) => {
 
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
-      (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, status,
+      (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, subject, gstin, status,
        sub_total, discount, tax_total, total, balance_due, notes, public_token)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -86,7 +86,7 @@ router.post("/", (req, res) => {
     const result = insertInvoice.run(
       req.auth.businessId, customer_id || null, invoiceNumber,
       invoice_date || new Date().toISOString().slice(0, 10), due_date || null,
-      terms || null, reference || null,
+      terms || null, reference || null, subject || null, gstin || null,
       subTotal, discountTotal, taxTotal, total, total, notes || null,
       randomUUID().replace(/-/g, "")
     );

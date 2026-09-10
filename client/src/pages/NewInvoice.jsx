@@ -10,6 +10,8 @@ export default function NewInvoice() {
   const [customerId, setCustomerId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [reference, setReference] = useState("");
+  const [subject, setSubject] = useState("");
+  const [gstin, setGstin] = useState("");
   const [terms, setTerms] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState([emptyLine()]);
@@ -20,6 +22,12 @@ export default function NewInvoice() {
     api.listCustomers().then(setCustomers);
     api.listItems().then(setItems);
   }, []);
+
+  const pickCustomer = (id) => {
+    setCustomerId(id);
+    const customer = customers.find((c) => String(c.id) === String(id));
+    setGstin(customer?.gstin || "");
+  };
 
   const updateLine = (index, patch) => {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
@@ -44,6 +52,8 @@ export default function NewInvoice() {
         customer_id: customerId || null,
         due_date: dueDate || null,
         reference: reference || null,
+        subject: subject || null,
+        gstin: gstin || null,
         terms: terms || null,
         notes: notes || null,
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
@@ -62,7 +72,7 @@ export default function NewInvoice() {
       <form onSubmit={handleSubmit}>
         <div className="form-row">
           <label className="block">Customer
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+            <select value={customerId} onChange={(e) => pickCustomer(e.target.value)}>
               <option value="">Walk-in / no customer</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -72,6 +82,14 @@ export default function NewInvoice() {
           </label>
           <label className="block">PO / Reference number (optional)
             <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PO-4021" />
+          </label>
+        </div>
+        <div className="form-row">
+          <label className="block">GST Number (optional)
+            <input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="Defaults from the customer's GSTIN" />
+          </label>
+          <label className="block" style={{ flex: 2 }}>Subject (optional)
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Let your customer know what this invoice is for" />
           </label>
         </div>
 
