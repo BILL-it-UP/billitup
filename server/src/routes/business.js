@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { buildTransport, SmtpNotConfiguredError } from "../lib/mailer.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -70,6 +71,36 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
 
   const updated = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   res.json(updated);
+});
+
+// Lets an owner/admin self-test their SMTP settings without going through
+// Claude or anyone else — sends a plain test email using whatever is
+// currently SAVED for this business (save the form first, then test), and
+// surfaces the real SMTP error (bad password, wrong host, etc.) straight
+// from nodemailer so it's actually useful for debugging.
+router.post("/test-email", requireRole("owner", "admin"), async (req, res) => {
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const to = (req.body && req.body.to) || business.smtp_from_email || business.email;
+  if (!to) return res.status(400).json({ error: "Enter an email address to send the test to" });
+
+  try {
+    const transport = buildTransport(business);
+    const fromEmail = business.smtp_from_email || business.smtp_user;
+    const fromName = business.smtp_from_name || business.name || "BillItUp";
+    await transport.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject: "BillItUp test email",
+      text: `This is a test email from BillItUp, sent using ${business.name || "your business"}'s SMTP settings.\n\nIf you're reading this, email delivery is working — invoices, quotes, and payment reminders will reach your customers.`,
+    });
+    res.json({ ok: true, sentTo: to });
+  } catch (err) {
+    if (err instanceof SmtpNotConfiguredError) return res.status(400).json({ error: err.message });
+    // Surface nodemailer's actual error (e.g. "Invalid login", "ECONNREFUSED")
+    // rather than a generic message — that's the whole point of a self-serve
+    // test button: the business owner can fix it themselves.
+    res.status(400).json({ error: err.message || "Failed to send test email" });
+  }
 });
 
 export default router;

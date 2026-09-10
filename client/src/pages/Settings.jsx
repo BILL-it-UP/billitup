@@ -182,9 +182,13 @@ function InvoiceBrandingSettings({ business, setBusiness }) {
 }
 
 function EmailSettings({ business, setBusiness }) {
+  const user = getUser();
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
   const [error, setError] = useState("");
+  const [testTo, setTestTo] = useState(user?.email || "");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -199,6 +203,20 @@ function EmailSettings({ business, setBusiness }) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const sendTestEmail = async (e) => {
+    e.preventDefault();
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await api.sendTestEmail(testTo);
+      setTestResult({ ok: true, to: res.sentTo });
+    } catch (err) {
+      setTestResult({ error: err.message });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -236,6 +254,16 @@ function EmailSettings({ business, setBusiness }) {
         {savedMsg && <p className="muted">{savedMsg}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save email settings"}</button>
       </form>
+
+      <form onSubmit={sendTestEmail} className="inline-form" style={{ marginTop: 16 }}>
+        <input type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="you@example.com" required />
+        <button type="submit" disabled={testing}>{testing ? "Sending..." : "Send test email"}</button>
+      </form>
+      <p className="muted" style={{ marginTop: -8 }}>
+        Save your settings above first, then send yourself a test email to confirm they actually work.
+      </p>
+      {testResult?.ok && <p className="muted">Test email sent to {testResult.to} — check your inbox (and spam folder).</p>}
+      {testResult?.error && <p className="error">{testResult.error}</p>}
     </div>
   );
 }

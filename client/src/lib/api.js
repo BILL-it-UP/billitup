@@ -44,6 +44,7 @@ export const api = {
 
   getBusiness: () => request("/api/business/me"),
   updateBusiness: (payload) => request("/api/business/me", { method: "PUT", body: payload }),
+  sendTestEmail: (to) => request("/api/business/test-email", { method: "POST", body: { to } }),
 
   listCustomers: () => request("/api/customers"),
   createCustomer: (payload) => request("/api/customers", { method: "POST", body: payload }),
