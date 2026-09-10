@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, getUser } from "../lib/api";
 
 export default function Items() {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({ name: "", unit: "pcs", rate: "", tax_rate: "0", hsn_sac_code: "" });
   const [error, setError] = useState("");
+  const canManage = ["owner", "admin"].includes(getUser()?.role);
 
   const load = () => api.listItems().then(setItems);
   useEffect(() => { load(); }, []);
@@ -24,14 +25,18 @@ export default function Items() {
   return (
     <div>
       <h1>Items</h1>
-      <form className="inline-form" onSubmit={handleSubmit}>
-        <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        <input placeholder="Unit (pcs, hrs...)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
-        <input placeholder="Rate (₹)" type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} required />
-        <input placeholder="Tax %" type="number" step="0.01" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
-        <input placeholder="HSN/SAC (optional)" value={form.hsn_sac_code} onChange={(e) => setForm({ ...form, hsn_sac_code: e.target.value })} />
-        <button type="submit">Add item</button>
-      </form>
+      {canManage ? (
+        <form className="inline-form" onSubmit={handleSubmit}>
+          <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <input placeholder="Unit (pcs, hrs...)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
+          <input placeholder="Rate (₹)" type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} required />
+          <input placeholder="Tax %" type="number" step="0.01" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
+          <input placeholder="HSN/SAC (optional)" value={form.hsn_sac_code} onChange={(e) => setForm({ ...form, hsn_sac_code: e.target.value })} />
+          <button type="submit">Add item</button>
+        </form>
+      ) : (
+        <p className="muted">Ask an Owner or Admin to add or edit items.</p>
+      )}
       {error && <p className="error">{error}</p>}
 
       <table className="table">

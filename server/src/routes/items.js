@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../db.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -12,7 +12,9 @@ router.get("/", (req, res) => {
   res.json(rows);
 });
 
-router.post("/", (req, res) => {
+// Cashiers pick items/rates while billing, but only Owner/Admin maintain
+// the price list itself — a cashier editing rates would affect every future invoice.
+router.post("/", requireRole("owner", "admin"), (req, res) => {
   const { name, description, unit, rate, tax_rate, hsn_sac_code } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
   const result = db
@@ -25,7 +27,7 @@ router.post("/", (req, res) => {
   res.status(201).json(created);
 });
 
-router.put("/:id", (req, res) => {
+router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const { name, description, unit, rate, tax_rate, hsn_sac_code } = req.body;
   db.prepare(
     `UPDATE items SET
@@ -38,7 +40,7 @@ router.put("/:id", (req, res) => {
   res.json(updated);
 });
 
-router.delete("/:id", (req, res) => {
+router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
   db.prepare("DELETE FROM items WHERE id = ? AND business_id = ?").run(req.params.id, req.auth.businessId);
   res.status(204).end();
 });

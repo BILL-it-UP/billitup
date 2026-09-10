@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, getUser } from "../lib/api";
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
   const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", gstin: "" });
   const [error, setError] = useState("");
+  const canManage = ["owner", "admin"].includes(getUser()?.role);
 
   const load = () => api.listCustomers().then(setCustomers);
   useEffect(() => { load(); }, []);
@@ -24,14 +25,18 @@ export default function Customers() {
   return (
     <div>
       <h1>Customers</h1>
-      <form className="inline-form" onSubmit={handleSubmit}>
-        <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input placeholder="Billing address" value={form.billing_address} onChange={(e) => setForm({ ...form, billing_address: e.target.value })} />
-        <input placeholder="GSTIN (optional)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} />
-        <button type="submit">Add customer</button>
-      </form>
+      {canManage ? (
+        <form className="inline-form" onSubmit={handleSubmit}>
+          <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input placeholder="Billing address" value={form.billing_address} onChange={(e) => setForm({ ...form, billing_address: e.target.value })} />
+          <input placeholder="GSTIN (optional)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} />
+          <button type="submit">Add customer</button>
+        </form>
+      ) : (
+        <p className="muted">Ask an Owner or Admin to add or edit customers.</p>
+      )}
       {error && <p className="error">{error}</p>}
 
       <table className="table">

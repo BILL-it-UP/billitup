@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../db.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -12,7 +12,9 @@ router.get("/", (req, res) => {
   res.json(rows);
 });
 
-router.post("/", (req, res) => {
+// Cashiers can look up customers to bill against, but only Owner/Admin
+// maintain the customer master list (edits here affect every future invoice).
+router.post("/", requireRole("owner", "admin"), (req, res) => {
   const { name, phone, email, billing_address, shipping_address, gstin } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
   const result = db
@@ -24,7 +26,7 @@ router.post("/", (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid, name, phone, email, billing_address, shipping_address, gstin });
 });
 
-router.put("/:id", (req, res) => {
+router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const { name, phone, email, billing_address, shipping_address, gstin } = req.body;
   db.prepare(
     `UPDATE customers SET
@@ -38,7 +40,7 @@ router.put("/:id", (req, res) => {
   res.json(updated);
 });
 
-router.delete("/:id", (req, res) => {
+router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
   db.prepare("DELETE FROM customers WHERE id = ? AND business_id = ?").run(req.params.id, req.auth.businessId);
   res.status(204).end();
 });
