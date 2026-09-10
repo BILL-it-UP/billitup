@@ -49,6 +49,9 @@ input, select { display: block; width: 100%; margin-top: 4px; padding: 8px; bord
 .auth-page { display: flex; justify-content: center; padding-top: 60px; }
 .auth-card { background: white; padding: 32px; border-radius: 10px; width: 360px; border: 1px solid var(--border); }
 .auth-card h1 { margin-top: 0; }
+.wizard-card { width: 400px; }
+.step-indicator { margin-top: -8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.wizard-nav { display: flex; justify-content: space-between; align-items: center; }
 
 .inline-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
 .inline-form input { width: auto; margin-top: 0; }
@@ -87,6 +90,8 @@ input, select { display: block; width: 100%; margin-top: 4px; padding: 8px; bord
 .stat-label { font-size: 13px; color: var(--muted); }
 .stat-value { font-size: 22px; font-weight: 700; }
 .report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.low-stock-alert { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 16px; margin-bottom: 32px; }
+.low-stock-alert h2 { margin-top: 0; }
 @media (max-width: 720px) {
   .stat-tiles { grid-template-columns: repeat(2, 1fr); }
   .report-columns { grid-template-columns: 1fr; }

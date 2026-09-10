@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import SendEmailButton from "../components/SendEmailButton";
 
 export default function QuoteView() {
   const { id } = useParams();
@@ -33,6 +34,10 @@ export default function QuoteView() {
     <div>
       <div className="no-print toolbar">
         <button onClick={() => window.print()}>Print / Save PDF</button>
+        <SendEmailButton
+          defaultTo={quote.customer?.email}
+          onSend={(to) => api.sendQuoteEmail(id, { to })}
+        />
         {quote.status !== "converted" && (
           <button onClick={handleConvert} disabled={converting}>
             {converting ? "Converting..." : "Convert to Invoice"}

@@ -43,7 +43,21 @@ router.get("/summary", (req, res) => {
     )
     .all(businessId);
 
-  res.json({ ...totals, topCustomers, topItems, statusBreakdown });
+  const totalCredited = db
+    .prepare(`SELECT COALESCE(SUM(total), 0) AS total FROM credit_notes WHERE business_id = ?`)
+    .get(businessId).total;
+
+  const lowStockItems = db
+    .prepare(
+      `SELECT id, name, unit, stock_qty, low_stock_threshold
+       FROM items
+       WHERE business_id = ? AND stock_qty IS NOT NULL AND low_stock_threshold IS NOT NULL
+         AND stock_qty <= low_stock_threshold
+       ORDER BY stock_qty ASC`
+    )
+    .all(businessId);
+
+  res.json({ ...totals, topCustomers, topItems, statusBreakdown, totalCredited, lowStockItems });
 });
 
 export default router;

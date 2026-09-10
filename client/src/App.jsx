@@ -9,6 +9,9 @@ import InvoiceView from "./pages/InvoiceView";
 import Quotes from "./pages/Quotes";
 import NewQuote from "./pages/NewQuote";
 import QuoteView from "./pages/QuoteView";
+import CreditNotes from "./pages/CreditNotes";
+import NewCreditNote from "./pages/NewCreditNote";
+import CreditNoteView from "./pages/CreditNoteView";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import { getUser, clearSession } from "./lib/api";
@@ -32,6 +35,7 @@ function Shell({ children }) {
         <nav>
           <Link to="/">Invoices</Link>
           <Link to="/quotes">Quotes</Link>
+          <Link to="/credit-notes">Credit Notes</Link>
           <Link to="/customers">Customers</Link>
           <Link to="/items">Items</Link>
           {isOwnerOrAdmin && <Link to="/reports">Reports</Link>}
@@ -60,6 +64,9 @@ export default function App() {
       <Route path="/quotes" element={<RequireAuth><Shell><Quotes /></Shell></RequireAuth>} />
       <Route path="/quotes/new" element={<RequireAuth><Shell><NewQuote /></Shell></RequireAuth>} />
       <Route path="/quotes/:id" element={<RequireAuth><Shell><QuoteView /></Shell></RequireAuth>} />
+      <Route path="/credit-notes" element={<RequireAuth><Shell><CreditNotes /></Shell></RequireAuth>} />
+      <Route path="/credit-notes/new" element={<RequireAuth><Shell><NewCreditNote /></Shell></RequireAuth>} />
+      <Route path="/credit-notes/:id" element={<RequireAuth><Shell><CreditNoteView /></Shell></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Shell><Reports /></Shell></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Shell><Settings /></Shell></RequireAuth>} />
     </Routes>

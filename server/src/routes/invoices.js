@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
+import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -132,6 +133,41 @@ router.put("/:id/status", (req, res) => {
   db.prepare("UPDATE invoices SET status = ? WHERE id = ? AND business_id = ?").run(status, req.params.id, req.auth.businessId);
   const updated = db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.id);
   res.json(updated);
+});
+
+// Email the invoice to the customer (or an override address) as a PDF attachment.
+router.post("/:id/send", async (req, res) => {
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+
+  const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
+  const customer = invoice.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null;
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+
+  const to = (req.body && req.body.to) || customer?.email;
+  if (!to) return res.status(400).json({ error: "No recipient email — add one to the customer or enter one to send to" });
+
+  try {
+    const pdfBuffer = await renderDocumentPdf({
+      docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: invoice.invoice_date,
+      extraMeta: [`Balance Due: Rs ${Number(invoice.balance_due).toFixed(2)}`],
+      business, party: customer, partyLabel: "Bill To", lineItems, totals: invoice, notes: invoice.notes,
+    });
+    await sendDocumentEmail({
+      business, to,
+      subject: `Invoice ${invoice.invoice_number} from ${business.name}`,
+      text: `Hi,\n\nPlease find attached invoice ${invoice.invoice_number} for Rs ${Number(invoice.total).toFixed(2)}.\n\nThanks,\n${business.name}`,
+      pdfBuffer, pdfFilename: `${invoice.invoice_number}.pdf`,
+    });
+    if (invoice.status === "draft") {
+      db.prepare("UPDATE invoices SET status = 'sent' WHERE id = ?").run(invoice.id);
+    }
+    res.json({ ok: true, sentTo: to });
+  } catch (err) {
+    if (err instanceof SmtpNotConfiguredError) return res.status(400).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Failed to send email — check your SMTP settings" });
+  }
 });
 
 export default router;

@@ -31,8 +31,20 @@ CREATE TABLE IF NOT EXISTS businesses (
   next_invoice_number INTEGER DEFAULT 1,
   quote_prefix TEXT DEFAULT 'QUO-',
   next_quote_number INTEGER DEFAULT 1,
+  credit_note_prefix TEXT DEFAULT 'CN-',
+  next_credit_note_number INTEGER DEFAULT 1,
   default_paper_size TEXT DEFAULT 'A4',   -- A4 | THERMAL_3IN | THERMAL_4IN
   inventory_enabled INTEGER DEFAULT 0,
+  -- SMTP settings for emailing invoices/quotes as PDF — each self-hosted business
+  -- brings its own mail account (e.g. a Gmail app password); nothing is sent
+  -- through a shared BillItUp relay.
+  smtp_host TEXT,
+  smtp_port INTEGER,
+  smtp_secure INTEGER DEFAULT 0,
+  smtp_user TEXT,
+  smtp_pass TEXT,
+  smtp_from_name TEXT,
+  smtp_from_email TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -68,6 +80,16 @@ CREATE TABLE IF NOT EXISTS items (
   tax_rate REAL DEFAULT 0,
   hsn_sac_code TEXT,
   stock_qty REAL,                 -- null when inventory module is off
+  low_stock_threshold REAL,       -- null = no low-stock alerting for this item
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS stock_adjustments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  item_id INTEGER NOT NULL REFERENCES items(id),
+  delta REAL NOT NULL,             -- positive = stock added, negative = removed
+  reason TEXT,                     -- e.g. restock, damage, correction
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -123,6 +145,38 @@ CREATE TABLE IF NOT EXISTS quotes (
 CREATE TABLE IF NOT EXISTS quote_line_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  item_id INTEGER REFERENCES items(id),
+  description TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 1,
+  rate REAL NOT NULL DEFAULT 0,
+  discount REAL DEFAULT 0,
+  tax_rate REAL DEFAULT 0,
+  amount REAL NOT NULL DEFAULT 0
+);
+
+-- A credit note optionally references an invoice (refund/return against it,
+-- reducing that invoice's balance_due) or can stand alone against a customer
+-- (e.g. a goodwill credit). Kept separate from invoices/quotes since its
+-- effect (crediting money back) is the opposite of both.
+CREATE TABLE IF NOT EXISTS credit_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  customer_id INTEGER REFERENCES customers(id),
+  invoice_id INTEGER REFERENCES invoices(id),
+  credit_note_number TEXT NOT NULL,
+  credit_note_date TEXT NOT NULL,
+  reason TEXT,
+  sub_total REAL DEFAULT 0,
+  discount REAL DEFAULT 0,
+  tax_total REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS credit_note_line_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  credit_note_id INTEGER NOT NULL REFERENCES credit_notes(id) ON DELETE CASCADE,
   item_id INTEGER REFERENCES items(id),
   description TEXT NOT NULL,
   qty REAL NOT NULL DEFAULT 1,

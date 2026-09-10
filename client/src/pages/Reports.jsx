@@ -29,7 +29,29 @@ export default function Reports() {
           <span className="stat-label">Invoices</span>
           <span className="stat-value">{summary.invoice_count}</span>
         </div>
+        <div className="stat-tile">
+          <span className="stat-label">Total Credited</span>
+          <span className="stat-value">₹{Number(summary.totalCredited).toFixed(2)}</span>
+        </div>
       </div>
+
+      {summary.lowStockItems.length > 0 && (
+        <div className="low-stock-alert">
+          <h2>Low Stock</h2>
+          <table className="table">
+            <thead><tr><th>Item</th><th>Remaining</th><th>Alert Threshold</th></tr></thead>
+            <tbody>
+              {summary.lowStockItems.map((i) => (
+                <tr key={i.id}>
+                  <td>{i.name}</td>
+                  <td>{i.stock_qty} {i.unit}</td>
+                  <td>{i.low_stock_threshold} {i.unit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="report-columns">
         <div>

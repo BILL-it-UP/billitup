@@ -55,6 +55,7 @@ export const api = {
   getInvoice: (id) => request(`/api/invoices/${id}`),
   createInvoice: (payload) => request("/api/invoices", { method: "POST", body: payload }),
   recordPayment: (id, payload) => request(`/api/invoices/${id}/payments`, { method: "POST", body: payload }),
+  sendInvoiceEmail: (id, payload) => request(`/api/invoices/${id}/send`, { method: "POST", body: payload }),
 
   listUsers: () => request("/api/users"),
   createUser: (payload) => request("/api/users", { method: "POST", body: payload }),
@@ -65,6 +66,14 @@ export const api = {
   createQuote: (payload) => request("/api/quotes", { method: "POST", body: payload }),
   setQuoteStatus: (id, status) => request(`/api/quotes/${id}/status`, { method: "PUT", body: { status } }),
   convertQuote: (id) => request(`/api/quotes/${id}/convert`, { method: "POST" }),
+  sendQuoteEmail: (id, payload) => request(`/api/quotes/${id}/send`, { method: "POST", body: payload }),
+
+  listCreditNotes: () => request("/api/credit-notes"),
+  getCreditNote: (id) => request(`/api/credit-notes/${id}`),
+  createCreditNote: (payload) => request("/api/credit-notes", { method: "POST", body: payload }),
+  sendCreditNoteEmail: (id, payload) => request(`/api/credit-notes/${id}/send`, { method: "POST", body: payload }),
+
+  adjustItemStock: (id, payload) => request(`/api/items/${id}/adjust-stock`, { method: "POST", body: payload }),
 
   getReportsSummary: () => request("/api/reports/summary"),
 };

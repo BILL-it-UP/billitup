@@ -64,6 +64,12 @@ export default function Settings() {
         <label>Invoice number prefix
           <input value={business.invoice_prefix || ""} onChange={(e) => setBusiness({ ...business, invoice_prefix: e.target.value })} />
         </label>
+        <label>Quote number prefix
+          <input value={business.quote_prefix || ""} onChange={(e) => setBusiness({ ...business, quote_prefix: e.target.value })} />
+        </label>
+        <label>Credit note number prefix
+          <input value={business.credit_note_prefix || ""} onChange={(e) => setBusiness({ ...business, credit_note_prefix: e.target.value })} />
+        </label>
         <label>Default paper size (used when opening an invoice)
           <select value={business.default_paper_size || "A4"} onChange={(e) => setBusiness({ ...business, default_paper_size: e.target.value })}>
             {PAPER_SIZES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -79,7 +85,68 @@ export default function Settings() {
         <button type="submit">Save</button>
       </form>
 
+      <EmailSettings business={business} setBusiness={setBusiness} />
+
       {user?.role === "owner" && <StaffManagement />}
+    </div>
+  );
+}
+
+function EmailSettings({ business, setBusiness }) {
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSavedMsg("");
+    setSaving(true);
+    try {
+      const updated = await api.updateBusiness(business);
+      setBusiness(updated);
+      setSavedMsg("Saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="staff-section">
+      <h2>Email (SMTP) Settings</h2>
+      <p className="muted">
+        Used to email invoices/quotes/credit notes to customers as a PDF. Bring your own mail account
+        (e.g. a Gmail address with an app password) — BillItUp doesn't send email through a shared server.
+      </p>
+      <form onSubmit={handleSave} className="settings-form">
+        <label>SMTP host
+          <input value={business.smtp_host || ""} onChange={(e) => setBusiness({ ...business, smtp_host: e.target.value })} placeholder="smtp.gmail.com" />
+        </label>
+        <label>SMTP port
+          <input type="number" value={business.smtp_port || ""} onChange={(e) => setBusiness({ ...business, smtp_port: e.target.value })} placeholder="587" />
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" checked={!!business.smtp_secure} onChange={(e) => setBusiness({ ...business, smtp_secure: e.target.checked })} />
+          {" "}Use SSL (usually only for port 465)
+        </label>
+        <label>SMTP username
+          <input value={business.smtp_user || ""} onChange={(e) => setBusiness({ ...business, smtp_user: e.target.value })} />
+        </label>
+        <label>SMTP password
+          <input type="password" value={business.smtp_pass || ""} onChange={(e) => setBusiness({ ...business, smtp_pass: e.target.value })} placeholder="App password" />
+        </label>
+        <label>"From" name
+          <input value={business.smtp_from_name || ""} onChange={(e) => setBusiness({ ...business, smtp_from_name: e.target.value })} placeholder={business.name} />
+        </label>
+        <label>"From" email
+          <input value={business.smtp_from_email || ""} onChange={(e) => setBusiness({ ...business, smtp_from_email: e.target.value })} placeholder="Defaults to SMTP username" />
+        </label>
+        {error && <p className="error">{error}</p>}
+        {savedMsg && <p className="muted">{savedMsg}</p>}
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save email settings"}</button>
+      </form>
     </div>
   );
 }

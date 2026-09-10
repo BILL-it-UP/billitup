@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
+import SendEmailButton from "../components/SendEmailButton";
 
 // Paper size presets: id -> { label, @page CSS size, content width for the on-screen/print preview }
 const PAPER_SIZES = {
@@ -61,6 +62,10 @@ export default function InvoiceView() {
           </select>
         </label>
         <button onClick={() => window.print()}>Print / Save PDF</button>
+        <SendEmailButton
+          defaultTo={invoice.customer?.email}
+          onSend={(to) => api.sendInvoiceEmail(id, { to })}
+        />
         {invoice.balance_due > 0 && (
           <form className="inline-form" onSubmit={recordPayment}>
             <input type="number" step="0.01" placeholder="Amount" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} required />

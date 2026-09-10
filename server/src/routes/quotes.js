@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
+import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -130,6 +131,41 @@ router.post("/:id/convert", (req, res) => {
   })();
 
   res.status(201).json(db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoiceId));
+});
+
+// Email the quote to the customer (or an override address) as a PDF attachment.
+router.post("/:id/send", async (req, res) => {
+  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!quote) return res.status(404).json({ error: "Not found" });
+
+  const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ?").all(quote.id);
+  const customer = quote.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(quote.customer_id) : null;
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+
+  const to = (req.body && req.body.to) || customer?.email;
+  if (!to) return res.status(400).json({ error: "No recipient email — add one to the customer or enter one to send to" });
+
+  try {
+    const pdfBuffer = await renderDocumentPdf({
+      docLabel: "Quote", docNumber: quote.quote_number, docDate: quote.quote_date,
+      extraMeta: quote.expiry_date ? [`Valid Until: ${quote.expiry_date}`] : [],
+      business, party: customer, partyLabel: "To", lineItems, totals: quote, notes: quote.notes,
+    });
+    await sendDocumentEmail({
+      business, to,
+      subject: `Quote ${quote.quote_number} from ${business.name}`,
+      text: `Hi,\n\nPlease find attached quote ${quote.quote_number} for Rs ${Number(quote.total).toFixed(2)}.\n\nThanks,\n${business.name}`,
+      pdfBuffer, pdfFilename: `${quote.quote_number}.pdf`,
+    });
+    if (quote.status === "draft") {
+      db.prepare("UPDATE quotes SET status = 'sent' WHERE id = ?").run(quote.id);
+    }
+    res.json({ ok: true, sentTo: to });
+  } catch (err) {
+    if (err instanceof SmtpNotConfiguredError) return res.status(400).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Failed to send email — check your SMTP settings" });
+  }
 });
 
 export default router;
