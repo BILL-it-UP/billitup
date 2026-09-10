@@ -12,6 +12,9 @@ import QuoteView from "./pages/QuoteView";
 import CreditNotes from "./pages/CreditNotes";
 import NewCreditNote from "./pages/NewCreditNote";
 import CreditNoteView from "./pages/CreditNoteView";
+import RecurringInvoices from "./pages/RecurringInvoices";
+import NewRecurringInvoice from "./pages/NewRecurringInvoice";
+import PublicInvoiceView from "./pages/PublicInvoiceView";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import { getUser, clearSession } from "./lib/api";
@@ -31,11 +34,12 @@ function Shell({ children }) {
   return (
     <div className="app-shell">
       <header className="no-print top-nav">
-        <div className="brand">BillItUp</div>
+        <Link to="/" className="brand"><img src="/logo-header.png" alt="BillItUp" /></Link>
         <nav>
           <Link to="/">Invoices</Link>
           <Link to="/quotes">Quotes</Link>
           <Link to="/credit-notes">Credit Notes</Link>
+          <Link to="/recurring-invoices">Recurring</Link>
           <Link to="/customers">Customers</Link>
           <Link to="/items">Items</Link>
           {isOwnerOrAdmin && <Link to="/reports">Reports</Link>}
@@ -56,6 +60,7 @@ export default function App() {
     <Routes>
       <Route path="/signup" element={<Signup />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/view/invoice/:token" element={<PublicInvoiceView />} />
       <Route path="/" element={<RequireAuth><Shell><Dashboard /></Shell></RequireAuth>} />
       <Route path="/customers" element={<RequireAuth><Shell><Customers /></Shell></RequireAuth>} />
       <Route path="/items" element={<RequireAuth><Shell><Items /></Shell></RequireAuth>} />
@@ -67,6 +72,8 @@ export default function App() {
       <Route path="/credit-notes" element={<RequireAuth><Shell><CreditNotes /></Shell></RequireAuth>} />
       <Route path="/credit-notes/new" element={<RequireAuth><Shell><NewCreditNote /></Shell></RequireAuth>} />
       <Route path="/credit-notes/:id" element={<RequireAuth><Shell><CreditNoteView /></Shell></RequireAuth>} />
+      <Route path="/recurring-invoices" element={<RequireAuth><Shell><RecurringInvoices /></Shell></RequireAuth>} />
+      <Route path="/recurring-invoices/new" element={<RequireAuth><Shell><NewRecurringInvoice /></Shell></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Shell><Reports /></Shell></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Shell><Settings /></Shell></RequireAuth>} />
     </Routes>

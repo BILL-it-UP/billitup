@@ -3,12 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 
-export default function NewInvoice() {
+const FREQUENCIES = [
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "yearly", label: "Yearly" },
+];
+
+export default function NewRecurringInvoice() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
   const [customerId, setCustomerId] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [frequency, setFrequency] = useState("monthly");
+  const [intervalCount, setIntervalCount] = useState(1);
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState("");
+  const [dueInDays, setDueInDays] = useState("15");
   const [reference, setReference] = useState("");
   const [terms, setTerms] = useState("");
   const [notes, setNotes] = useState("");
@@ -24,13 +35,11 @@ export default function NewInvoice() {
   const updateLine = (index, patch) => {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   };
-
   const pickItem = (index, itemId) => {
     const item = items.find((i) => String(i.id) === String(itemId));
     if (!item) return updateLine(index, { item_id: "" });
     updateLine(index, { item_id: item.id, description: item.name, rate: item.rate, tax_rate: item.tax_rate });
   };
-
   const addLine = () => setLines((prev) => [...prev, emptyLine()]);
   const removeLine = (index) => setLines((prev) => prev.filter((_, i) => i !== index));
   const { subTotal, discountTotal, taxTotal, total } = computeTotals(lines);
@@ -40,15 +49,15 @@ export default function NewInvoice() {
     setError("");
     setSaving(true);
     try {
-      const invoice = await api.createInvoice({
+      await api.createRecurringInvoice({
         customer_id: customerId || null,
-        due_date: dueDate || null,
-        reference: reference || null,
-        terms: terms || null,
-        notes: notes || null,
+        frequency, interval_count: Number(intervalCount) || 1,
+        start_date: startDate, end_date: endDate || null,
+        due_in_days: dueInDays === "" ? null : Number(dueInDays),
+        reference: reference || null, terms: terms || null, notes: notes || null,
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
       });
-      navigate(`/invoices/${invoice.id}`);
+      navigate("/recurring-invoices");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -58,20 +67,37 @@ export default function NewInvoice() {
 
   return (
     <div>
-      <h1>New Invoice</h1>
+      <h1>New Recurring Invoice</h1>
       <form onSubmit={handleSubmit}>
+        <label className="block">Customer
+          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+            <option value="">Select a customer</option>
+            {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+
         <div className="form-row">
-          <label className="block">Customer
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              <option value="">Walk-in / no customer</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <label className="block">Repeats
+            <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+              {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
           </label>
-          <label className="block">Due date (optional)
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <label className="block">Every
+            <input type="number" min="1" value={intervalCount} onChange={(e) => setIntervalCount(e.target.value)} />
+          </label>
+          <label className="block">Due (days after invoice date)
+            <input type="number" min="0" value={dueInDays} onChange={(e) => setDueInDays(e.target.value)} />
+          </label>
+        </div>
+        <div className="form-row">
+          <label className="block">First invoice date
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+          </label>
+          <label className="block">Ends on (optional)
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </label>
           <label className="block">PO / Reference number (optional)
-            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PO-4021" />
+            <input value={reference} onChange={(e) => setReference(e.target.value)} />
           </label>
         </div>
 
@@ -105,18 +131,18 @@ export default function NewInvoice() {
           <div><span>Sub Total</span><span>₹{subTotal.toFixed(2)}</span></div>
           <div><span>Discount</span><span>-₹{discountTotal.toFixed(2)}</span></div>
           <div><span>Tax</span><span>₹{taxTotal.toFixed(2)}</span></div>
-          <div className="grand-total"><span>Total</span><span>₹{total.toFixed(2)}</span></div>
+          <div className="grand-total"><span>Total per invoice</span><span>₹{total.toFixed(2)}</span></div>
         </div>
 
         <label className="block">Terms (optional)
           <input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="e.g. Net 15" />
         </label>
-        <label className="block">Notes (optional, shown on the invoice)
+        <label className="block">Notes (optional, shown on each generated invoice)
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
 
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Invoice"}</button>
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Recurring Invoice"}</button>
       </form>
     </div>
   );

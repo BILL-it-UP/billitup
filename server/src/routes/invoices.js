@@ -1,4 +1,5 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
@@ -9,7 +10,8 @@ router.use(requireAuth);
 router.get("/", (req, res) => {
   const rows = db
     .prepare(
-      `SELECT invoices.*, customers.name AS customer_name
+      `SELECT invoices.*, customers.name AS customer_name,
+        (invoices.balance_due > 0 AND invoices.due_date IS NOT NULL AND invoices.due_date < date('now')) AS is_overdue
        FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
        WHERE invoices.business_id = ? ORDER BY invoices.created_at DESC`
     )
@@ -32,8 +34,9 @@ router.get("/:id", (req, res) => {
     : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   const payments = db.prepare("SELECT * FROM payments WHERE invoice_id = ?").all(invoice.id);
+  const isOverdue = !!(invoice.balance_due > 0 && invoice.due_date && invoice.due_date < new Date().toISOString().slice(0, 10));
 
-  res.json({ ...invoice, lineItems, customer, business, payments });
+  res.json({ ...invoice, is_overdue: isOverdue, lineItems, customer, business, payments });
 });
 
 // Create an invoice with its line items in one call. Server computes all totals —
@@ -68,15 +71,12 @@ router.post("/", (req, res) => {
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, status,
-       sub_total, discount, tax_total, total, balance_due, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, balance_due, notes, public_token)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  const decrementStock = db.prepare(
-    "UPDATE items SET stock_qty = stock_qty - ? WHERE id = ? AND stock_qty IS NOT NULL"
   );
   const bumpInvoiceNumber = db.prepare(
     "UPDATE businesses SET next_invoice_number = next_invoice_number + 1 WHERE id = ?"
@@ -87,14 +87,12 @@ router.post("/", (req, res) => {
       req.auth.businessId, customer_id || null, invoiceNumber,
       invoice_date || new Date().toISOString().slice(0, 10), due_date || null,
       terms || null, reference || null,
-      subTotal, discountTotal, taxTotal, total, total, notes || null
+      subTotal, discountTotal, taxTotal, total, total, notes || null,
+      randomUUID().replace(/-/g, "")
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
       insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
-      if (business.inventory_enabled && line.item_id) {
-        decrementStock.run(line.qty, line.item_id);
-      }
     }
     bumpInvoiceNumber.run(req.auth.businessId);
     return id;
@@ -146,6 +144,7 @@ router.post("/:id/send", async (req, res) => {
 
   const to = (req.body && req.body.to) || customer?.email;
   if (!to) return res.status(400).json({ error: "No recipient email — add one to the customer or enter one to send to" });
+  const isReminder = !!(req.body && req.body.reminder);
 
   try {
     const pdfBuffer = await renderDocumentPdf({
@@ -155,8 +154,12 @@ router.post("/:id/send", async (req, res) => {
     });
     await sendDocumentEmail({
       business, to,
-      subject: `Invoice ${invoice.invoice_number} from ${business.name}`,
-      text: `Hi,\n\nPlease find attached invoice ${invoice.invoice_number} for Rs ${Number(invoice.total).toFixed(2)}.\n\nThanks,\n${business.name}`,
+      subject: isReminder
+        ? `Payment Reminder: Invoice ${invoice.invoice_number} from ${business.name}`
+        : `Invoice ${invoice.invoice_number} from ${business.name}`,
+      text: isReminder
+        ? `Hi,\n\nThis is a reminder that invoice ${invoice.invoice_number}${invoice.due_date ? ` (due ${invoice.due_date})` : ""} for Rs ${Number(invoice.total).toFixed(2)} has a balance of Rs ${Number(invoice.balance_due).toFixed(2)} still outstanding. The invoice is attached again for reference.\n\nThanks,\n${business.name}`
+        : `Hi,\n\nPlease find attached invoice ${invoice.invoice_number} for Rs ${Number(invoice.total).toFixed(2)}.\n\nThanks,\n${business.name}`,
       pdfBuffer, pdfFilename: `${invoice.invoice_number}.pdf`,
     });
     if (invoice.status === "draft") {

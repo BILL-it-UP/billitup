@@ -18,8 +18,9 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
   display: flex; align-items: center; gap: 24px;
   padding: 12px 24px; background: white; border-bottom: 1px solid var(--border);
 }
-.top-nav .brand { font-weight: 700; font-size: 18px; }
-.top-nav nav { display: flex; gap: 16px; flex: 1; }
+.top-nav .brand { display: flex; align-items: center; }
+.top-nav .brand img { height: 28px; display: block; }
+.top-nav nav { display: flex; gap: 16px; flex: 1; flex-wrap: wrap; }
 .top-nav nav a { color: var(--ink); text-decoration: none; }
 .top-nav nav a:hover { color: var(--accent); }
 .nav-user { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--muted); }
@@ -44,12 +45,15 @@ button:disabled { opacity: 0.6; cursor: default; }
 
 label { display: block; margin-bottom: 12px; font-size: 14px; color: var(--muted); }
 label.block { max-width: 320px; }
+.form-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.form-row label.block { flex: 1; min-width: 200px; }
 input, select, textarea { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
 textarea { resize: vertical; }
 
 .auth-page { display: flex; justify-content: center; padding-top: 60px; }
 .auth-card { background: white; padding: 32px; border-radius: 10px; width: 360px; border: 1px solid var(--border); }
 .auth-card h1 { margin-top: 0; }
+.auth-logo { display: block; height: 40px; margin: 0 auto 20px; }
 .wizard-card { width: 400px; }
 .step-indicator { margin-top: -8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 .wizard-nav { display: flex; justify-content: space-between; align-items: center; }
@@ -105,7 +109,6 @@ textarea { resize: vertical; }
   background: white; margin: 0 auto; border: 1px solid var(--border);
 }
 .invoice-doc.invoice-full { padding: 16mm 14mm; }
-.invoice-doc.invoice-receipt { padding: 3mm; font-family: "Courier New", monospace; font-size: 12px; }
 
 .doc-brand-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
 .doc-brand-left h2 { margin: 8px 0 6px; font-size: 20px; }
@@ -137,12 +140,6 @@ textarea { resize: vertical; }
 .doc-signature-img { max-height: 48px; max-width: 180px; display: inline-block; margin-bottom: 4px; }
 .doc-signature-line { border-top: 1px solid var(--ink); width: 180px; margin-left: auto; margin-bottom: 6px; }
 
-.receipt-center { text-align: center; }
-.receipt-divider { border-top: 1px dashed #999; margin: 6px 0; }
-.receipt-line { margin-bottom: 4px; }
-.receipt-line-detail { display: flex; justify-content: space-between; }
-.receipt-total { font-weight: 700; }
-
 /* ---- Print ---- */
 @media print {
   .no-print { display: none !important; }
@@ -150,5 +147,9 @@ textarea { resize: vertical; }
   main { max-width: none; padding: 0; margin: 0; }
   .invoice-doc { border: none; margin: 0; box-shadow: none; }
   .invoice-doc.invoice-full { padding: 0; }
-  .invoice-doc.invoice-receipt { padding: 0; }
 }
+
+/* ---- Public (no-login) invoice view ---- */
+.public-invoice-page { background: var(--bg); min-height: 100vh; padding: 24px 0 60px; }
+.public-invoice-toolbar { max-width: 210mm; margin: 0 auto 16px; padding: 0 8px; display: flex; justify-content: space-between; align-items: center; }
+.public-invoice-toolbar img { height: 24px; }

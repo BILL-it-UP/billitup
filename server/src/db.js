@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.BILLITUP_DB_PATH || path.join(__dirname, "..", "data", "billitup.sqlite");
@@ -27,7 +28,7 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS businesses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  business_type TEXT,            -- e.g. grocery, clothing, services, corporate
+  business_type TEXT,            -- unused since BillItUp narrowed to corporate/A4 invoicing; column kept so nothing breaks for existing installs
   address TEXT,
   phone TEXT,
   email TEXT,
@@ -40,8 +41,8 @@ CREATE TABLE IF NOT EXISTS businesses (
   next_quote_number INTEGER DEFAULT 1,
   credit_note_prefix TEXT DEFAULT 'CN-',
   next_credit_note_number INTEGER DEFAULT 1,
-  default_paper_size TEXT DEFAULT 'A4',   -- A4 | THERMAL_3IN | THERMAL_4IN
-  inventory_enabled INTEGER DEFAULT 0,
+  default_paper_size TEXT DEFAULT 'A4',   -- unused since BillItUp went A4-only; column kept for existing installs
+  inventory_enabled INTEGER DEFAULT 0,    -- unused since the inventory module was dropped; column kept for existing installs
   -- SMTP settings for emailing invoices/quotes as PDF — each self-hosted business
   -- brings its own mail account (e.g. a Gmail app password); nothing is sent
   -- through a shared BillItUp relay.
@@ -111,8 +112,8 @@ CREATE TABLE IF NOT EXISTS items (
   rate REAL NOT NULL DEFAULT 0,
   tax_rate REAL DEFAULT 0,
   hsn_sac_code TEXT,
-  stock_qty REAL,                 -- null when inventory module is off
-  low_stock_threshold REAL,       -- null = no low-stock alerting for this item
+  stock_qty REAL,                 -- unused since the inventory module was dropped; column kept for existing installs
+  low_stock_threshold REAL,       -- unused since the inventory module was dropped; column kept for existing installs
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -141,6 +142,11 @@ CREATE TABLE IF NOT EXISTS invoices (
   total REAL DEFAULT 0,
   balance_due REAL DEFAULT 0,
   notes TEXT,
+  -- Lets a customer open a read-only, no-login view of this exact invoice
+  -- (client-facing sharing) — a long random token rather than the numeric id,
+  -- so the link can't be guessed by walking ids.
+  public_token TEXT UNIQUE,
+  recurring_invoice_id INTEGER REFERENCES recurring_invoices(id),
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -218,6 +224,39 @@ CREATE TABLE IF NOT EXISTS credit_note_line_items (
   amount REAL NOT NULL DEFAULT 0
 );
 
+-- A recurring invoice is a template (customer + line items + cadence) that
+-- the server turns into a real invoice on schedule, so a business doesn't
+-- have to re-create the same monthly retainer/subscription invoice by hand.
+CREATE TABLE IF NOT EXISTS recurring_invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  customer_id INTEGER REFERENCES customers(id),
+  frequency TEXT NOT NULL DEFAULT 'monthly',   -- weekly | monthly | quarterly | yearly
+  interval_count INTEGER NOT NULL DEFAULT 1,   -- e.g. every 2 months
+  start_date TEXT NOT NULL,
+  next_invoice_date TEXT NOT NULL,
+  end_date TEXT,                               -- null = runs indefinitely
+  status TEXT NOT NULL DEFAULT 'active',       -- active | paused | ended
+  due_in_days INTEGER,                         -- generated invoice's due_date = its invoice_date + this
+  reference TEXT,
+  terms TEXT,
+  notes TEXT,
+  last_generated_invoice_id INTEGER REFERENCES invoices(id),
+  last_generated_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS recurring_invoice_line_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  recurring_invoice_id INTEGER NOT NULL REFERENCES recurring_invoices(id) ON DELETE CASCADE,
+  item_id INTEGER REFERENCES items(id),
+  description TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 1,
+  rate REAL NOT NULL DEFAULT 0,
+  discount REAL DEFAULT 0,
+  tax_rate REAL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   invoice_id INTEGER NOT NULL REFERENCES invoices(id),
@@ -279,3 +318,22 @@ ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");
 
 // users
 ensureColumn("users", "last_login_at", "last_login_at TEXT");
+
+// invoices — shareable no-login view, and the link back to the recurring
+// profile that generated an invoice (both added alongside recurring invoices
+// and the client-facing share link)
+ensureColumn("invoices", "public_token", "public_token TEXT");
+ensureColumn("invoices", "recurring_invoice_id", "recurring_invoice_id INTEGER REFERENCES recurring_invoices(id)");
+
+// Backfill: any invoice created before public_token existed (or before this
+// migration ran) won't have one yet — give every such row a token so the
+// "Copy shareable link" button always has something to share, not just
+// invoices created after this update.
+const invoicesMissingToken = db.prepare("SELECT id FROM invoices WHERE public_token IS NULL").all();
+if (invoicesMissingToken.length > 0) {
+  const setToken = db.prepare("UPDATE invoices SET public_token = ? WHERE id = ?");
+  const backfill = db.transaction((rows) => {
+    for (const row of rows) setToken.run(randomUUID().replace(/-/g, ""), row.id);
+  });
+  backfill(invoicesMissingToken);
+}

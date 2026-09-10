@@ -5,9 +5,9 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 const router = express.Router();
 router.use(requireAuth);
 
-// Read own business profile/settings. Open to all roles (cashiers need e.g.
-// inventory_enabled/default_paper_size), but SMTP credentials are stripped
-// for anyone who isn't owner/admin — a cashier login has no reason to see
+// Read own business profile/settings. Open to all roles (staff need the
+// branding/prefix fields to raise invoices), but SMTP credentials are
+// stripped for anyone who isn't owner/admin — staff have no reason to see
 // the business's mail password.
 router.get("/me", (req, res) => {
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
@@ -19,11 +19,11 @@ router.get("/me", (req, res) => {
   res.json(business);
 });
 
-// Onboarding / settings update: business type, inventory toggle, tax, paper size, branding
+// Settings update: profile, tax, numbering prefixes, SMTP, and invoice branding.
 router.put("/me", requireRole("owner", "admin"), (req, res) => {
   const {
-    name, business_type, address, phone, email, website, gstin,
-    invoice_prefix, quote_prefix, credit_note_prefix, default_paper_size, inventory_enabled,
+    name, address, phone, email, website, gstin,
+    invoice_prefix, quote_prefix, credit_note_prefix,
     smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
@@ -32,7 +32,6 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
   db.prepare(
     `UPDATE businesses SET
       name = COALESCE(?, name),
-      business_type = COALESCE(?, business_type),
       address = COALESCE(?, address),
       phone = COALESCE(?, phone),
       email = COALESCE(?, email),
@@ -41,8 +40,6 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       invoice_prefix = COALESCE(?, invoice_prefix),
       quote_prefix = COALESCE(?, quote_prefix),
       credit_note_prefix = COALESCE(?, credit_note_prefix),
-      default_paper_size = COALESCE(?, default_paper_size),
-      inventory_enabled = COALESCE(?, inventory_enabled),
       smtp_host = COALESCE(?, smtp_host),
       smtp_port = COALESCE(?, smtp_port),
       smtp_secure = COALESCE(?, smtp_secure),
@@ -61,9 +58,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       signature_name = COALESCE(?, signature_name)
     WHERE id = ?`
   ).run(
-    name, business_type, address, phone, email, website, gstin,
-    invoice_prefix, quote_prefix, credit_note_prefix, default_paper_size,
-    inventory_enabled === undefined ? undefined : (inventory_enabled ? 1 : 0),
+    name, address, phone, email, website, gstin,
+    invoice_prefix, quote_prefix, credit_note_prefix,
     smtp_host, smtp_port === undefined || smtp_port === "" ? smtp_port : Number(smtp_port),
     smtp_secure === undefined ? undefined : (smtp_secure ? 1 : 0),
     smtp_user, smtp_pass, smtp_from_name, smtp_from_email,

@@ -64,6 +64,7 @@ export default function QuoteView() {
           <div className="invoice-dates">
             <div><span>Quote Date :</span><span>{quote.quote_date}</span></div>
             {quote.expiry_date && <div><span>Valid Until :</span><span>{quote.expiry_date}</span></div>}
+            {quote.reference && <div><span>Reference :</span><span>{quote.reference}</span></div>}
           </div>
         </div>
 

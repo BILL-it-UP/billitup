@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, getUser } from "../lib/api";
 
-const PAPER_SIZES = [
-  { value: "A4", label: "A4" },
-  { value: "THERMAL_3IN", label: '3" Thermal' },
-  { value: "THERMAL_4IN", label: '4" Thermal' },
-];
-
 export default function Settings() {
   const user = getUser();
   const [business, setBusiness] = useState(null);
@@ -36,15 +30,12 @@ export default function Settings() {
     <div>
       <h1>Business Settings</h1>
       {isFirstTimeSetup && (
-        <p className="muted">Finish setting up your business — fill in the details below and choose how invoices should behave.</p>
+        <p className="muted">Finish setting up your business — fill in the details below, then add your branding and bank details further down.</p>
       )}
 
       <form onSubmit={handleSave} className="settings-form">
         <label>Business name
           <input value={business.name || ""} onChange={(e) => setBusiness({ ...business, name: e.target.value })} />
-        </label>
-        <label>Business type
-          <input value={business.business_type || ""} onChange={(e) => setBusiness({ ...business, business_type: e.target.value })} />
         </label>
         <label>Address
           <input value={business.address || ""} onChange={(e) => setBusiness({ ...business, address: e.target.value })} />
@@ -70,16 +61,6 @@ export default function Settings() {
         <label>Credit note number prefix
           <input value={business.credit_note_prefix || ""} onChange={(e) => setBusiness({ ...business, credit_note_prefix: e.target.value })} />
         </label>
-        <label>Default paper size (used when opening an invoice)
-          <select value={business.default_paper_size || "A4"} onChange={(e) => setBusiness({ ...business, default_paper_size: e.target.value })}>
-            {PAPER_SIZES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
-        </label>
-        <label className="checkbox-label">
-          <input type="checkbox" checked={!!business.inventory_enabled} onChange={(e) => setBusiness({ ...business, inventory_enabled: e.target.checked })} />
-          {" "}Track stock quantity for items (decrements automatically when invoiced)
-        </label>
-
         {error && <p className="error">{error}</p>}
         {savedMsg && <p className="muted">{savedMsg}</p>}
         <button type="submit">Save</button>

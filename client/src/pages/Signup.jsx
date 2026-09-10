@@ -2,33 +2,24 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api, setSession } from "../lib/api";
 
-const BUSINESS_TYPES = ["grocery", "clothing", "services", "restaurant", "corporate", "other"];
-const PAPER_SIZES = [
-  { value: "A4", label: "A4 (standard printer)" },
-  { value: "THERMAL_3IN", label: '3" thermal receipt printer' },
-  { value: "THERMAL_4IN", label: '4" thermal receipt printer' },
-];
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 2;
 
-// A short signup wizard: what kind of business this is, then which modules it
-// needs (inventory, GST, printer type), then who the Owner is. Everything
-// chosen here is saved straight onto the business at signup, so there's no
-// separate "finish setting up" step afterward.
+// A short signup wizard for corporate/agency billing: business details, then
+// the Owner login. BillItUp is corporate/A4-invoicing focused, so there's no
+// "what kind of business/printer" branching here — every business gets the
+// same clean invoicing setup, and can fine-tune branding/tax/prefixes later
+// in Settings.
 export default function Signup() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    businessName: "", businessType: "grocery",
-    gstin: "", defaultPaperSize: "A4", inventoryEnabled: false,
+    businessName: "", gstin: "",
     ownerName: "", email: "", password: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const update = (field) => (e) => {
-    const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-    setForm({ ...form, [field]: value });
-  };
+  const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
   const next = (e) => { e.preventDefault(); setError(""); setStep((s) => Math.min(TOTAL_STEPS, s + 1)); };
   const back = () => setStep((s) => Math.max(1, s - 1));
@@ -51,6 +42,7 @@ export default function Signup() {
   return (
     <div className="auth-page">
       <div className="auth-card wizard-card">
+        <img src="/logo-header.png" alt="BillItUp" className="auth-logo" />
         <h1>Set up BillItUp</h1>
         <p className="muted step-indicator">Step {step} of {TOTAL_STEPS}</p>
 
@@ -60,40 +52,19 @@ export default function Signup() {
             <label>Business name
               <input value={form.businessName} onChange={update("businessName")} required autoFocus />
             </label>
-            <label>What kind of business is this?
-              <select value={form.businessType} onChange={update("businessType")}>
-                {BUSINESS_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-            <button type="submit">Next</button>
-          </form>
-        )}
-
-        {step === 2 && (
-          <form onSubmit={next}>
-            <p className="muted">Now, how do you want to bill?</p>
             <label>GSTIN (leave blank if not GST-registered)
               <input value={form.gstin} onChange={update("gstin")} placeholder="Optional" />
             </label>
-            <label>What do you print invoices on?
-              <select value={form.defaultPaperSize} onChange={update("defaultPaperSize")}>
-                {PAPER_SIZES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </label>
-            <label className="checkbox-label">
-              <input type="checkbox" checked={form.inventoryEnabled} onChange={update("inventoryEnabled")} />
-              {" "}Track stock quantity for items (decrements automatically when invoiced)
-            </label>
             <div className="wizard-nav">
-              <button type="button" className="link-btn" onClick={back}>Back</button>
+              <span />
               <button type="submit">Next</button>
             </div>
           </form>
         )}
 
-        {step === 3 && (
+        {step === 2 && (
           <form onSubmit={handleSubmit}>
-            <p className="muted">Finally, create your Owner login — you can add staff logins later.</p>
+            <p className="muted">Now create your Owner login — you can add staff logins later, and finish branding (logo, bank details, terms) in Settings.</p>
             <label>Your name
               <input value={form.ownerName} onChange={update("ownerName")} required autoFocus />
             </label>

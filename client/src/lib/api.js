@@ -74,7 +74,21 @@ export const api = {
   createCreditNote: (payload) => request("/api/credit-notes", { method: "POST", body: payload }),
   sendCreditNoteEmail: (id, payload) => request(`/api/credit-notes/${id}/send`, { method: "POST", body: payload }),
 
-  adjustItemStock: (id, payload) => request(`/api/items/${id}/adjust-stock`, { method: "POST", body: payload }),
-
   getReportsSummary: () => request("/api/reports/summary"),
+
+  listRecurringInvoices: () => request("/api/recurring-invoices"),
+  getRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}`),
+  createRecurringInvoice: (payload) => request("/api/recurring-invoices", { method: "POST", body: payload }),
+  setRecurringInvoiceStatus: (id, status) => request(`/api/recurring-invoices/${id}/status`, { method: "PUT", body: { status } }),
+  generateRecurringInvoiceNow: (id) => request(`/api/recurring-invoices/${id}/generate-now`, { method: "POST" }),
+  deleteRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}`, { method: "DELETE" }),
+
+  // Unauthenticated — no token attached, used by the public "view invoice
+  // without logging in" page.
+  getPublicInvoice: (token) => fetch(`${BASE_URL}/api/public/invoices/${token}`).then(async (res) => {
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "Invoice not found");
+    return data;
+  }),
+  publicInvoicePdfUrl: (token) => `${BASE_URL}/api/public/invoices/${token}/pdf`,
 };

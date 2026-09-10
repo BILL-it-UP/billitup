@@ -8,27 +8,19 @@ const router = express.Router();
 // Signup creates the business AND its first user, who is always the Owner.
 // Staff logins are created later by the Owner/Admin via POST /api/users, not here.
 router.post("/signup", (req, res) => {
-  const {
-    businessName, businessType, ownerName, email, password,
-    gstin, defaultPaperSize, inventoryEnabled,
-  } = req.body;
+  const { businessName, ownerName, email, password, gstin } = req.body;
   if (!businessName || !ownerName || !email || !password) {
     return res.status(400).json({ error: "businessName, ownerName, email and password are required" });
   }
   const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
   if (existing) return res.status(409).json({ error: "An account with that email already exists" });
 
-  // Everything the onboarding wizard collected (modules/paper size/GSTIN) is
-  // saved straight onto the business at creation, so Settings doesn't need to
-  // be revisited afterward just to finish setup.
-  const insertBusiness = db.prepare(
-    `INSERT INTO businesses (name, business_type, gstin, default_paper_size, inventory_enabled)
-     VALUES (?, ?, ?, ?, ?)`
-  );
-  const businessResult = insertBusiness.run(
-    businessName, businessType || null, gstin || null,
-    defaultPaperSize || "A4", inventoryEnabled ? 1 : 0
-  );
+  // Signup only collects the essentials (business name + GSTIN); everything
+  // else (branding, bank details, terms, prefixes) is finished in Settings
+  // afterward. Corporate/A4 invoicing is the only mode BillItUp runs in, so
+  // there's no business-type/paper-size/inventory branching to collect here.
+  const insertBusiness = db.prepare(`INSERT INTO businesses (name, gstin) VALUES (?, ?)`);
+  const businessResult = insertBusiness.run(businessName, gstin || null);
   const businessId = businessResult.lastInsertRowid;
 
   const passwordHash = bcrypt.hashSync(password, 10);

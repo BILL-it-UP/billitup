@@ -33,19 +33,24 @@ export default function Reports() {
           <span className="stat-label">Total Credited</span>
           <span className="stat-value">₹{Number(summary.totalCredited).toFixed(2)}</span>
         </div>
+        <div className="stat-tile">
+          <span className="stat-label">Overdue</span>
+          <span className="stat-value">₹{Number(summary.overdueAmount).toFixed(2)}</span>
+        </div>
       </div>
 
-      {summary.lowStockItems.length > 0 && (
+      {summary.overdueInvoices.length > 0 && (
         <div className="low-stock-alert">
-          <h2>Low Stock</h2>
+          <h2>Overdue Invoices</h2>
           <table className="table">
-            <thead><tr><th>Item</th><th>Remaining</th><th>Alert Threshold</th></tr></thead>
+            <thead><tr><th>#</th><th>Customer</th><th>Due Date</th><th>Balance Due</th></tr></thead>
             <tbody>
-              {summary.lowStockItems.map((i) => (
-                <tr key={i.id}>
-                  <td>{i.name}</td>
-                  <td>{i.stock_qty} {i.unit}</td>
-                  <td>{i.low_stock_threshold} {i.unit}</td>
+              {summary.overdueInvoices.map((inv) => (
+                <tr key={inv.id}>
+                  <td><a href={`/invoices/${inv.id}`}>{inv.invoice_number}</a></td>
+                  <td>{inv.customer_name || "—"}</td>
+                  <td>{inv.due_date}</td>
+                  <td>₹{Number(inv.balance_due).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>

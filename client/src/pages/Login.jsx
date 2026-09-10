@@ -26,6 +26,7 @@ export default function Login() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={handleSubmit}>
+        <img src="/logo-header.png" alt="BillItUp" className="auth-logo" />
         <h1>Log in to BillItUp</h1>
         <label>Email
           <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />

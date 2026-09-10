@@ -38,7 +38,11 @@ export default function Dashboard() {
                 <td><Link to={`/invoices/${inv.id}`}>{inv.invoice_number}</Link></td>
                 <td>{inv.customer_name || "—"}</td>
                 <td>{inv.invoice_date}</td>
-                <td><span className={`badge badge-${inv.status}`}>{STATUS_LABEL[inv.status] || inv.status}</span></td>
+                <td>
+                  {inv.is_overdue
+                    ? <span className="badge badge-overdue">Overdue</span>
+                    : <span className={`badge badge-${inv.status}`}>{STATUS_LABEL[inv.status] || inv.status}</span>}
+                </td>
                 <td>₹{Number(inv.total).toFixed(2)}</td>
               </tr>
             ))}

@@ -9,6 +9,8 @@ export default function NewQuote() {
   const [items, setItems] = useState([]);
   const [customerId, setCustomerId] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  const [reference, setReference] = useState("");
+  const [notes, setNotes] = useState("");
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,6 +40,8 @@ export default function NewQuote() {
       const quote = await api.createQuote({
         customer_id: customerId || null,
         expiry_date: expiryDate || null,
+        reference: reference || null,
+        notes: notes || null,
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
       });
       navigate(`/quotes/${quote.id}`);
@@ -58,9 +62,14 @@ export default function NewQuote() {
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
-        <label className="block">Valid until (optional)
-          <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-        </label>
+        <div className="form-row">
+          <label className="block">Valid until (optional)
+            <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+          </label>
+          <label className="block">PO / Reference number (optional)
+            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PO-4021" />
+          </label>
+        </div>
 
         <table className="table line-item-table">
           <thead>
@@ -94,6 +103,10 @@ export default function NewQuote() {
           <div><span>Tax</span><span>₹{taxTotal.toFixed(2)}</span></div>
           <div className="grand-total"><span>Total</span><span>₹{total.toFixed(2)}</span></div>
         </div>
+
+        <label className="block">Notes (optional, shown on the quote)
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </label>
 
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Quote"}</button>

@@ -47,17 +47,21 @@ router.get("/summary", (req, res) => {
     .prepare(`SELECT COALESCE(SUM(total), 0) AS total FROM credit_notes WHERE business_id = ?`)
     .get(businessId).total;
 
-  const lowStockItems = db
+  // An invoice is overdue once its due date has passed and it's not fully
+  // paid — computed live off due_date rather than a stored status, so it's
+  // always accurate without a background job to keep it in sync.
+  const overdueInvoices = db
     .prepare(
-      `SELECT id, name, unit, stock_qty, low_stock_threshold
-       FROM items
-       WHERE business_id = ? AND stock_qty IS NOT NULL AND low_stock_threshold IS NOT NULL
-         AND stock_qty <= low_stock_threshold
-       ORDER BY stock_qty ASC`
+      `SELECT invoices.id, invoices.invoice_number, invoices.due_date, invoices.balance_due, customers.name AS customer_name
+       FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
+       WHERE invoices.business_id = ? AND invoices.balance_due > 0
+         AND invoices.due_date IS NOT NULL AND invoices.due_date < date('now')
+       ORDER BY invoices.due_date ASC`
     )
     .all(businessId);
+  const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + inv.balance_due, 0);
 
-  res.json({ ...totals, topCustomers, topItems, statusBreakdown, totalCredited, lowStockItems });
+  res.json({ ...totals, topCustomers, topItems, statusBreakdown, totalCredited, overdueInvoices, overdueAmount });
 });
 
 export default router;

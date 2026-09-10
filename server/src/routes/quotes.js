@@ -1,4 +1,5 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
@@ -105,8 +106,8 @@ router.post("/:id/convert", (req, res) => {
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, reference, status,
-       sub_total, discount, tax_total, total, balance_due, notes)
-     VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, balance_due, notes, public_token)
+     VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -119,7 +120,8 @@ router.post("/:id/convert", (req, res) => {
     const result = insertInvoice.run(
       req.auth.businessId, quote.customer_id, invoiceNumber,
       new Date().toISOString().slice(0, 10), `Converted from ${quote.quote_number}`,
-      quote.sub_total, quote.discount, quote.tax_total, quote.total, quote.total, quote.notes
+      quote.sub_total, quote.discount, quote.tax_total, quote.total, quote.total, quote.notes,
+      randomUUID().replace(/-/g, "")
     );
     const id = result.lastInsertRowid;
     for (const line of lineItems) {
