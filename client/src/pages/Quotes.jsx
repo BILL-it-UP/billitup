@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/format";
+import { exportSheet } from "../lib/exportExcel";
 
 const STATUS_LABEL = { draft: "Draft", sent: "Sent", accepted: "Accepted", declined: "Declined", converted: "Converted to Invoice" };
 
@@ -15,7 +16,14 @@ export default function Quotes() {
     <div>
       <div className="page-header">
         <h1>Quotes</h1>
-        <Link className="btn" to="/quotes/new">+ New Quote</Link>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {quotes.length > 0 && (
+            <button type="button" className="link-btn" onClick={() => exportQuotesToExcel(quotes)}>
+              Export to Excel
+            </button>
+          )}
+          <Link className="btn" to="/quotes/new">+ New Quote</Link>
+        </div>
       </div>
 
       {loading && <p className="muted">Loading...</p>}
@@ -39,4 +47,15 @@ export default function Quotes() {
       )}
     </div>
   );
+}
+
+function exportQuotesToExcel(quotes) {
+  const rows = quotes.map((q) => ({
+    "Quote #": q.quote_number,
+    Customer: q.customer_name || "—",
+    Date: q.quote_date,
+    Status: STATUS_LABEL[q.status] || q.status,
+    Total: Number(q.total),
+  }));
+  exportSheet("quotes.xlsx", "Quotes", rows);
 }

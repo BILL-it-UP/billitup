@@ -5,6 +5,7 @@ import CashFlowChart from "../components/CashFlowChart";
 import InvoiceDetail from "../components/InvoiceDetail";
 import { relativeDueLabel } from "../lib/invoiceStatus";
 import { formatMoney } from "../lib/format";
+import { exportSheet } from "../lib/exportExcel";
 
 export default function Dashboard() {
   const [invoices, setInvoices] = useState([]);
@@ -91,7 +92,14 @@ export default function Dashboard() {
         </>
       )}
 
-      <h2>Invoices</h2>
+      <div className="page-header">
+        <h2>Invoices</h2>
+        {invoices.length > 0 && (
+          <button type="button" className="link-btn" onClick={() => exportInvoicesToExcel(invoices)}>
+            Export to Excel
+          </button>
+        )}
+      </div>
       {loading && <p className="muted">Loading...</p>}
       {!loading && invoices.length === 0 && (
         <div className="panel">
@@ -131,4 +139,17 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function exportInvoicesToExcel(invoices) {
+  const rows = invoices.map((inv) => ({
+    "Invoice #": inv.invoice_number,
+    Customer: inv.customer_name || "Walk-in customer",
+    "Invoice Date": inv.invoice_date,
+    "Due Date": inv.due_date || "",
+    Status: inv.status,
+    Total: Number(inv.total),
+    "Balance Due": Number(inv.balance_due),
+  }));
+  exportSheet("invoices.xlsx", "Invoices", rows);
 }

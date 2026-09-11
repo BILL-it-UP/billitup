@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, getUser } from "../lib/api";
+import { exportSheet } from "../lib/exportExcel";
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -24,7 +25,14 @@ export default function Customers() {
 
   return (
     <div>
-      <h1>Customers</h1>
+      <div className="page-header">
+        <h1>Customers</h1>
+        {customers.length > 0 && (
+          <button type="button" className="link-btn" onClick={() => exportCustomersToExcel(customers)}>
+            Export to Excel
+          </button>
+        )}
+      </div>
       {canManage ? (
         <form className="inline-form" onSubmit={handleSubmit}>
           <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -49,4 +57,15 @@ export default function Customers() {
       </table>
     </div>
   );
+}
+
+function exportCustomersToExcel(customers) {
+  const rows = customers.map((c) => ({
+    Name: c.name,
+    Phone: c.phone || "",
+    Email: c.email || "",
+    "Billing Address": c.billing_address || "",
+    GSTIN: c.gstin || "",
+  }));
+  exportSheet("customers.xlsx", "Customers", rows);
 }

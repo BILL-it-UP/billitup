@@ -31,7 +31,10 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   }, [invoiceId]);
 
   useEffect(() => {
-    if (!standalone) return undefined;
+    // Always set the A4 @page size, whether this is the standalone
+    // /invoices/:id page or the embedded pane inside the Dashboard's
+    // master-detail Invoices list — printing from either place should
+    // produce the same A4 document.
     let styleTag = document.getElementById("dynamic-print-style");
     if (!styleTag) {
       styleTag = document.createElement("style");
@@ -39,8 +42,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
       document.head.appendChild(styleTag);
     }
     styleTag.textContent = `@page { size: A4; margin: 12mm; }`;
-    return undefined;
-  }, [standalone]);
+  }, []);
 
   if (!invoice) return <p className="muted">Loading...</p>;
 

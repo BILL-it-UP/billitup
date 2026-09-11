@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
 import { formatMoney } from "../lib/format";
+import { exportWorkbook } from "../lib/exportExcel";
 
 export default function Reports() {
   const [summary, setSummary] = useState(null);
@@ -15,7 +16,12 @@ export default function Reports() {
 
   return (
     <div>
-      <h1>Reports</h1>
+      <div className="page-header">
+        <h1>Reports</h1>
+        <button type="button" className="link-btn" onClick={() => exportReportsToExcel(summary, aging, agingTotal)}>
+          Export to Excel
+        </button>
+      </div>
 
       <div className="stat-tiles">
         <div className="stat-tile">
@@ -179,4 +185,45 @@ export default function Reports() {
       )}
     </div>
   );
+}
+
+function exportReportsToExcel(summary, aging, agingTotal) {
+  exportWorkbook("reports.xlsx", [
+    {
+      name: "AR Aging",
+      rows: [{
+        Current: aging.current, "1-30 days": aging.days1to30, "31-60 days": aging.days31to60,
+        "61-90 days": aging.days61to90, "90+ days": aging.days90plus, Total: agingTotal,
+      }],
+    },
+    {
+      name: "Sales by Customer",
+      rows: summary.salesByCustomer.map((c) => ({ Customer: c.name, Invoices: c.invoice_count, "Total Billed": Number(c.total) })),
+    },
+    {
+      name: "Sales by Item",
+      rows: summary.salesByItem.map((i) => ({ Item: i.description, "Qty Sold": i.qty, Total: Number(i.total) })),
+    },
+    {
+      name: "Customer Balances",
+      rows: summary.customerBalances.map((c) => ({
+        Customer: c.name, "Total Invoiced": Number(c.total_invoiced),
+        "Total Received": Number(c.total_received), "Balance Due": Number(c.balance_due),
+      })),
+    },
+    {
+      name: "Payments Received",
+      rows: summary.paymentsReceived.map((p) => ({
+        Date: String(p.paid_at).slice(0, 10), "Invoice #": p.invoice_number,
+        Customer: p.customer_name || "", Mode: p.mode, Amount: Number(p.amount),
+      })),
+    },
+    {
+      name: "Overdue Invoices",
+      rows: summary.overdueInvoices.map((inv) => ({
+        "Invoice #": inv.invoice_number, Customer: inv.customer_name || "",
+        "Due Date": inv.due_date, "Balance Due": Number(inv.balance_due),
+      })),
+    },
+  ]);
 }

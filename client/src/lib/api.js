@@ -41,6 +41,9 @@ async function request(path, { method = "GET", body } = {}) {
 export const api = {
   signup: (payload) => request("/api/auth/signup", { method: "POST", body: payload }),
   login: (payload) => request("/api/auth/login", { method: "POST", body: payload }),
+  getMyBusinesses: () => request("/api/auth/businesses"),
+  switchBusiness: (businessId) => request("/api/auth/switch-business", { method: "POST", body: { businessId } }),
+  createFirm: (payload) => request("/api/auth/firms", { method: "POST", body: payload }),
 
   getBusiness: () => request("/api/business/me"),
   updateBusiness: (payload) => request("/api/business/me", { method: "PUT", body: payload }),

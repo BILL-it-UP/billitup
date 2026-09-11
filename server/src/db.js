@@ -267,6 +267,22 @@ CREATE TABLE IF NOT EXISTS payments (
   paid_at TEXT DEFAULT (datetime('now')),
   notes TEXT
 );
+
+-- One person's login (a row in "users") can belong to more than one firm —
+-- e.g. an owner who runs two separate businesses can switch between them
+-- without logging out. "users.business_id" stays each login's original/home
+-- firm (kept so nothing else has to change); this table is the actual list
+-- of firms a login can currently switch into, with the role that login has
+-- in each one. A staff login (created via Settings > Staff Logins) still
+-- gets exactly one membership row, so it behaves exactly as before.
+CREATE TABLE IF NOT EXISTS memberships (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  role TEXT NOT NULL DEFAULT 'owner',
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, business_id)
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------
@@ -341,3 +357,17 @@ if (invoicesMissingToken.length > 0) {
   });
   backfill(invoicesMissingToken);
 }
+
+// Backfill: every user created before the memberships table existed needs a
+// membership row for their own (home) business, or they'd suddenly have zero
+// firms to switch into. INSERT OR IGNORE so re-running this on a database
+// that's already up to date does nothing.
+const insertMembership = db.prepare(
+  "INSERT OR IGNORE INTO memberships (user_id, business_id, role) VALUES (?, ?, ?)"
+);
+const backfillMemberships = db.transaction(() => {
+  for (const user of db.prepare("SELECT id, business_id, role FROM users").all()) {
+    insertMembership.run(user.id, user.business_id, user.role);
+  }
+});
+backfillMemberships();

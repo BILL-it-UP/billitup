@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, Link, NavLink, useNavigate } from "react-router-dom";
 import {
   IconDashboard, IconQuote, IconCreditNote, IconRecurring,
@@ -6,6 +6,7 @@ import {
 } from "./components/Icons";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
+import AddFirm from "./pages/AddFirm";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
 import Items from "./pages/Items";
@@ -22,7 +23,7 @@ import NewRecurringInvoice from "./pages/NewRecurringInvoice";
 import PublicInvoiceView from "./pages/PublicInvoiceView";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
-import { getUser, clearSession } from "./lib/api";
+import { api, getUser, clearSession, setSession } from "./lib/api";
 
 function RequireAuth({ children }) {
   const user = getUser();
@@ -40,6 +41,41 @@ const NAV_ITEMS = [
   { to: "/reports", label: "Reports", icon: IconReports, ownerOnly: true },
   { to: "/settings", label: "Settings", icon: IconSettings, ownerOnly: true },
 ];
+
+// Firm switcher — only owners create/switch firms (see /api/auth/firms), so
+// this only renders for role === "owner". Harmless for an owner with just
+// one firm: the dropdown then just shows that one name plus "+ Add another
+// firm", same as Zoho Books' organization switcher always being present.
+function FirmSwitcher({ user, navigate }) {
+  const [businesses, setBusinesses] = useState([]);
+
+  useEffect(() => {
+    api.getMyBusinesses().then(setBusinesses).catch(() => {});
+  }, []);
+
+  if (businesses.length === 0) return null;
+
+  const handleChange = async (e) => {
+    const value = e.target.value;
+    if (value === "__add__") { navigate("/add-firm"); return; }
+    const businessId = Number(value);
+    if (businessId === user.business_id) return;
+    try {
+      const { token, user: switchedUser } = await api.switchBusiness(businessId);
+      setSession(token, switchedUser);
+      window.location.assign("/"); // full reload — every page's data is scoped to the active firm
+    } catch {
+      // If the switch fails for some reason, just leave the dropdown as-is.
+    }
+  };
+
+  return (
+    <select className="firm-switcher" value={user.business_id} onChange={handleChange} title="Switch firm">
+      {businesses.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+      <option value="__add__">+ Add another firm</option>
+    </select>
+  );
+}
 
 function Shell({ children }) {
   const navigate = useNavigate();
@@ -91,7 +127,9 @@ function Shell({ children }) {
 
       <div className="app-main-col">
         <header className="no-print topbar">
-          <div className="topbar-spacer" />
+          <div className="topbar-spacer">
+            {user?.role === "owner" && <FirmSwitcher user={user} navigate={navigate} />}
+          </div>
           {user && (
             <div className="topbar-user">
               <span className="topbar-avatar">{initials}</span>
@@ -132,6 +170,7 @@ export default function App() {
       <Route path="/recurring-invoices/new" element={<RequireAuth><Shell><NewRecurringInvoice /></Shell></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Shell><Reports /></Shell></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Shell><Settings /></Shell></RequireAuth>} />
+      <Route path="/add-firm" element={<RequireAuth><Shell><AddFirm /></Shell></RequireAuth>} />
     </Routes>
   );
 }

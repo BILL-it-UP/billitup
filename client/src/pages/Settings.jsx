@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, getUser } from "../lib/api";
+import { Link } from "react-router-dom";
+import { api, getUser, setSession } from "../lib/api";
 
 export default function Settings() {
   const user = getUser();
@@ -70,7 +71,47 @@ export default function Settings() {
 
       <EmailSettings business={business} setBusiness={setBusiness} />
 
+      {user?.role === "owner" && <FirmManagement />}
+
       {user?.role === "owner" && <StaffManagement />}
+    </div>
+  );
+}
+
+function FirmManagement() {
+  const [businesses, setBusinesses] = useState([]);
+  const user = getUser();
+
+  const load = () => api.getMyBusinesses().then(setBusinesses);
+  useEffect(() => { load(); }, []);
+
+  const switchTo = async (businessId) => {
+    if (businessId === user.business_id) return;
+    const { token, user: switchedUser } = await api.switchBusiness(businessId);
+    setSession(token, switchedUser);
+    window.location.assign("/");
+  };
+
+  return (
+    <div className="staff-section">
+      <h2>Your Firms</h2>
+      <p className="muted">
+        Run more than one business? Add another firm here — it gets its own customers, invoices, and
+        numbering, and you switch into it anytime from the dropdown at the top, all under this same login.
+      </p>
+      <table className="table">
+        <thead><tr><th>Firm</th><th>Your Role</th><th /></tr></thead>
+        <tbody>
+          {businesses.map((b) => (
+            <tr key={b.id}>
+              <td>{b.name}{b.id === user.business_id && <span className="muted"> (active)</span>}</td>
+              <td>{b.role}</td>
+              <td>{b.id !== user.business_id && <button className="link-btn" onClick={() => switchTo(b.id)}>Switch to this firm</button>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Link className="link-btn" to="/add-firm">+ Add another firm</Link>
     </div>
   );
 }

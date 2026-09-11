@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, getUser } from "../lib/api";
+import { exportSheet } from "../lib/exportExcel";
 
 export default function Items() {
   const [items, setItems] = useState([]);
@@ -24,7 +25,14 @@ export default function Items() {
 
   return (
     <div>
-      <h1>Items</h1>
+      <div className="page-header">
+        <h1>Items</h1>
+        {items.length > 0 && (
+          <button type="button" className="link-btn" onClick={() => exportItemsToExcel(items)}>
+            Export to Excel
+          </button>
+        )}
+      </div>
       {canManage ? (
         <form className="inline-form" onSubmit={handleSubmit}>
           <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -53,4 +61,15 @@ export default function Items() {
       </table>
     </div>
   );
+}
+
+function exportItemsToExcel(items) {
+  const rows = items.map((i) => ({
+    Name: i.name,
+    Unit: i.unit || "",
+    Rate: Number(i.rate),
+    "Tax %": Number(i.tax_rate) || 0,
+    "HSN/SAC": i.hsn_sac_code || "",
+  }));
+  exportSheet("items.xlsx", "Items", rows);
 }

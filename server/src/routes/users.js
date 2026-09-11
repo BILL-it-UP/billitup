@@ -51,6 +51,8 @@ router.post("/", (req, res) => {
   const result = db
     .prepare("INSERT INTO users (business_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)")
     .run(req.auth.businessId, name, email, passwordHash, role);
+  db.prepare("INSERT INTO memberships (user_id, business_id, role) VALUES (?, ?, ?)")
+    .run(result.lastInsertRowid, req.auth.businessId, role);
   res.status(201).json({ id: result.lastInsertRowid, name, email, role });
 });
 

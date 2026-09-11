@@ -88,6 +88,11 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
   padding: 10px 24px; background: white; border-bottom: 1px solid var(--border);
   min-height: 56px; box-sizing: border-box;
 }
+.topbar-spacer { flex: 1; display: flex; align-items: center; }
+.firm-switcher {
+  width: auto; margin-top: 0; max-width: 240px; font-size: 13px; padding: 6px 10px;
+  border-color: var(--border); background: var(--bg, #f6f7f9); cursor: pointer;
+}
 .topbar-user { display: flex; align-items: center; gap: 10px; }
 .topbar-avatar {
   width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: white;
@@ -282,12 +287,24 @@ textarea { resize: vertical; }
 .doc-signature-img { max-height: 48px; max-width: 180px; display: inline-block; margin-bottom: 4px; }
 .doc-signature-line { border-top: 1px solid var(--ink); width: 180px; margin-left: auto; margin-bottom: 6px; }
 
-/* ---- Print ---- */
+/* ---- Print ----
+   Printing an invoice/quote/credit note can happen from a standalone page
+   (fine on its own) OR from the embedded pane inside the master-detail
+   Invoices list on the Dashboard — where the surrounding page (sidebar,
+   stat tiles, invoice list column) sits right next to the document in the
+   DOM and would otherwise print too. To always print ONLY the document
+   regardless of where it's embedded, hide everything on the page and then
+   re-reveal just the .invoice-doc subtree, pulled out to the page origin. */
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
   main { max-width: none; padding: 0; margin: 0; }
-  .invoice-doc { border: none; margin: 0; box-shadow: none; }
+  body * { visibility: hidden; }
+  .invoice-doc, .invoice-doc * { visibility: visible; }
+  .invoice-doc {
+    position: absolute; top: 0; left: 0; width: 100% !important;
+    max-width: none !important; border: none; margin: 0; box-shadow: none;
+  }
   .invoice-doc.invoice-full { padding: 0; }
 }
 

@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db.js";
-import { signToken } from "../middleware/auth.js";
+import { signToken, requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -28,8 +28,10 @@ router.post("/signup", (req, res) => {
     "INSERT INTO users (business_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, 'owner')"
   );
   const userResult = insertUser.run(businessId, ownerName, email, passwordHash);
+  const userId = userResult.lastInsertRowid;
+  db.prepare("INSERT INTO memberships (user_id, business_id, role) VALUES (?, ?, 'owner')").run(userId, businessId);
 
-  const user = { id: userResult.lastInsertRowid, business_id: businessId, role: "owner" };
+  const user = { id: userId, business_id: businessId, role: "owner" };
   const token = signToken(user);
   res.status(201).json({ token, user: { ...user, name: ownerName, email } });
 });
@@ -54,6 +56,58 @@ router.post("/login", (req, res) => {
   res.json({
     token,
     user: { id: user.id, business_id: user.business_id, role: user.role, name: user.name, email: user.email },
+  });
+});
+
+// Firms this login can switch into — one row per membership. Used to render
+// the firm switcher in the topbar; also works fine for a login that only
+// has the one (usual) firm.
+router.get("/businesses", requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT businesses.id, businesses.name, businesses.gstin, memberships.role
+       FROM memberships JOIN businesses ON businesses.id = memberships.business_id
+       WHERE memberships.user_id = ?
+       ORDER BY businesses.created_at`
+    )
+    .all(req.auth.userId);
+  res.json(rows);
+});
+
+// Switch the active firm for this login — issues a fresh token scoped to the
+// target business (only one this login actually has a membership in).
+router.post("/switch-business", requireAuth, (req, res) => {
+  const { businessId } = req.body;
+  const membership = db
+    .prepare("SELECT * FROM memberships WHERE user_id = ? AND business_id = ?")
+    .get(req.auth.userId, businessId);
+  if (!membership) return res.status(403).json({ error: "You don't have access to that firm" });
+
+  const person = db.prepare("SELECT * FROM users WHERE id = ?").get(req.auth.userId);
+  const token = signToken({ id: person.id, business_id: membership.business_id, role: membership.role });
+  res.json({
+    token,
+    user: { id: person.id, business_id: membership.business_id, role: membership.role, name: person.name, email: person.email },
+  });
+});
+
+// Add another firm under this same login (Owner only) — like Zoho Books'
+// "+ Add Organization". Creates a new business and a fresh membership for
+// the SAME user row; no new login/email is created. Immediately switches
+// into the new firm so the response can be used exactly like a login result.
+router.post("/firms", requireAuth, requireRole("owner"), (req, res) => {
+  const { businessName, gstin } = req.body;
+  if (!businessName) return res.status(400).json({ error: "businessName is required" });
+
+  const businessResult = db.prepare("INSERT INTO businesses (name, gstin) VALUES (?, ?)").run(businessName, gstin || null);
+  const businessId = businessResult.lastInsertRowid;
+  db.prepare("INSERT INTO memberships (user_id, business_id, role) VALUES (?, ?, 'owner')").run(req.auth.userId, businessId);
+
+  const person = db.prepare("SELECT * FROM users WHERE id = ?").get(req.auth.userId);
+  const token = signToken({ id: person.id, business_id: businessId, role: "owner" });
+  res.status(201).json({
+    token,
+    user: { id: person.id, business_id: businessId, role: "owner", name: person.name, email: person.email },
   });
 });
 
