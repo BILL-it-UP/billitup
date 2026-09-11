@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
+import { formatMoney, formatQty } from "../lib/format";
 
 export default function QuoteView() {
   const { id } = useParams();
@@ -52,7 +53,7 @@ export default function QuoteView() {
       <div className="invoice-doc invoice-full" style={{ width: "210mm" }}>
         <DocumentBrandHeader
           business={business} docLabel="Quote" docNumber={quote.quote_number}
-          headline={{ label: "Total", value: `₹${Number(quote.total).toFixed(2)}` }}
+          headline={{ label: "Total", value: `₹${formatMoney(quote.total)}` }}
         />
 
         <div className="invoice-parties">
@@ -73,19 +74,19 @@ export default function QuoteView() {
           <tbody>
             {lineItems.map((line, i) => (
               <tr key={line.id}>
-                <td>{i + 1}</td><td>{line.description}</td><td>{line.qty}</td>
-                <td>₹{Number(line.rate).toFixed(2)}</td><td>₹{Number(line.discount).toFixed(2)}</td>
-                <td>₹{Number(line.amount).toFixed(2)}</td>
+                <td>{i + 1}</td><td>{line.description}</td><td>{formatQty(line.qty)}</td>
+                <td>₹{formatMoney(line.rate)}</td><td>₹{formatMoney(line.discount)}</td>
+                <td>₹{formatMoney(line.amount)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         <div className="totals-box">
-          <div><span>Sub Total</span><span>₹{Number(quote.sub_total).toFixed(2)}</span></div>
-          <div><span>Discount</span><span>-₹{Number(quote.discount).toFixed(2)}</span></div>
-          <div><span>Tax</span><span>₹{Number(quote.tax_total).toFixed(2)}</span></div>
-          <div className="grand-total"><span>Total</span><span>₹{Number(quote.total).toFixed(2)}</span></div>
+          <div><span>Sub Total</span><span>₹{formatMoney(quote.sub_total)}</span></div>
+          <div><span>Discount</span><span>-₹{formatMoney(quote.discount)}</span></div>
+          <div><span>Tax</span><span>₹{formatMoney(quote.tax_total)}</span></div>
+          <div className="grand-total"><span>Total</span><span>₹{formatMoney(quote.total)}</span></div>
         </div>
 
         {quote.notes && <p className="invoice-notes">{quote.notes}</p>}

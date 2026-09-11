@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { formatMoney } from "../lib/format";
 
 const STATUS_LABEL = { draft: "Draft", sent: "Sent", accepted: "Accepted", declined: "Declined", converted: "Converted to Invoice" };
 
@@ -30,7 +31,7 @@ export default function Quotes() {
                 <td>{q.customer_name || "—"}</td>
                 <td>{q.quote_date}</td>
                 <td><span className={`badge badge-${q.status === "converted" ? "paid" : q.status}`}>{STATUS_LABEL[q.status] || q.status}</span></td>
-                <td>₹{Number(q.total).toFixed(2)}</td>
+                <td>₹{formatMoney(q.total)}</td>
               </tr>
             ))}
           </tbody>

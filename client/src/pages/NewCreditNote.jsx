@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
+import { formatMoney } from "../lib/format";
 
 export default function NewCreditNote() {
   const navigate = useNavigate();
@@ -100,12 +101,12 @@ export default function NewCreditNote() {
                     {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
                   </select>
                 </td>
-                <td><input value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })} required /></td>
+                <td><textarea rows={2} value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })} placeholder="Add a line break to list multiple items under one line" required /></td>
                 <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.tax_rate} onChange={(e) => updateLine(i, { tax_rate: e.target.value })} /></td>
-                <td className="num">₹{lineAmount(line).toFixed(2)}</td>
+                <td className="num">₹{formatMoney(lineAmount(line))}</td>
                 <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
               </tr>
             ))}
@@ -114,10 +115,10 @@ export default function NewCreditNote() {
         <button type="button" className="link-btn" onClick={addLine}>+ Add line</button>
 
         <div className="totals-box">
-          <div><span>Sub Total</span><span>₹{subTotal.toFixed(2)}</span></div>
-          <div><span>Discount</span><span>-₹{discountTotal.toFixed(2)}</span></div>
-          <div><span>Tax</span><span>₹{taxTotal.toFixed(2)}</span></div>
-          <div className="grand-total"><span>Total Credit</span><span>₹{total.toFixed(2)}</span></div>
+          <div><span>Sub Total</span><span>₹{formatMoney(subTotal)}</span></div>
+          <div><span>Discount</span><span>-₹{formatMoney(discountTotal)}</span></div>
+          <div><span>Tax</span><span>₹{formatMoney(taxTotal)}</span></div>
+          <div className="grand-total"><span>Total Credit</span><span>₹{formatMoney(total)}</span></div>
         </div>
         {invoiceId && <p className="muted">This amount will be deducted from that invoice's balance due.</p>}
 

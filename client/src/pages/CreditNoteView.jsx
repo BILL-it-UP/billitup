@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
+import { formatMoney, formatQty } from "../lib/format";
 
 export default function CreditNoteView() {
   const { id } = useParams();
@@ -28,7 +29,7 @@ export default function CreditNoteView() {
       <div className="invoice-doc invoice-full" style={{ width: "210mm" }}>
         <DocumentBrandHeader
           business={business} docLabel="Credit Note" docNumber={creditNote.credit_note_number}
-          headline={{ label: "Total Credit", value: `₹${Number(creditNote.total).toFixed(2)}` }}
+          headline={{ label: "Total Credit", value: `₹${formatMoney(creditNote.total)}` }}
           extraMeta={invoice ? [`Against Invoice: ${invoice.invoice_number}`] : []}
         />
 
@@ -49,19 +50,19 @@ export default function CreditNoteView() {
           <tbody>
             {lineItems.map((line, i) => (
               <tr key={line.id}>
-                <td>{i + 1}</td><td>{line.description}</td><td>{line.qty}</td>
-                <td>₹{Number(line.rate).toFixed(2)}</td><td>₹{Number(line.discount).toFixed(2)}</td>
-                <td>₹{Number(line.amount).toFixed(2)}</td>
+                <td>{i + 1}</td><td>{line.description}</td><td>{formatQty(line.qty)}</td>
+                <td>₹{formatMoney(line.rate)}</td><td>₹{formatMoney(line.discount)}</td>
+                <td>₹{formatMoney(line.amount)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         <div className="totals-box">
-          <div><span>Sub Total</span><span>₹{Number(creditNote.sub_total).toFixed(2)}</span></div>
-          <div><span>Discount</span><span>-₹{Number(creditNote.discount).toFixed(2)}</span></div>
-          <div><span>Tax</span><span>₹{Number(creditNote.tax_total).toFixed(2)}</span></div>
-          <div className="grand-total"><span>Total Credit</span><span>₹{Number(creditNote.total).toFixed(2)}</span></div>
+          <div><span>Sub Total</span><span>₹{formatMoney(creditNote.sub_total)}</span></div>
+          <div><span>Discount</span><span>-₹{formatMoney(creditNote.discount)}</span></div>
+          <div><span>Tax</span><span>₹{formatMoney(creditNote.tax_total)}</span></div>
+          <div className="grand-total"><span>Total Credit</span><span>₹{formatMoney(creditNote.total)}</span></div>
         </div>
 
         {creditNote.notes && <p className="invoice-notes">{creditNote.notes}</p>}

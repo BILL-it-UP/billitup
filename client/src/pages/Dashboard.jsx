@@ -4,6 +4,7 @@ import { api, getUser } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
 import InvoiceDetail from "../components/InvoiceDetail";
 import { relativeDueLabel } from "../lib/invoiceStatus";
+import { formatMoney } from "../lib/format";
 
 export default function Dashboard() {
   const [invoices, setInvoices] = useState([]);
@@ -40,19 +41,19 @@ export default function Dashboard() {
           <div className="stat-tiles">
             <div className="stat-tile">
               <span className="stat-label">Total Invoiced</span>
-              <span className="stat-value">₹{Number(summary.total_invoiced).toFixed(2)}</span>
+              <span className="stat-value">₹{formatMoney(summary.total_invoiced)}</span>
             </div>
             <div className="stat-tile">
               <span className="stat-label">Total Received</span>
-              <span className="stat-value">₹{Number(summary.total_received).toFixed(2)}</span>
+              <span className="stat-value">₹{formatMoney(summary.total_received)}</span>
             </div>
             <div className="stat-tile">
               <span className="stat-label">Outstanding</span>
-              <span className="stat-value">₹{Number(summary.total_outstanding).toFixed(2)}</span>
+              <span className="stat-value">₹{formatMoney(summary.total_outstanding)}</span>
             </div>
             <div className="stat-tile">
               <span className="stat-label">Overdue</span>
-              <span className="stat-value" style={{ color: "var(--danger, #b3261e)" }}>₹{Number(summary.overdueAmount).toFixed(2)}</span>
+              <span className="stat-value" style={{ color: "var(--danger, #b3261e)" }}>₹{formatMoney(summary.overdueAmount)}</span>
             </div>
           </div>
 
@@ -62,11 +63,11 @@ export default function Dashboard() {
               <div className="receivables-split">
                 <div>
                   <span className="stat-label">Current</span>
-                  <span className="stat-value">₹{Number(summary.receivables.current).toFixed(2)}</span>
+                  <span className="stat-value">₹{formatMoney(summary.receivables.current)}</span>
                 </div>
                 <div>
                   <span className="stat-label">Overdue</span>
-                  <span className="stat-value" style={{ color: "var(--danger, #b3261e)" }}>₹{Number(summary.receivables.overdue).toFixed(2)}</span>
+                  <span className="stat-value" style={{ color: "var(--danger, #b3261e)" }}>₹{formatMoney(summary.receivables.overdue)}</span>
                 </div>
               </div>
               <div className="receivables-bar">
@@ -113,7 +114,7 @@ export default function Dashboard() {
                 >
                   <div className="invoice-list-item-top">
                     <span className="invoice-list-item-name">{inv.customer_name || "Walk-in customer"}</span>
-                    <span className="invoice-list-item-amount">₹{Number(inv.total).toFixed(2)}</span>
+                    <span className="invoice-list-item-amount">₹{formatMoney(inv.total)}</span>
                   </div>
                   <div className="invoice-list-item-bottom">
                     <span className="muted">{inv.invoice_number} · {inv.invoice_date}</span>

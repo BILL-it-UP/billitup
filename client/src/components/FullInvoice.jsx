@@ -1,5 +1,6 @@
 import DocumentBrandHeader from "./DocumentBrandHeader";
 import DocumentFooter from "./DocumentFooter";
+import { formatMoney, formatQty } from "../lib/format";
 
 // The actual A4 invoice document — shared by the authenticated Invoice
 // detail view, the master-detail Invoices list, and the public (no-login)
@@ -10,7 +11,7 @@ export default function FullInvoice({ invoice }) {
     <>
       <DocumentBrandHeader
         business={business} docLabel="Invoice" docNumber={invoice.invoice_number}
-        headline={{ label: "Balance Due", value: `₹${Number(invoice.balance_due).toFixed(2)}` }}
+        headline={{ label: "Balance Due", value: `₹${formatMoney(invoice.balance_due)}` }}
       />
 
       <div className="invoice-parties">
@@ -35,20 +36,20 @@ export default function FullInvoice({ invoice }) {
         <tbody>
           {lineItems.map((line, i) => (
             <tr key={line.id}>
-              <td>{i + 1}</td><td>{line.description}</td><td>{line.qty}</td>
-              <td>₹{Number(line.rate).toFixed(2)}</td><td>₹{Number(line.discount).toFixed(2)}</td>
-              <td>₹{Number(line.amount).toFixed(2)}</td>
+              <td>{i + 1}</td><td>{line.description}</td><td>{formatQty(line.qty)}</td>
+              <td>₹{formatMoney(line.rate)}</td><td>₹{formatMoney(line.discount)}</td>
+              <td>₹{formatMoney(line.amount)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
       <div className="totals-box">
-        <div><span>Sub Total</span><span>₹{Number(invoice.sub_total).toFixed(2)}</span></div>
-        <div><span>Discount</span><span>-₹{Number(invoice.discount).toFixed(2)}</span></div>
-        <div><span>Tax</span><span>₹{Number(invoice.tax_total).toFixed(2)}</span></div>
-        <div className="grand-total"><span>Total</span><span>₹{Number(invoice.total).toFixed(2)}</span></div>
-        <div className="doc-balance-due-row"><span>Balance Due</span><span>₹{Number(invoice.balance_due).toFixed(2)}</span></div>
+        <div><span>Sub Total</span><span>₹{formatMoney(invoice.sub_total)}</span></div>
+        <div><span>Discount</span><span>-₹{formatMoney(invoice.discount)}</span></div>
+        <div><span>Tax</span><span>₹{formatMoney(invoice.tax_total)}</span></div>
+        <div className="grand-total"><span>Total</span><span>₹{formatMoney(invoice.total)}</span></div>
+        <div className="doc-balance-due-row"><span>Balance Due</span><span>₹{formatMoney(invoice.balance_due)}</span></div>
       </div>
 
       {invoice.notes && <p className="invoice-notes">{invoice.notes}</p>}

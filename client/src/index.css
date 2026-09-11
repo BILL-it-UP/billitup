@@ -145,8 +145,9 @@ textarea { resize: vertical; }
 .table th, .table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
 .table th { color: var(--muted); font-weight: 600; }
 .table .num { text-align: right; }
-.line-item-table input, .line-item-table select { margin-top: 0; }
+.line-item-table input, .line-item-table select, .line-item-table textarea { margin-top: 0; }
 .line-item-table td { padding: 4px; }
+.line-item-table textarea { resize: vertical; min-height: 38px; font-size: 14px; }
 
 .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
 .badge-draft { background: #eee; color: #555; }
@@ -265,6 +266,10 @@ textarea { resize: vertical; }
 
 .doc-line-items thead tr { background: #2b2f38; }
 .doc-line-items thead th { color: white; font-weight: 600; padding: 10px 8px; border-bottom: none; }
+/* Item & Description column — preserve line breaks so a multi-line item
+   breakdown (e.g. several SKUs bundled under one line) prints the way it
+   was typed, instead of collapsing onto a single line. */
+.doc-line-items td:nth-child(2) { white-space: pre-line; }
 .totals-box .doc-balance-due-row { background: #f3f4f6; font-weight: 700; margin: 4px -8px 0; padding: 8px; }
 
 .doc-amount-words { font-size: 13px; margin: 20px 0 0; }

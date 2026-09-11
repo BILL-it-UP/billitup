@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { formatMoney } from "../lib/format";
 
 export default function CreditNotes() {
   const [creditNotes, setCreditNotes] = useState([]);
@@ -28,7 +29,7 @@ export default function CreditNotes() {
                 <td>{c.customer_name || "—"}</td>
                 <td>{c.invoice_number || "—"}</td>
                 <td>{c.credit_note_date}</td>
-                <td>₹{Number(c.total).toFixed(2)}</td>
+                <td>₹{formatMoney(c.total)}</td>
               </tr>
             ))}
           </tbody>

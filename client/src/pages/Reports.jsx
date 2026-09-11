@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
+import { formatMoney } from "../lib/format";
 
 export default function Reports() {
   const [summary, setSummary] = useState(null);
@@ -19,15 +20,15 @@ export default function Reports() {
       <div className="stat-tiles">
         <div className="stat-tile">
           <span className="stat-label">Total Invoiced</span>
-          <span className="stat-value">₹{Number(summary.total_invoiced).toFixed(2)}</span>
+          <span className="stat-value">₹{formatMoney(summary.total_invoiced)}</span>
         </div>
         <div className="stat-tile">
           <span className="stat-label">Total Received</span>
-          <span className="stat-value">₹{Number(summary.total_received).toFixed(2)}</span>
+          <span className="stat-value">₹{formatMoney(summary.total_received)}</span>
         </div>
         <div className="stat-tile">
           <span className="stat-label">Outstanding</span>
-          <span className="stat-value">₹{Number(summary.total_outstanding).toFixed(2)}</span>
+          <span className="stat-value">₹{formatMoney(summary.total_outstanding)}</span>
         </div>
         <div className="stat-tile">
           <span className="stat-label">Invoices</span>
@@ -35,11 +36,11 @@ export default function Reports() {
         </div>
         <div className="stat-tile">
           <span className="stat-label">Total Credited</span>
-          <span className="stat-value">₹{Number(summary.totalCredited).toFixed(2)}</span>
+          <span className="stat-value">₹{formatMoney(summary.totalCredited)}</span>
         </div>
         <div className="stat-tile">
           <span className="stat-label">Overdue</span>
-          <span className="stat-value">₹{Number(summary.overdueAmount).toFixed(2)}</span>
+          <span className="stat-value">₹{formatMoney(summary.overdueAmount)}</span>
         </div>
       </div>
 
@@ -49,11 +50,11 @@ export default function Reports() {
           <div className="receivables-split">
             <div>
               <span className="stat-label">Current</span>
-              <span className="stat-value">₹{Number(summary.receivables.current).toFixed(2)}</span>
+              <span className="stat-value">₹{formatMoney(summary.receivables.current)}</span>
             </div>
             <div>
               <span className="stat-label">Overdue</span>
-              <span className="stat-value" style={{ color: "var(--danger, #b3261e)" }}>₹{Number(summary.receivables.overdue).toFixed(2)}</span>
+              <span className="stat-value" style={{ color: "var(--danger, #b3261e)" }}>₹{formatMoney(summary.receivables.overdue)}</span>
             </div>
           </div>
           <div className="receivables-bar">
@@ -85,7 +86,7 @@ export default function Reports() {
                   <td><a href={`/invoices/${inv.id}`}>{inv.invoice_number}</a></td>
                   <td>{inv.customer_name || "—"}</td>
                   <td>{inv.due_date}</td>
-                  <td>₹{Number(inv.balance_due).toFixed(2)}</td>
+                  <td>₹{formatMoney(inv.balance_due)}</td>
                 </tr>
               ))}
             </tbody>
@@ -98,12 +99,12 @@ export default function Reports() {
         <thead><tr><th>Current</th><th>1–30 days</th><th>31–60 days</th><th>61–90 days</th><th>90+ days</th><th>Total</th></tr></thead>
         <tbody>
           <tr>
-            <td>₹{aging.current.toFixed(2)}</td>
-            <td>₹{aging.days1to30.toFixed(2)}</td>
-            <td>₹{aging.days31to60.toFixed(2)}</td>
-            <td>₹{aging.days61to90.toFixed(2)}</td>
-            <td>₹{aging.days90plus.toFixed(2)}</td>
-            <td><strong>₹{agingTotal.toFixed(2)}</strong></td>
+            <td>₹{formatMoney(aging.current)}</td>
+            <td>₹{formatMoney(aging.days1to30)}</td>
+            <td>₹{formatMoney(aging.days31to60)}</td>
+            <td>₹{formatMoney(aging.days61to90)}</td>
+            <td>₹{formatMoney(aging.days90plus)}</td>
+            <td><strong>₹{formatMoney(agingTotal)}</strong></td>
           </tr>
         </tbody>
       </table>
@@ -117,7 +118,7 @@ export default function Reports() {
               <thead><tr><th>Customer</th><th>Invoices</th><th>Total Billed</th></tr></thead>
               <tbody>
                 {summary.salesByCustomer.map((c) => (
-                  <tr key={c.name}><td>{c.name}</td><td>{c.invoice_count}</td><td>₹{Number(c.total).toFixed(2)}</td></tr>
+                  <tr key={c.name}><td>{c.name}</td><td>{c.invoice_count}</td><td>₹{formatMoney(c.total)}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -132,7 +133,7 @@ export default function Reports() {
               <thead><tr><th>Item</th><th>Qty Sold</th><th>Total</th></tr></thead>
               <tbody>
                 {summary.salesByItem.map((i) => (
-                  <tr key={i.description}><td>{i.description}</td><td>{i.qty}</td><td>₹{Number(i.total).toFixed(2)}</td></tr>
+                  <tr key={i.description}><td>{i.description}</td><td>{i.qty}</td><td>₹{formatMoney(i.total)}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -149,9 +150,9 @@ export default function Reports() {
             {summary.customerBalances.map((c) => (
               <tr key={c.id}>
                 <td>{c.name}</td>
-                <td>₹{Number(c.total_invoiced).toFixed(2)}</td>
-                <td>₹{Number(c.total_received).toFixed(2)}</td>
-                <td>₹{Number(c.balance_due).toFixed(2)}</td>
+                <td>₹{formatMoney(c.total_invoiced)}</td>
+                <td>₹{formatMoney(c.total_received)}</td>
+                <td>₹{formatMoney(c.balance_due)}</td>
               </tr>
             ))}
           </tbody>
@@ -170,7 +171,7 @@ export default function Reports() {
                 <td><a href={`/invoices/${p.invoice_id}`}>{p.invoice_number}</a></td>
                 <td>{p.customer_name || "—"}</td>
                 <td>{p.mode}</td>
-                <td>₹{Number(p.amount).toFixed(2)}</td>
+                <td>₹{formatMoney(p.amount)}</td>
               </tr>
             ))}
           </tbody>
