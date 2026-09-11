@@ -204,6 +204,42 @@ textarea { resize: vertical; }
 .cash-flow-value { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .cash-flow-label { font-size: 12px; color: var(--muted); }
 
+/* ---- Master-detail Invoices list ---- */
+.invoices-split { display: grid; grid-template-columns: 340px 1fr; gap: 20px; height: 680px; margin-top: 12px; }
+.invoice-list {
+  background: white; border: 1px solid var(--border); border-radius: 10px;
+  overflow-y: auto; height: 100%;
+}
+.invoice-list-item {
+  all: unset; display: block; box-sizing: border-box; width: 100%;
+  padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.invoice-list-item:hover { background: var(--bg); }
+.invoice-list-item.active { background: #eaf5ef; border-left: 3px solid var(--accent); padding-left: 11px; }
+.invoice-list-item-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.invoice-list-item-bottom { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.due-label { font-weight: 600; white-space: nowrap; }
+.due-label-overdue { color: #b3261e; }
+.due-label-due, .due-label-sent { color: var(--accent); }
+.due-label-due-soon { color: #b26a00; }
+.due-label-paid { color: #166534; }
+.due-label-draft { color: var(--muted); }
+
+.invoice-detail-pane {
+  background: white; border: 1px solid var(--border); border-radius: 10px;
+  overflow-y: auto; height: 100%; padding: 20px; box-sizing: border-box;
+}
+
+.payment-form { flex-basis: 100%; max-width: 640px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 4px; }
+.payment-form .form-row { margin-bottom: 4px; }
+.payment-form-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+
+@media (max-width: 900px) {
+  .invoices-split { grid-template-columns: 1fr; height: auto; }
+  .invoice-list { height: 320px; }
+  .invoice-detail-pane { height: 600px; }
+}
+
 /* ---- Invoice / Quote / Credit Note document ---- */
 .invoice-doc {
   background: white; margin: 0 auto; border: 1px solid var(--border);

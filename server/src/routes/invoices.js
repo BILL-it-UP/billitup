@@ -106,13 +106,18 @@ router.post("/:id/payments", (req, res) => {
   const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
-  const { amount, mode, notes } = req.body;
+  const { amount, mode, notes, paid_at } = req.body;
   const amt = Number(amount);
   if (!amt || amt <= 0) return res.status(400).json({ error: "amount must be a positive number" });
 
   db.transaction(() => {
-    db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes) VALUES (?, ?, ?, ?)")
-      .run(invoice.id, amt, mode || "cash", notes || null);
+    if (paid_at) {
+      db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes, paid_at) VALUES (?, ?, ?, ?, ?)")
+        .run(invoice.id, amt, mode || "cash", notes || null, paid_at);
+    } else {
+      db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes) VALUES (?, ?, ?, ?)")
+        .run(invoice.id, amt, mode || "cash", notes || null);
+    }
     const newBalance = Math.max(0, invoice.balance_due - amt);
     const newStatus = newBalance === 0 ? "paid" : "partially_paid";
     db.prepare("UPDATE invoices SET balance_due = ?, status = ? WHERE id = ?")

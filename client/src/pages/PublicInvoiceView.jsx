@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
-import { FullInvoice } from "./InvoiceView";
+import FullInvoice from "../components/FullInvoice";
 
 // Reached with no login — the destination of an invoice's "Copy shareable
 // link" button, so a customer can view (and download a PDF of) exactly one

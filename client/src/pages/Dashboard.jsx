@@ -2,25 +2,31 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
-
-const STATUS_LABEL = {
-  draft: "Draft", sent: "Sent", paid: "Paid",
-  partially_paid: "Partially paid", overdue: "Overdue",
-};
+import InvoiceDetail from "../components/InvoiceDetail";
+import { relativeDueLabel } from "../lib/invoiceStatus";
 
 export default function Dashboard() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const user = getUser();
   const isOwnerOrAdmin = user?.role === "owner" || user?.role === "admin";
 
-  useEffect(() => {
-    api.listInvoices().then(setInvoices).finally(() => setLoading(false));
-    if (isOwnerOrAdmin) api.getReportsSummary().then(setSummary).catch(() => {});
-  }, [isOwnerOrAdmin]);
+  const loadInvoices = () =>
+    api.listInvoices().then((rows) => {
+      setInvoices(rows);
+      setSelectedId((current) => {
+        if (current && rows.some((r) => r.id === current)) return current;
+        return rows[0]?.id ?? null;
+      });
+    });
 
-  const recent = invoices.slice(0, 8);
+  useEffect(() => {
+    loadInvoices().finally(() => setLoading(false));
+    if (isOwnerOrAdmin) api.getReportsSummary().then(setSummary).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnerOrAdmin]);
 
   return (
     <div>
@@ -84,40 +90,44 @@ export default function Dashboard() {
         </>
       )}
 
-      <div className="panel dashboard-invoices">
-        <div className="panel-header-row">
-          <h2>Recent Invoices</h2>
-          {invoices.length > 8 && <span className="muted" style={{ fontSize: 13 }}>Showing 8 of {invoices.length}</span>}
-        </div>
-
-        {loading && <p className="muted">Loading...</p>}
-        {!loading && invoices.length === 0 && (
+      <h2>Invoices</h2>
+      {loading && <p className="muted">Loading...</p>}
+      {!loading && invoices.length === 0 && (
+        <div className="panel">
           <p className="muted">No invoices yet — create your first one.</p>
-        )}
+          <Link className="btn" to="/invoices/new">+ New Invoice</Link>
+        </div>
+      )}
 
-        {recent.length > 0 && (
-          <table className="table">
-            <thead>
-              <tr><th>#</th><th>Customer</th><th>Date</th><th>Status</th><th className="num">Total</th></tr>
-            </thead>
-            <tbody>
-              {recent.map((inv) => (
-                <tr key={inv.id}>
-                  <td><Link to={`/invoices/${inv.id}`}>{inv.invoice_number}</Link></td>
-                  <td>{inv.customer_name || "—"}</td>
-                  <td>{inv.invoice_date}</td>
-                  <td>
-                    {inv.is_overdue
-                      ? <span className="badge badge-overdue">Overdue</span>
-                      : <span className={`badge badge-${inv.status}`}>{STATUS_LABEL[inv.status] || inv.status}</span>}
-                  </td>
-                  <td className="num">₹{Number(inv.total).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {invoices.length > 0 && (
+        <div className="invoices-split">
+          <div className="invoice-list">
+            {invoices.map((inv) => {
+              const label = relativeDueLabel(inv);
+              return (
+                <button
+                  key={inv.id}
+                  type="button"
+                  className={`invoice-list-item${inv.id === selectedId ? " active" : ""}`}
+                  onClick={() => setSelectedId(inv.id)}
+                >
+                  <div className="invoice-list-item-top">
+                    <span className="invoice-list-item-name">{inv.customer_name || "Walk-in customer"}</span>
+                    <span className="invoice-list-item-amount">₹{Number(inv.total).toFixed(2)}</span>
+                  </div>
+                  <div className="invoice-list-item-bottom">
+                    <span className="muted">{inv.invoice_number} · {inv.invoice_date}</span>
+                    <span className={`due-label due-label-${label.tone}`}>{label.text}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="invoice-detail-pane">
+            {selectedId && <InvoiceDetail invoiceId={selectedId} onChanged={loadInvoices} />}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
