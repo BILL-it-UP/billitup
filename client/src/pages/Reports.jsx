@@ -1,28 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-
-const MONTH_LABEL = (ym) => {
-  if (!ym) return "";
-  const [y, m] = ym.split("-");
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
-};
-
-function CashFlowChart({ data }) {
-  const max = Math.max(1, ...data.map((d) => Number(d.total) || 0));
-  return (
-    <div className="cash-flow-chart">
-      {data.map((d) => (
-        <div className="cash-flow-bar" key={d.month}>
-          <div className="cash-flow-bar-track">
-            <div className="cash-flow-bar-fill" style={{ height: `${Math.max(2, (Number(d.total) / max) * 100)}%` }} />
-          </div>
-          <span className="cash-flow-value">₹{Number(d.total).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
-          <span className="cash-flow-label">{MONTH_LABEL(d.month)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+import CashFlowChart from "../components/CashFlowChart";
 
 export default function Reports() {
   const [summary, setSummary] = useState(null);
