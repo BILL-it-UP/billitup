@@ -157,7 +157,49 @@ textarea { resize: vertical; }
    single "Item & Description" block (matching how Zoho's item table has one
    combined column) instead of two cramped side-by-side columns. */
 .line-item-details { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
-.line-item-details select { font-size: 12px; color: var(--muted); padding: 4px 6px; }
+
+/* Item picker — a type-to-search combobox standing in for the old plain
+   <select>, matching Zoho's "type or click to select an item" field. */
+.item-picker { position: relative; }
+.item-picker input { font-size: 13px; padding: 6px 8px; }
+.item-picker-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 30; margin-top: 4px;
+  background: white; border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); max-height: 260px; overflow-y: auto;
+}
+.item-picker-option {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  width: 100%; text-align: left; padding: 8px 12px; border: none; background: none;
+  cursor: pointer; font-size: 13px; font: inherit; color: var(--ink);
+}
+.item-picker-option:hover { background: var(--bg); }
+.item-picker-name { font-weight: 500; }
+.item-picker-rate { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.item-picker-empty { padding: 8px 12px; font-size: 12px; color: var(--muted); }
+.item-picker-add {
+  display: block; width: 100%; text-align: left; padding: 8px 12px; border: none;
+  border-top: 1px solid var(--border); background: none; color: var(--accent);
+  cursor: pointer; font-size: 13px; font-weight: 600; font: inherit;
+}
+.item-picker-add:hover { background: var(--bg); }
+
+/* Small inline modal, used by the item picker's "+ Add New Item" popup. */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100; background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-panel {
+  background: white; border-radius: 10px; width: 420px; max-width: 100%;
+  max-height: 90vh; overflow-y: auto; padding: 20px 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.modal-header h3 { margin: 0; }
+.modal-close {
+  background: none; border: none; font-size: 22px; line-height: 1; color: var(--muted);
+  cursor: pointer; padding: 0 4px;
+}
+.modal-close:hover { color: var(--ink); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
 .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
 .badge-draft { background: #eee; color: #555; }

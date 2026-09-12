@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
+import ItemPicker from "../components/ItemPicker";
 
 export default function NewInvoice() {
   const navigate = useNavigate();
+  const canManageItems = ["owner", "admin"].includes(getUser()?.role);
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
   const [customerId, setCustomerId] = useState("");
@@ -34,10 +36,29 @@ export default function NewInvoice() {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   };
 
-  const pickItem = (index, itemId) => {
-    const item = items.find((i) => String(i.id) === String(itemId));
-    if (!item) return updateLine(index, { item_id: "" });
-    updateLine(index, { item_id: item.id, description: item.name, rate: item.rate, tax_rate: item.tax_rate });
+  // Selecting an item from the picker fills in its rate/tax and — only if the
+  // description is still blank — its description too, so re-picking an item
+  // never clobbers text the user already typed for this line.
+  const pickItem = (index, item) => {
+    setLines((prev) =>
+      prev.map((line, i) => {
+        if (i !== index) return line;
+        if (!item) return { ...line, item_id: "", item_name: "" };
+        return {
+          ...line,
+          item_id: item.id,
+          item_name: item.name,
+          rate: item.rate,
+          tax_rate: item.tax_rate,
+          description: line.description || item.description || item.name,
+        };
+      })
+    );
+  };
+
+  const handleItemCreated = (index, item) => {
+    setItems((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
+    pickItem(index, item);
   };
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()]);
@@ -102,10 +123,15 @@ export default function NewInvoice() {
             {lines.map((line, i) => (
               <tr key={i}>
                 <td className="line-item-details">
-                  <select value={line.item_id} onChange={(e) => pickItem(i, e.target.value)}>
-                    <option value="">Custom item</option>
-                    {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
-                  </select>
+                  <ItemPicker
+                    items={items}
+                    itemId={line.item_id}
+                    itemName={line.item_name}
+                    canManage={canManageItems}
+                    onSelect={(item) => pickItem(i, item)}
+                    onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
+                    onItemCreated={(item) => handleItemCreated(i, item)}
+                  />
                   <textarea rows={2} value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })} placeholder="Description — add a line break to list multiple items under one line" required />
                 </td>
                 <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
