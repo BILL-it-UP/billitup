@@ -5,11 +5,21 @@ services:
       - "4000:4000"
     volumes:
       - billitup_data:/app/data
+    env_file:
+      # Loads JWT_SECRET and APP_URL from server/.env on the host, so they
+      # survive container rebuilds/restarts. Create server/.env from
+      # server/.env.example before running "docker compose up" for real.
+      - ./server/.env
     restart: unless-stopped
 
   client:
     build:
       context: ./client
+      args:
+        # Same-origin build: the client calls "/api/..." and nginx.conf
+        # proxies that to the "server" service below. Leave this empty
+        # unless the API is deployed on a different host than the client.
+        VITE_API_URL: ""
     ports:
       - "8080:80"
     depends_on:

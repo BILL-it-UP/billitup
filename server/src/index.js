@@ -12,6 +12,7 @@ import reportsRouter from "./routes/reports.js";
 import creditNotesRouter from "./routes/credit-notes.js";
 import recurringInvoicesRouter, { runDueRecurringInvoices } from "./routes/recurring-invoices.js";
 import publicRouter from "./routes/public.js";
+import { startBackupSchedule } from "./lib/backup.js";
 
 const app = express();
 app.use(cors());
@@ -50,3 +51,7 @@ app.listen(PORT, () => {
 // generates once its next_invoice_date actually arrives.
 runDueRecurringInvoices();
 setInterval(runDueRecurringInvoices, 60 * 60 * 1000);
+
+// Automated backups — see lib/backup.js. Runs once shortly after startup,
+// then daily.
+startBackupSchedule();

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, getUser, setSession } from "../lib/api";
+import { formatDateTime } from "../lib/format";
 
 export default function Settings() {
   const user = getUser();
@@ -74,6 +75,8 @@ export default function Settings() {
       {user?.role === "owner" && <FirmManagement />}
 
       {user?.role === "owner" && <StaffManagement />}
+
+      {user?.role === "owner" && <BackupSettings />}
     </div>
   );
 }
@@ -309,15 +312,6 @@ function EmailSettings({ business, setBusiness }) {
   );
 }
 
-// Login timestamps are stored as ISO strings — render them in the viewer's
-// own locale/timezone rather than showing raw ISO text.
-function formatDateTime(iso) {
-  if (!iso) return "Never";
-  const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
-}
-
 function StaffManagement() {
   const [users, setUsers] = useState([]);
   const [loginEvents, setLoginEvents] = useState([]);
@@ -401,6 +395,56 @@ function StaffManagement() {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// Backups run automatically on the server (once a day — see server/src/lib/
+// backup.js), so there's nothing here to configure — just visibility into
+// whether it's actually working, and a self-serve "run one now" button in
+// the same spirit as "Send test email" above.
+function BackupSettings() {
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [runningBackup, setRunningBackup] = useState(false);
+
+  const load = () => api.getBackupStatus().then(setStatus).catch((err) => setError(err.message));
+  useEffect(() => { load(); }, []);
+
+  const backupNow = async () => {
+    setError("");
+    setRunningBackup(true);
+    try {
+      await api.backupNow();
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRunningBackup(false);
+    }
+  };
+
+  return (
+    <div className="staff-section">
+      <h2>Backups</h2>
+      <p className="muted">
+        Your invoice database is backed up automatically once a day and the last {status?.keep ?? "30"} backups are
+        kept. Point the backup folder at OneDrive, Google Drive, or another sync tool (set{" "}
+        <code>BILLITUP_BACKUP_DIR</code> in <code>server/.env</code>) so backups are copied off this machine
+        automatically too, with nothing extra to run.
+      </p>
+      {status && (
+        <p className="muted">
+          {status.count > 0
+            ? <>Last backup: {formatDateTime(status.last?.at)} ({Math.round((status.last?.sizeBytes || 0) / 1024)} KB) —{" "}
+                {status.count} backup{status.count === 1 ? "" : "s"} kept in <code>{status.dir}</code>.</>
+            : "No backups yet — one runs automatically shortly after the server starts, or click below to run one now."}
+        </p>
+      )}
+      {error && <p className="error">{error}</p>}
+      <button type="button" onClick={backupNow} disabled={runningBackup}>
+        {runningBackup ? "Backing up..." : "Back up now"}
+      </button>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = process.env.BILLITUP_DB_PATH || path.join(__dirname, "..", "data", "billitup.sqlite");
+export const dbPath = process.env.BILLITUP_DB_PATH || path.join(__dirname, "..", "data", "billitup.sqlite");
 
 // Make sure the folder exists — matters when BILLITUP_DB_PATH points somewhere
 // that hasn't been created yet (e.g. a fresh location outside the app folder,
@@ -295,6 +295,23 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   token_hash TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   used_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- One row per edit made to an already-created invoice. "snapshot" is the
+-- full invoice header + line items exactly as they were right BEFORE this
+-- edit overwrote them (JSON text) — cheap to store (invoices are small) and
+-- means the previous version can always be shown later without having tried
+-- to anticipate which fields someone might want to compare.
+CREATE TABLE IF NOT EXISTS invoice_edit_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  edited_by_user_id INTEGER REFERENCES users(id),
+  edited_by_name TEXT,
+  previous_total REAL,
+  new_total REAL,
+  snapshot TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
 `);

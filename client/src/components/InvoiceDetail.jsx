@@ -1,20 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, getUser } from "../lib/api";
 import SendEmailButton from "./SendEmailButton";
 import RecordPaymentForm from "./RecordPaymentForm";
 import FullInvoice from "./FullInvoice";
+import EditHistory from "./EditHistory";
 
-// The invoice detail pane: toolbar (Send / Share / Reminder / Print-PDF /
-// Record Payment) plus the actual A4 document. Used both by the standalone
-// /invoices/:id page and embedded as the right-hand pane of the
+// The invoice detail pane: toolbar (Edit / Send / Share / Reminder /
+// Print-PDF / Record Payment) plus the actual A4 document. Used both by the
+// standalone /invoices/:id page and embedded as the right-hand pane of the
 // master-detail Invoices list on the Dashboard, so the two never diverge.
-//
-// No "Edit" action here on purpose — BillItUp doesn't yet support editing an
-// already-created invoice's line items server-side (only status changes and
-// payments), so a button that didn't do anything real would be worse than
-// no button.
 export default function InvoiceDetail({ invoiceId, onChanged, standalone = false }) {
+  const canEdit = ["owner", "admin"].includes(getUser()?.role);
   const [invoice, setInvoice] = useState(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -93,6 +90,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         {!standalone && (
           <Link className="link-btn" to={`/invoices/${invoiceId}`} title="Open in its own page">↗ Open</Link>
         )}
+        {canEdit && <Link className="link-btn" to={`/invoices/${invoiceId}/edit`}>Edit</Link>}
         <button onClick={() => window.print()}>Print / Save PDF</button>
         <SendEmailButton
           defaultTo={invoice.customer?.email}
@@ -115,6 +113,8 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
       <div className="invoice-doc invoice-full" style={{ width: standalone ? "210mm" : "100%", maxWidth: "210mm" }}>
         <FullInvoice invoice={invoice} />
       </div>
+
+      {canEdit && <EditHistory invoiceId={invoiceId} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
@@ -7,10 +7,13 @@ import ItemPicker from "../components/ItemPicker";
 
 export default function NewInvoice() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
   const canManageItems = ["owner", "admin"].includes(getUser()?.role);
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
   const [customerId, setCustomerId] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [reference, setReference] = useState("");
   const [subject, setSubject] = useState("");
@@ -20,11 +23,57 @@ export default function NewInvoice() {
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loadingInvoice, setLoadingInvoice] = useState(isEdit);
 
   useEffect(() => {
     api.listCustomers().then(setCustomers);
     api.listItems().then(setItems);
   }, []);
+
+  // Edit mode: load the existing invoice and prefill every field. Runs once
+  // per invoice id — re-picking items below (once the catalog loads) is a
+  // separate effect so this one doesn't need to wait on that.
+  useEffect(() => {
+    if (!isEdit) return;
+    setLoadingInvoice(true);
+    api.getInvoice(id).then((inv) => {
+      setCustomerId(inv.customer_id || "");
+      setInvoiceDate(inv.invoice_date || "");
+      setDueDate(inv.due_date || "");
+      setReference(inv.reference || "");
+      setSubject(inv.subject || "");
+      setGstin(inv.gstin || "");
+      setTerms(inv.terms || "");
+      setNotes(inv.notes || "");
+      setLines(
+        (inv.lineItems || []).map((li) => ({
+          item_id: li.item_id || "",
+          item_name: "", // resolved once the item catalog loads, see below
+          description: li.description || "",
+          qty: li.qty,
+          rate: li.rate,
+          discount: li.discount,
+          tax_rate: li.tax_rate,
+        }))
+      );
+      setLoadingInvoice(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // An invoice line only stores item_id + description, never the item's own
+  // name — so once the catalog is loaded, look up each locked line's name by
+  // its item_id purely so the ItemPicker has something to display.
+  useEffect(() => {
+    if (items.length === 0) return;
+    setLines((prev) =>
+      prev.map((line) => {
+        if (!line.item_id || line.item_name) return line;
+        const match = items.find((it) => String(it.id) === String(line.item_id));
+        return match ? { ...line, item_name: match.name } : line;
+      })
+    );
+  }, [items]);
 
   const pickCustomer = (id) => {
     setCustomerId(id);
@@ -70,8 +119,9 @@ export default function NewInvoice() {
     setError("");
     setSaving(true);
     try {
-      const invoice = await api.createInvoice({
+      const payload = {
         customer_id: customerId || null,
+        invoice_date: invoiceDate || null,
         due_date: dueDate || null,
         reference: reference || null,
         subject: subject || null,
@@ -79,8 +129,14 @@ export default function NewInvoice() {
         terms: terms || null,
         notes: notes || null,
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
-      });
-      navigate(`/invoices/${invoice.id}`);
+      };
+      if (isEdit) {
+        await api.updateInvoice(id, payload);
+        navigate(`/invoices/${id}`);
+      } else {
+        const invoice = await api.createInvoice(payload);
+        navigate(`/invoices/${invoice.id}`);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -88,9 +144,17 @@ export default function NewInvoice() {
     }
   };
 
+  if (loadingInvoice) return <p className="muted">Loading...</p>;
+
   return (
     <div>
-      <h1>New Invoice</h1>
+      <h1>{isEdit ? "Edit Invoice" : "New Invoice"}</h1>
+      {isEdit && (
+        <p className="muted">
+          Saving will recalculate this invoice's total. The previous version is kept — see Edit History on the
+          invoice once you're done.
+        </p>
+      )}
       <form onSubmit={handleSubmit}>
         <div className="form-row">
           <label className="block">Customer
@@ -98,6 +162,9 @@ export default function NewInvoice() {
               <option value="">Walk-in / no customer</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </label>
+          <label className="block">Invoice date
+            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} placeholder="Defaults to today" />
           </label>
           <label className="block">Due date (optional)
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
@@ -127,12 +194,13 @@ export default function NewInvoice() {
                     items={items}
                     itemId={line.item_id}
                     itemName={line.item_name}
+                    description={line.description}
                     canManage={canManageItems}
                     onSelect={(item) => pickItem(i, item)}
                     onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
+                    onDescriptionChange={(text) => updateLine(i, { description: text })}
                     onItemCreated={(item) => handleItemCreated(i, item)}
                   />
-                  <textarea rows={2} value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })} placeholder="Description — add a line break to list multiple items under one line" required />
                 </td>
                 <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
@@ -161,7 +229,9 @@ export default function NewInvoice() {
         </label>
 
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Invoice"}</button>
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving..." : isEdit ? "Save Changes" : "Create Invoice"}
+        </button>
       </form>
     </div>
   );

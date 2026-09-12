@@ -163,6 +163,7 @@ export default function App() {
       <Route path="/customers" element={<RequireAuth><Shell><Customers /></Shell></RequireAuth>} />
       <Route path="/items" element={<RequireAuth><Shell><Items /></Shell></RequireAuth>} />
       <Route path="/invoices/new" element={<RequireAuth><Shell><NewInvoice /></Shell></RequireAuth>} />
+      <Route path="/invoices/:id/edit" element={<RequireAuth><Shell><NewInvoice /></Shell></RequireAuth>} />
       <Route path="/invoices/:id" element={<RequireAuth><Shell><InvoiceView /></Shell></RequireAuth>} />
       <Route path="/quotes" element={<RequireAuth><Shell><Quotes /></Shell></RequireAuth>} />
       <Route path="/quotes/new" element={<RequireAuth><Shell><NewQuote /></Shell></RequireAuth>} />

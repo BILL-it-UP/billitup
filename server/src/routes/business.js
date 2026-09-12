@@ -2,6 +2,7 @@ import express from "express";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { buildTransport, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { runBackup, getBackupStatus } from "../lib/backup.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -100,6 +101,23 @@ router.post("/test-email", requireRole("owner", "admin"), async (req, res) => {
     // rather than a generic message — that's the whole point of a self-serve
     // test button: the business owner can fix it themselves.
     res.status(400).json({ error: err.message || "Failed to send test email" });
+  }
+});
+
+// Backups apply to the whole install (one shared SQLite file, not scoped per
+// business the way most of this API is), so — like Staff Logins and adding
+// another firm — this is owner-only, not admin.
+router.get("/backup-status", requireRole("owner"), (_req, res) => {
+  res.json(getBackupStatus());
+});
+
+router.post("/backup-now", requireRole("owner"), async (_req, res) => {
+  try {
+    const status = await runBackup();
+    res.json(status);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Backup failed" });
   }
 });
 
