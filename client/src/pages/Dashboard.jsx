@@ -11,6 +11,7 @@ import { exportSheet } from "../lib/exportExcel";
 export default function Dashboard() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [summary, setSummary] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
@@ -29,7 +30,14 @@ export default function Dashboard() {
     });
 
   useEffect(() => {
-    loadInvoices().finally(() => setLoading(false));
+    // The 401 case (expired login) is now handled globally in lib/api.js,
+    // which sends the user straight back to the login page — this .catch()
+    // is only for anything else that can fail (server down, no network) so
+    // it shows a plain message instead of leaving the page looking empty
+    // with no explanation.
+    loadInvoices()
+      .catch((err) => setLoadError(err.message || "Could not load invoices."))
+      .finally(() => setLoading(false));
     if (isOwnerOrAdmin) api.getReportsSummary().then(setSummary).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwnerOrAdmin]);
@@ -53,6 +61,8 @@ export default function Dashboard() {
         <h1>Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}</h1>
         <Link className="btn" to="/invoices/new">+ New Invoice</Link>
       </div>
+
+      {loadError && <p className="error">{loadError}</p>}
 
       {isOwnerOrAdmin && summary && (
         <>

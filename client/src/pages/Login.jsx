@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api, setSession } from "../lib/api";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const expired = searchParams.get("expired") === "1";
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,6 +30,9 @@ export default function Login() {
       <form className="auth-card" onSubmit={handleSubmit}>
         <img src="/logo-header.png" alt="BillItUp" className="auth-logo" />
         <h1>Log in to BillItUp</h1>
+        {expired && !error && (
+          <p className="error">Your session had expired, so you were logged out. Please log in again.</p>
+        )}
         <label>Email
           <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </label>

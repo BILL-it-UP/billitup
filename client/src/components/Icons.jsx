@@ -116,3 +116,75 @@ export function IconChevron({ size = 18, direction = "left" }) {
     </svg>
   );
 }
+
+// The following are used to give each Settings section its own visual
+// identity (a small icon beside the section heading) — same shared stroke
+// weight as the set above, no new dependency.
+export function IconBuilding({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <rect x="5" y="3.5" width="10" height="17" rx="0.6" />
+      <path d="M15 9.5h4a.6.6 0 0 1 .6.6V20a.5.5 0 0 1-.5.5H15" />
+      <path d="M8 7.5h1M11.5 7.5h1M8 11h1M11.5 11h1M8 14.5h1M11.5 14.5h1M17 13h1.2M17 16.5h1.2" />
+    </svg>
+  );
+}
+
+export function IconImage({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <rect x="3" y="4.5" width="18" height="15" rx="1.2" />
+      <circle cx="8.3" cy="9.3" r="1.6" />
+      <path d="M3.5 16.5 9 11l4 4 2.5-2.5 5 4.5" />
+    </svg>
+  );
+}
+
+export function IconMail({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <rect x="3" y="5" width="18" height="14" rx="1.4" />
+      <path d="M3.5 6 12 13 20.5 6" />
+    </svg>
+  );
+}
+
+export function IconBriefcase({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <rect x="3" y="7.5" width="18" height="12" rx="1.4" />
+      <path d="M8.5 7.5V5.8a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1V7.5" />
+      <path d="M3 12.5h18M10.5 12v2M13.5 12v2" />
+    </svg>
+  );
+}
+
+export function IconTeam({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <circle cx="8.5" cy="7.5" r="3" />
+      <circle cx="16.5" cy="9" r="2.4" />
+      <path d="M3 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
+      <path d="M15 15.3c2.4.3 4 2 4 4.7" />
+    </svg>
+  );
+}
+
+export function IconCloud({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M7 18.5a4.5 4.5 0 0 1-.5-8.97A5.5 5.5 0 0 1 17.2 8a4 4 0 0 1-.7 7.97" strokeLinejoin="round" />
+      <path d="M12 12.5v6M9.3 16l2.7-2.7 2.7 2.7" />
+    </svg>
+  );
+}
+
+export function IconTrash({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4.5 6.5h15M9.5 6.5V4.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.7" />
+      <path d="M6.5 6.5 7.3 19a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9l.8-12.5" />
+      <path d="M10.3 10.5v6M13.7 10.5v6" />
+    </svg>
+  );
+}

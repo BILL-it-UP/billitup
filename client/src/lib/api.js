@@ -54,6 +54,20 @@ async function request(path, { method = "GET", body } = {}) {
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
+    // A 401 on a request that carried a token means the token itself is no
+    // longer good (expired after 30 days, or the account was removed) — not
+    // a wrong password, which only happens on the unauthenticated login
+    // call and never reaches here with a token attached. Left alone, the
+    // page just sits there looking logged in with every list silently
+    // empty (this was the "sometimes no data shows" report) — so instead
+    // drop the stale session and send the user back to a clear "please log
+    // in again" screen right away.
+    if (res.status === 401 && token) {
+      clearSession();
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        window.location.assign("/login?expired=1");
+      }
+    }
     throw new Error(data?.error || `Request failed (${res.status})`);
   }
   return data;

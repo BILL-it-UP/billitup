@@ -239,12 +239,41 @@ textarea { resize: vertical; }
 .toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .inline-confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 
-.settings-form { max-width: 480px; }
+.settings-form { max-width: 560px; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; }
 .checkbox-label input { width: auto; margin-top: 0; }
-.staff-section { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); max-width: 720px; }
 .logo-preview-row { display: flex; align-items: center; gap: 12px; margin: -4px 0 16px; }
 .logo-preview { max-height: 60px; max-width: 200px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: white; }
+
+/* ---- Settings page ---- */
+.settings-page { max-width: 760px; display: flex; flex-direction: column; gap: 20px; }
+.settings-page > p.muted:first-child { margin-top: -8px; }
+
+.settings-card {
+  background: white; border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; box-shadow: 0 1px 2px rgba(28, 31, 38, 0.04);
+}
+.settings-card-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+.settings-card-icon {
+  flex: none; width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: #eaf5ef; color: var(--accent);
+}
+.settings-card-header h2 { margin: 0 0 2px; font-size: 16px; }
+.settings-card-header p { margin: 0; }
+.settings-card .settings-form,
+.settings-card .inline-form { max-width: none; }
+.settings-card > *:last-child { margin-bottom: 0; }
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.field-row > label { min-width: 0; }
+@media (max-width: 640px) {
+  .field-row { grid-template-columns: 1fr; }
+}
+
+.danger-card { border-color: #f0c9c5; background: #fdf7f6; }
+.danger-card .settings-card-icon { background: #fbe4e1; color: #b3261e; }
+.danger-card p.muted { color: #8a5b56; }
 
 /* ---- Reports ---- */
 .stat-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
