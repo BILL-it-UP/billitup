@@ -1,13 +1,37 @@
 import express from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import { db } from "../db.js";
 import { signToken, requireAuth, requireRole } from "../middleware/auth.js";
+import { buildTransport, SmtpNotConfiguredError } from "../lib/mailer.js";
 
 const router = express.Router();
 
+// Login/signup can be hammered by a script trying passwords or spamming
+// accounts — cap them per IP. Forgot-password is capped tighter still since
+// each attempt sends a real email through the business's own SMTP account.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Please wait a while and try again." },
+});
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many password reset requests. Please wait a while and try again." },
+});
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+
 // Signup creates the business AND its first user, who is always the Owner.
 // Staff logins are created later by the Owner/Admin via POST /api/users, not here.
-router.post("/signup", (req, res) => {
+router.post("/signup", authLimiter, (req, res) => {
   const { businessName, ownerName, email, password, gstin } = req.body;
   if (!businessName || !ownerName || !email || !password) {
     return res.status(400).json({ error: "businessName, ownerName, email and password are required" });
@@ -36,7 +60,7 @@ router.post("/signup", (req, res) => {
   res.status(201).json({ token, user: { ...user, name: ownerName, email } });
 });
 
-router.post("/login", (req, res) => {
+router.post("/login", authLimiter, (req, res) => {
   const { email, password } = req.body;
   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
@@ -57,6 +81,72 @@ router.post("/login", (req, res) => {
     token,
     user: { id: user.id, business_id: user.business_id, role: user.role, name: user.name, email: user.email },
   });
+});
+
+// Always responds the same way regardless of whether the email exists or the
+// email actually sent — this endpoint must never reveal which emails have
+// accounts, or whether a given business has SMTP configured.
+router.post("/forgot-password", forgotPasswordLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "email is required" });
+  const genericResponse = { message: "If an account exists for that email, we've sent password reset instructions." };
+
+  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  if (!user) return res.json(genericResponse);
+
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(user.business_id);
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString();
+  db.prepare(
+    "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)"
+  ).run(user.id, hashToken(rawToken), expiresAt);
+
+  // APP_URL is how a self-hosted install tells the server what its public
+  // client address is, so the emailed link points somewhere real instead of
+  // localhost. See server/.env.example.
+  const appUrl = (process.env.APP_URL || "http://localhost:5173").replace(/\/$/, "");
+  const resetLink = `${appUrl}/reset-password?token=${rawToken}`;
+
+  try {
+    const transport = buildTransport(business);
+    const fromEmail = business.smtp_from_email || business.smtp_user;
+    const fromName = business.smtp_from_name || business.name || "BillItUp";
+    await transport.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to: user.email,
+      subject: "Reset your BillItUp password",
+      text: `Hi ${user.name},\n\nSomeone requested a password reset for your BillItUp account. If this was you, set a new password here (this link expires in 1 hour):\n\n${resetLink}\n\nIf you didn't request this, you can safely ignore this email.`,
+    });
+  } catch (err) {
+    // Don't leak SMTP-configuration state to the caller — just log it so
+    // whoever runs this install can see why a user never got their email.
+    if (err instanceof SmtpNotConfiguredError) {
+      console.warn(`Password reset requested for ${email}, but that business hasn't configured SMTP yet — no email was sent.`);
+    } else {
+      console.error("Failed to send password reset email:", err);
+    }
+  }
+
+  res.json(genericResponse);
+});
+
+router.post("/reset-password", (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: "token and password are required" });
+  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+
+  const row = db
+    .prepare("SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL")
+    .get(hashToken(token));
+  if (!row || new Date(row.expires_at) < new Date()) {
+    return res.status(400).json({ error: "This reset link is invalid or has expired. Request a new one." });
+  }
+
+  const passwordHash = bcrypt.hashSync(password, 10);
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
+  db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?").run(row.id);
+
+  res.json({ message: "Password updated. You can now log in." });
 });
 
 // Firms this login can switch into — one row per membership. Used to render

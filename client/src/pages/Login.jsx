@@ -36,6 +36,7 @@ export default function Login() {
         </label>
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={loading}>{loading ? "Logging in..." : "Log in"}</button>
+        <p className="muted"><Link to="/forgot-password">Forgot your password?</Link></p>
         <p className="muted">New business? <Link to="/signup">Set up BillItUp</Link></p>
       </form>
     </div>

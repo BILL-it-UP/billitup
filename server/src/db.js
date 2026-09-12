@@ -283,6 +283,20 @@ CREATE TABLE IF NOT EXISTS memberships (
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(user_id, business_id)
 );
+
+-- "Forgot password" support. Only a SHA-256 hash of the actual reset token is
+-- ever stored — the raw token exists only in the emailed link — so a leaked
+-- database alone can't be used to reset anyone's password. Old/used rows are
+-- cheap to leave in place (no cleanup job needed for how few of these there
+-- will ever be), since expired/used tokens are simply never accepted again.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------

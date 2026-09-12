@@ -6,6 +6,8 @@ import {
 } from "./components/Icons";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import AddFirm from "./pages/AddFirm";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
@@ -154,6 +156,8 @@ export default function App() {
     <Routes>
       <Route path="/signup" element={<Signup />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/view/invoice/:token" element={<PublicInvoiceView />} />
       <Route path="/" element={<RequireAuth><Shell><Dashboard /></Shell></RequireAuth>} />
       <Route path="/customers" element={<RequireAuth><Shell><Customers /></Shell></RequireAuth>} />

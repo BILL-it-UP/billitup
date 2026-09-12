@@ -1,4 +1,10 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+// `??` (not `||`) matters here: in the Docker/production build VITE_API_URL
+// is deliberately set to "" (same-origin — see client/nginx.conf, which
+// proxies /api/* to the server container), and "" is falsy, so `||` would
+// silently discard it and fall back to localhost, breaking the app for every
+// visitor on the real domain. Local `npm run dev` never sets VITE_API_URL at
+// all (undefined), so it still falls through to the localhost default below.
+const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
 function getToken() {
   return localStorage.getItem("billitup_token");
@@ -41,6 +47,8 @@ async function request(path, { method = "GET", body } = {}) {
 export const api = {
   signup: (payload) => request("/api/auth/signup", { method: "POST", body: payload }),
   login: (payload) => request("/api/auth/login", { method: "POST", body: payload }),
+  forgotPassword: (email) => request("/api/auth/forgot-password", { method: "POST", body: { email } }),
+  resetPassword: (token, password) => request("/api/auth/reset-password", { method: "POST", body: { token, password } }),
   getMyBusinesses: () => request("/api/auth/businesses"),
   switchBusiness: (businessId) => request("/api/auth/switch-business", { method: "POST", body: { businessId } }),
   createFirm: (payload) => request("/api/auth/firms", { method: "POST", body: payload }),
