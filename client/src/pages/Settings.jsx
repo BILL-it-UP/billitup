@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, getUser, setSession } from "../lib/api";
+import { api, getUser, setSession, clearSession } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 
 export default function Settings() {
@@ -57,6 +57,19 @@ export default function Settings() {
         <label>Invoice number prefix
           <input value={business.invoice_prefix || ""} onChange={(e) => setBusiness({ ...business, invoice_prefix: e.target.value })} />
         </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={!!business.reset_invoice_numbering_yearly}
+            onChange={(e) => setBusiness({ ...business, reset_invoice_numbering_yearly: e.target.checked })}
+          />
+          {" "}Reset invoice numbers every financial year (April to March), e.g. INV-2026-27-000001
+        </label>
+        {!!business.reset_invoice_numbering_yearly && (
+          <p className="muted" style={{ marginTop: -8 }}>
+            Applies from your next new invoice onward — invoices you've already created keep their existing numbers.
+          </p>
+        )}
         <label>Quote number prefix
           <input value={business.quote_prefix || ""} onChange={(e) => setBusiness({ ...business, quote_prefix: e.target.value })} />
         </label>
@@ -77,6 +90,8 @@ export default function Settings() {
       {user?.role === "owner" && <StaffManagement />}
 
       {user?.role === "owner" && <BackupSettings />}
+
+      {user?.role === "owner" && <DangerZone business={business} />}
     </div>
   );
 }
@@ -445,6 +460,71 @@ function BackupSettings() {
       <button type="button" onClick={backupNow} disabled={runningBackup}>
         {runningBackup ? "Backing up..." : "Back up now"}
       </button>
+    </div>
+  );
+}
+
+// Self-service business deletion — no separate export pipeline is built for
+// this; it points at the Excel export buttons already on Customers, Items,
+// and the Invoices list (top of Dashboard), which is real, working data
+// backup someone can do in one click before deleting anything.
+function DangerZone({ business }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleDelete = async (e) => {
+    e.preventDefault();
+    setError("");
+    setDeleting(true);
+    try {
+      const result = await api.deleteBusiness({ password, confirmBusinessName: confirmName });
+      if (result.accountDeleted) {
+        clearSession();
+        window.location.assign("/login");
+      } else {
+        setSession(result.token, result.user);
+        window.location.assign("/");
+      }
+    } catch (err) {
+      setError(err.message);
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="staff-section">
+      <h2>Delete This Business</h2>
+      <p className="muted">
+        This permanently deletes {business.name} — every customer, item, invoice, quote, credit note, and
+        payment record — for anyone who has access to it. There's no undo. Before you do this, use the
+        Export to Excel button on Customers, Items, and the Invoices list (Dashboard) to save a copy of
+        anything you want to keep.
+      </p>
+      {!open && (
+        <button type="button" onClick={() => setOpen(true)}>Delete this business...</button>
+      )}
+      {open && (
+        <form onSubmit={handleDelete} className="settings-form">
+          <label>Your password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </label>
+          <label>Type the business name (<strong>{business.name}</strong>) to confirm
+            <input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} required />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <div style={{ display: "flex", gap: 12 }}>
+            <button type="submit" disabled={deleting} style={{ background: "#b3261e" }}>
+              {deleting ? "Deleting..." : "Permanently delete this business"}
+            </button>
+            <button type="button" onClick={() => { setOpen(false); setError(""); setPassword(""); setConfirmName(""); }} disabled={deleting}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

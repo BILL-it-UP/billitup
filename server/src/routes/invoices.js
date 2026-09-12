@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { nextInvoiceNumber } from "../lib/invoiceNumbering.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -35,7 +36,7 @@ router.get("/", (req, res) => {
   const rows = db
     .prepare(
       `SELECT invoices.*, customers.name AS customer_name,
-        (invoices.balance_due > 0 AND invoices.due_date IS NOT NULL AND invoices.due_date < date('now')) AS is_overdue
+        (invoices.status <> 'cancelled' AND invoices.balance_due > 0 AND invoices.due_date IS NOT NULL AND invoices.due_date < date('now')) AS is_overdue
        FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
        WHERE invoices.business_id = ? ORDER BY invoices.created_at DESC`
     )
@@ -58,7 +59,7 @@ router.get("/:id", (req, res) => {
     : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   const payments = db.prepare("SELECT * FROM payments WHERE invoice_id = ?").all(invoice.id);
-  const isOverdue = !!(invoice.balance_due > 0 && invoice.due_date && invoice.due_date < new Date().toISOString().slice(0, 10));
+  const isOverdue = !!(invoice.status !== "cancelled" && invoice.balance_due > 0 && invoice.due_date && invoice.due_date < new Date().toISOString().slice(0, 10));
 
   res.json({ ...invoice, is_overdue: isOverdue, lineItems, customer, business, payments });
 });
@@ -72,7 +73,7 @@ router.post("/", (req, res) => {
   }
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
-  const invoiceNumber = `${business.invoice_prefix || "INV-"}${String(business.next_invoice_number).padStart(6, "0")}`;
+  const { invoiceNumber, commit: commitInvoiceNumber } = nextInvoiceNumber(business);
 
   const { computedLines, subTotal, discountTotal, taxTotal, total } = computeLineTotals(lineItems);
 
@@ -85,9 +86,6 @@ router.post("/", (req, res) => {
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  const bumpInvoiceNumber = db.prepare(
-    "UPDATE businesses SET next_invoice_number = next_invoice_number + 1 WHERE id = ?"
   );
 
   const invoiceId = db.transaction(() => {
@@ -102,7 +100,7 @@ router.post("/", (req, res) => {
     for (const line of computedLines) {
       insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
     }
-    bumpInvoiceNumber.run(req.auth.businessId);
+    commitInvoiceNumber();
     return id;
   })();
 
@@ -227,9 +225,23 @@ router.post("/:id/payments", (req, res) => {
 
 router.put("/:id/status", (req, res) => {
   const { status } = req.body;
-  if (!["draft", "sent", "paid", "partially_paid", "overdue"].includes(status)) {
+  if (!["draft", "sent", "paid", "partially_paid", "overdue", "cancelled"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+
+  // Cancelling only makes sense for an invoice nobody has paid against yet —
+  // once money has changed hands, a credit note is the correct way to
+  // reverse it, so the financial trail stays intact instead of a cancelled
+  // invoice quietly still holding a real payment.
+  if (status === "cancelled") {
+    const amountPaid = invoice.total - invoice.balance_due;
+    if (amountPaid > 0) {
+      return res.status(400).json({ error: "This invoice has a payment recorded against it — issue a credit note instead of cancelling it" });
+    }
+  }
+
   db.prepare("UPDATE invoices SET status = ? WHERE id = ? AND business_id = ?").run(status, req.params.id, req.auth.businessId);
   const updated = db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.id);
   res.json(updated);

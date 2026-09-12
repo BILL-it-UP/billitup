@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
@@ -12,6 +12,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const user = getUser();
   const isOwnerOrAdmin = user?.role === "owner" || user?.role === "admin";
 
@@ -29,6 +31,19 @@ export default function Dashboard() {
     if (isOwnerOrAdmin) api.getReportsSummary().then(setSummary).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwnerOrAdmin]);
+
+  const filteredInvoices = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return invoices.filter((inv) => {
+      if (statusFilter !== "all" && inv.status !== statusFilter) return false;
+      if (!q) return true;
+      return (
+        (inv.customer_name || "").toLowerCase().includes(q) ||
+        (inv.invoice_number || "").toLowerCase().includes(q) ||
+        (inv.reference || "").toLowerCase().includes(q)
+      );
+    });
+  }, [invoices, search, statusFilter]);
 
   return (
     <div>
@@ -110,27 +125,48 @@ export default function Dashboard() {
 
       {invoices.length > 0 && (
         <div className="invoices-split">
-          <div className="invoice-list">
-            {invoices.map((inv) => {
-              const label = relativeDueLabel(inv);
-              return (
-                <button
-                  key={inv.id}
-                  type="button"
-                  className={`invoice-list-item${inv.id === selectedId ? " active" : ""}`}
-                  onClick={() => setSelectedId(inv.id)}
-                >
-                  <div className="invoice-list-item-top">
-                    <span className="invoice-list-item-name">{inv.customer_name || "Walk-in customer"}</span>
-                    <span className="invoice-list-item-amount">₹{formatMoney(inv.total)}</span>
-                  </div>
-                  <div className="invoice-list-item-bottom">
-                    <span className="muted">{inv.invoice_number} · {inv.invoice_date}</span>
-                    <span className={`due-label due-label-${label.tone}`}>{label.text}</span>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="invoice-list-wrap">
+            <div className="list-toolbar">
+              <input
+                type="search"
+                placeholder="Search by customer, invoice #, reference..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="all">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="paid">Paid</option>
+                <option value="partially_paid">Partially paid</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="invoice-list">
+              {filteredInvoices.length === 0 && (
+                <p className="list-empty-filtered">No invoices match your search.</p>
+              )}
+              {filteredInvoices.map((inv) => {
+                const label = relativeDueLabel(inv);
+                return (
+                  <button
+                    key={inv.id}
+                    type="button"
+                    className={`invoice-list-item${inv.id === selectedId ? " active" : ""}`}
+                    onClick={() => setSelectedId(inv.id)}
+                  >
+                    <div className="invoice-list-item-top">
+                      <span className="invoice-list-item-name">{inv.customer_name || "Walk-in customer"}</span>
+                      <span className="invoice-list-item-amount">₹{formatMoney(inv.total)}</span>
+                    </div>
+                    <div className="invoice-list-item-bottom">
+                      <span className="muted">{inv.invoice_number} · {inv.invoice_date}</span>
+                      <span className={`due-label due-label-${label.tone}`}>{label.text}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className="invoice-detail-pane">
             {selectedId && <InvoiceDetail invoiceId={selectedId} onChanged={loadInvoices} />}

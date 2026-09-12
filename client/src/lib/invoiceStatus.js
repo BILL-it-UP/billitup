@@ -10,6 +10,7 @@ export function relativeDueLabel(invoice) {
     partially_paid: "Partially paid",
   };
 
+  if (invoice.status === "cancelled") return { text: "Cancelled", tone: "cancelled" };
   if (invoice.status === "paid") return { text: "Paid", tone: "paid" };
   if (invoice.status === "draft") return { text: "Draft", tone: "draft" };
 

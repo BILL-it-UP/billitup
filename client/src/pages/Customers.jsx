@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
 
@@ -6,10 +6,22 @@ export default function Customers() {
   const [customers, setCustomers] = useState([]);
   const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", gstin: "" });
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
   const canManage = ["owner", "admin"].includes(getUser()?.role);
 
   const load = () => api.listCustomers().then(setCustomers);
   useEffect(() => { load(); }, []);
+
+  const filteredCustomers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter((c) =>
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.phone || "").toLowerCase().includes(q) ||
+      (c.email || "").toLowerCase().includes(q) ||
+      (c.gstin || "").toLowerCase().includes(q)
+    );
+  }, [customers, search]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,10 +59,25 @@ export default function Customers() {
       )}
       {error && <p className="error">{error}</p>}
 
+      {customers.length > 0 && (
+        <div className="list-toolbar">
+          <input
+            type="search"
+            placeholder="Search by name, phone, email, GSTIN..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
+      {filteredCustomers.length === 0 && customers.length > 0 && (
+        <p className="list-empty-filtered">No customers match your search.</p>
+      )}
+
       <table className="table">
         <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>GSTIN</th></tr></thead>
         <tbody>
-          {customers.map((c) => (
+          {filteredCustomers.map((c) => (
             <tr key={c.id}><td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td><td>{c.gstin}</td></tr>
           ))}
         </tbody>

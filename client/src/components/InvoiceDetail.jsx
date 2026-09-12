@@ -17,6 +17,8 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   const [copied, setCopied] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [reminderResult, setReminderResult] = useState(null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const load = () => api.getInvoice(invoiceId).then(setInvoice);
   useEffect(() => {
@@ -71,6 +73,33 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     }
   };
 
+  const cancelInvoice = async () => {
+    setError("");
+    setStatusBusy(true);
+    try {
+      await api.setInvoiceStatus(invoiceId, "cancelled");
+      setConfirmingCancel(false);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const reopenInvoice = async () => {
+    setError("");
+    setStatusBusy(true);
+    try {
+      await api.setInvoiceStatus(invoiceId, "draft");
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
   const sendReminder = async () => {
     setSendingReminder(true);
     setReminderResult(null);
@@ -102,8 +131,21 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
             {sendingReminder ? "Sending..." : "Send Payment Reminder"}
           </button>
         )}
-        {invoice.balance_due > 0 && (
+        {invoice.balance_due > 0 && invoice.status !== "cancelled" && (
           <RecordPaymentForm balanceDue={invoice.balance_due} onRecord={recordPayment} />
+        )}
+        {canEdit && invoice.status !== "cancelled" && !confirmingCancel && (
+          <button type="button" onClick={() => setConfirmingCancel(true)}>Cancel Invoice</button>
+        )}
+        {canEdit && confirmingCancel && (
+          <span className="inline-confirm">
+            Cancel this invoice?
+            <button type="button" onClick={cancelInvoice} disabled={statusBusy}>{statusBusy ? "Cancelling..." : "Yes, cancel it"}</button>
+            <button type="button" onClick={() => setConfirmingCancel(false)} disabled={statusBusy}>No</button>
+          </span>
+        )}
+        {canEdit && invoice.status === "cancelled" && (
+          <button type="button" onClick={reopenInvoice} disabled={statusBusy}>{statusBusy ? "Reopening..." : "Reopen (mark as Draft)"}</button>
         )}
       </div>
       {reminderResult?.ok && <p className="muted no-print">Reminder sent to {reminderResult.to}.</p>}

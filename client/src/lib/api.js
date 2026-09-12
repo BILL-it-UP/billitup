@@ -58,6 +58,7 @@ export const api = {
   sendTestEmail: (to) => request("/api/business/test-email", { method: "POST", body: { to } }),
   getBackupStatus: () => request("/api/business/backup-status"),
   backupNow: () => request("/api/business/backup-now", { method: "POST" }),
+  deleteBusiness: (payload) => request("/api/business/delete", { method: "POST", body: payload }),
 
   listCustomers: () => request("/api/customers"),
   createCustomer: (payload) => request("/api/customers", { method: "POST", body: payload }),
@@ -70,6 +71,7 @@ export const api = {
   createInvoice: (payload) => request("/api/invoices", { method: "POST", body: payload }),
   updateInvoice: (id, payload) => request(`/api/invoices/${id}`, { method: "PUT", body: payload }),
   getInvoiceHistory: (id) => request(`/api/invoices/${id}/history`),
+  setInvoiceStatus: (id, status) => request(`/api/invoices/${id}/status`, { method: "PUT", body: { status } }),
   recordPayment: (id, payload) => request(`/api/invoices/${id}/payments`, { method: "POST", body: payload }),
   sendInvoiceEmail: (id, payload) => request(`/api/invoices/${id}/send`, { method: "POST", body: payload }),
 

@@ -65,6 +65,11 @@ CREATE TABLE IF NOT EXISTS businesses (
   terms_and_conditions TEXT,
   signature_data_url TEXT,
   signature_name TEXT,
+  -- Off by default so nobody's existing invoice numbering changes underneath
+  -- them. When on, invoice numbers reset to 1 at the start of each Indian
+  -- financial year (April) and carry the FY in the number itself — see
+  -- invoice_number_counters below and lib/invoiceNumbering.js.
+  reset_invoice_numbering_yearly INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -314,6 +319,17 @@ CREATE TABLE IF NOT EXISTS invoice_edit_history (
   snapshot TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Only used when a business turns on "reset numbering by financial year"
+-- (see businesses.reset_invoice_numbering_yearly). Each financial year gets
+-- its own counter row (fy_key like "2026-27"), started fresh at 1, instead of
+-- businesses.next_invoice_number which counts forever and never resets.
+CREATE TABLE IF NOT EXISTS invoice_number_counters (
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  fy_key TEXT NOT NULL,
+  next_number INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (business_id, fy_key)
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------
@@ -361,6 +377,7 @@ ensureColumn("businesses", "bank_upi_id", "bank_upi_id TEXT");
 ensureColumn("businesses", "terms_and_conditions", "terms_and_conditions TEXT");
 ensureColumn("businesses", "signature_data_url", "signature_data_url TEXT");
 ensureColumn("businesses", "signature_name", "signature_name TEXT");
+ensureColumn("businesses", "reset_invoice_numbering_yearly", "reset_invoice_numbering_yearly INTEGER DEFAULT 0");
 
 // items
 ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");

@@ -9,6 +9,7 @@ export default function FullInvoice({ invoice }) {
   const { business, customer, lineItems } = invoice;
   return (
     <>
+      {invoice.status === "cancelled" && <div className="doc-cancelled-stamp">CANCELLED</div>}
       <DocumentBrandHeader
         business={business} docLabel="Invoice" docNumber={invoice.invoice_number}
         headline={{ label: "Balance Due", value: `₹${formatMoney(invoice.balance_due)}` }}

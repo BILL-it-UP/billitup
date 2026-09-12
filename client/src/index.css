@@ -146,6 +146,11 @@ textarea { resize: vertical; }
 .inline-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
 .inline-form input { width: auto; margin-top: 0; }
 
+.list-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar input[type="search"] { width: 260px; max-width: 100%; margin-top: 0; }
+.list-toolbar select { width: auto; margin-top: 0; }
+.list-empty-filtered { color: var(--muted); padding: 16px 0; }
+
 .table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 .table th, .table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
 .table th { color: var(--muted); font-weight: 600; }
@@ -153,15 +158,34 @@ textarea { resize: vertical; }
 .line-item-table input, .line-item-table select, .line-item-table textarea { margin-top: 0; }
 .line-item-table td { padding: 4px; }
 .line-item-table textarea { resize: vertical; min-height: 38px; font-size: 14px; }
-/* Item picker + description live in ONE cell, stacked, so the row reads as a
-   single "Item & Description" block (matching how Zoho's item table has one
-   combined column) instead of two cramped side-by-side columns. */
-.line-item-details { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
+/* The item picker is the WHOLE "Item & Description" cell — one combined
+   widget (search box, or the confirmed name + its description), matching how
+   Zoho's item table has one combined column instead of two cramped
+   side-by-side fields. */
+.line-item-details { min-width: 220px; }
 
 /* Item picker — a type-to-search combobox standing in for the old plain
-   <select>, matching Zoho's "type or click to select an item" field. */
+   <select>, matching Zoho's "type or click to select an item" field. Before
+   anything is picked it's just the search input; once a name is confirmed
+   (picked from the catalog, or free-typed and committed) that becomes a
+   fixed label and a description box appears underneath it. */
 .item-picker { position: relative; }
 .item-picker input { font-size: 13px; padding: 6px 8px; }
+.item-picker-locked {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; background: white;
+}
+.item-picker-locked-name {
+  background: none; border: none; padding: 0; margin: 0; text-align: left; flex: 1;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer;
+}
+.item-picker-locked-name:hover { text-decoration: underline; }
+.item-picker-locked-clear {
+  background: none; border: none; padding: 0 2px; margin: 0; color: var(--muted);
+  font-size: 16px; line-height: 1; cursor: pointer; flex-shrink: 0;
+}
+.item-picker-locked-clear:hover { color: #b3261e; }
+.item-picker-description { margin-top: 6px; font-size: 13px; }
 .item-picker-dropdown {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 30; margin-top: 4px;
   background: white; border: 1px solid var(--border); border-radius: 8px;
@@ -213,6 +237,7 @@ textarea { resize: vertical; }
 .totals-box .grand-total { font-weight: 700; font-size: 16px; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
 
 .toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.inline-confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 
 .settings-form { max-width: 480px; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; }
@@ -259,9 +284,11 @@ textarea { resize: vertical; }
 
 /* ---- Master-detail Invoices list ---- */
 .invoices-split { display: grid; grid-template-columns: 340px 1fr; gap: 20px; height: 680px; margin-top: 12px; }
+.invoice-list-wrap { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.invoice-list-wrap .list-toolbar { flex-shrink: 0; }
 .invoice-list {
   background: white; border: 1px solid var(--border); border-radius: 10px;
-  overflow-y: auto; height: 100%;
+  overflow-y: auto; flex: 1; min-height: 0;
 }
 .invoice-list-item {
   all: unset; display: block; box-sizing: border-box; width: 100%;
@@ -277,6 +304,7 @@ textarea { resize: vertical; }
 .due-label-due-soon { color: #b26a00; }
 .due-label-paid { color: #166534; }
 .due-label-draft { color: var(--muted); }
+.due-label-cancelled { color: #b3261e; text-decoration: line-through; }
 
 .invoice-detail-pane {
   background: white; border: 1px solid var(--border); border-radius: 10px;
@@ -289,15 +317,21 @@ textarea { resize: vertical; }
 
 @media (max-width: 900px) {
   .invoices-split { grid-template-columns: 1fr; height: auto; }
-  .invoice-list { height: 320px; }
+  .invoice-list-wrap { height: 380px; }
   .invoice-detail-pane { height: 600px; }
 }
 
 /* ---- Invoice / Quote / Credit Note document ---- */
 .invoice-doc {
-  background: white; margin: 0 auto; border: 1px solid var(--border);
+  background: white; margin: 0 auto; border: 1px solid var(--border); position: relative;
 }
 .invoice-doc.invoice-full { padding: 16mm 14mm; }
+
+.doc-cancelled-stamp {
+  position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-18deg);
+  font-size: 64px; font-weight: 800; letter-spacing: 0.1em; color: #d33; opacity: 0.28;
+  border: 6px solid #d33; border-radius: 12px; padding: 6px 28px; pointer-events: none; z-index: 5;
+}
 
 .doc-brand-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
 .doc-brand-left h2 { margin: 8px 0 6px; font-size: 20px; }

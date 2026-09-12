@@ -1,6 +1,7 @@
 import express from "express";
+import bcrypt from "bcryptjs";
 import { db } from "../db.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth, requireRole, signToken } from "../middleware/auth.js";
 import { buildTransport, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { runBackup, getBackupStatus } from "../lib/backup.js";
 
@@ -29,6 +30,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
+    reset_invoice_numbering_yearly,
   } = req.body;
 
   db.prepare(
@@ -57,7 +59,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       bank_upi_id = COALESCE(?, bank_upi_id),
       terms_and_conditions = COALESCE(?, terms_and_conditions),
       signature_data_url = COALESCE(?, signature_data_url),
-      signature_name = COALESCE(?, signature_name)
+      signature_name = COALESCE(?, signature_name),
+      reset_invoice_numbering_yearly = COALESCE(?, reset_invoice_numbering_yearly)
     WHERE id = ?`
   ).run(
     name, address, phone, email, website, gstin,
@@ -67,6 +70,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
+    reset_invoice_numbering_yearly === undefined ? undefined : (reset_invoice_numbering_yearly ? 1 : 0),
     req.auth.businessId
   );
 
@@ -119,6 +123,103 @@ router.post("/backup-now", requireRole("owner"), async (_req, res) => {
     console.error(err);
     res.status(500).json({ error: err.message || "Backup failed" });
   }
+});
+
+// Self-service "delete this business" — Owner only. Removes every row this
+// business owns across every table, then cleans up the login(s) that only
+// ever had access to this one business. Guarded by password + typing the
+// business's exact name (same double-confirmation pattern as GitHub's repo
+// deletion), since there's no undo and no support desk to appeal to.
+//
+// Most tables reference businesses.id / invoices.id etc WITHOUT
+// ON DELETE CASCADE (see db.js), so this deletes in a careful, explicit
+// order: payments before invoices, quotes/credit notes before invoices
+// (they point at invoices, not the other way round), and — since invoices
+// and recurring_invoices point at EACH OTHER (invoices.recurring_invoice_id
+// / recurring_invoices.last_generated_invoice_id) — that one circular
+// reference is broken with an UPDATE ... SET ... = NULL before either side
+// is deleted.
+router.post("/delete", requireRole("owner"), (req, res) => {
+  const { password, confirmBusinessName } = req.body;
+  const businessId = req.auth.businessId;
+
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(businessId);
+  if (!business) return res.status(404).json({ error: "Not found" });
+
+  const requester = db.prepare("SELECT * FROM users WHERE id = ?").get(req.auth.userId);
+  if (!requester || !bcrypt.compareSync(password || "", requester.password_hash)) {
+    return res.status(401).json({ error: "Incorrect password" });
+  }
+  if ((confirmBusinessName || "").trim() !== business.name) {
+    return res.status(400).json({ error: "Business name doesn't match — type it exactly as shown to confirm" });
+  }
+
+  const result = db.transaction(() => {
+    // Break the invoices <-> recurring_invoices cycle first so neither side
+    // blocks deleting the other.
+    db.prepare("UPDATE invoices SET recurring_invoice_id = NULL WHERE business_id = ?").run(businessId);
+    db.prepare("UPDATE recurring_invoices SET last_generated_invoice_id = NULL WHERE business_id = ?").run(businessId);
+
+    db.prepare("DELETE FROM payments WHERE invoice_id IN (SELECT id FROM invoices WHERE business_id = ?)").run(businessId);
+    // Quotes/credit notes point AT invoices — delete them first so nothing
+    // is left referencing an invoice row that's about to disappear.
+    db.prepare("DELETE FROM quotes WHERE business_id = ?").run(businessId);
+    db.prepare("DELETE FROM credit_notes WHERE business_id = ?").run(businessId);
+    // Cascades invoice_line_items and invoice_edit_history.
+    db.prepare("DELETE FROM invoices WHERE business_id = ?").run(businessId);
+    // Cascades recurring_invoice_line_items.
+    db.prepare("DELETE FROM recurring_invoices WHERE business_id = ?").run(businessId);
+    db.prepare("DELETE FROM stock_adjustments WHERE business_id = ?").run(businessId);
+    db.prepare("DELETE FROM customers WHERE business_id = ?").run(businessId);
+    db.prepare("DELETE FROM items WHERE business_id = ?").run(businessId);
+    db.prepare("DELETE FROM invoice_number_counters WHERE business_id = ?").run(businessId);
+    db.prepare("DELETE FROM login_events WHERE business_id = ?").run(businessId);
+
+    // Every login that had access to this business — figure out which of
+    // them are left with no other business to sign into, BEFORE removing
+    // the membership rows that answer that question.
+    const affectedUserIds = db
+      .prepare("SELECT DISTINCT user_id FROM memberships WHERE business_id = ?")
+      .all(businessId)
+      .map((row) => row.user_id);
+    db.prepare("DELETE FROM memberships WHERE business_id = ?").run(businessId);
+
+    for (const userId of affectedUserIds) {
+      const remaining = db.prepare("SELECT business_id, role FROM memberships WHERE user_id = ? ORDER BY created_at").all(userId);
+      if (remaining.length > 0) {
+        // Still has at least one other firm — if THIS business was their
+        // "home" business_id, point it at one they still have.
+        const user = db.prepare("SELECT business_id FROM users WHERE id = ?").get(userId);
+        if (user && user.business_id === businessId) {
+          db.prepare("UPDATE users SET business_id = ? WHERE id = ?").run(remaining[0].business_id, userId);
+        }
+      } else {
+        // This login only ever had access to this one business — nothing
+        // left for it to do, so remove the login entirely.
+        db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(userId);
+        db.prepare("DELETE FROM login_events WHERE user_id = ?").run(userId);
+        db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+      }
+    }
+
+    db.prepare("DELETE FROM businesses WHERE id = ?").run(businessId);
+
+    // Report back whether the requesting login still exists (they had
+    // another firm) so the client knows whether to switch into it or just
+    // sign the person out entirely.
+    const stillExists = db.prepare("SELECT * FROM users WHERE id = ?").get(req.auth.userId);
+    if (!stillExists) return { accountDeleted: true };
+
+    const membership = db.prepare("SELECT business_id, role FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1").get(stillExists.id);
+    const token = signToken({ id: stillExists.id, business_id: membership.business_id, role: membership.role });
+    return {
+      accountDeleted: false,
+      token,
+      user: { id: stillExists.id, business_id: membership.business_id, role: membership.role, name: stillExists.name, email: stillExists.email },
+    };
+  })();
+
+  res.json({ ok: true, ...result });
 });
 
 export default router;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/format";
@@ -7,8 +7,19 @@ import { exportSheet } from "../lib/exportExcel";
 export default function CreditNotes() {
   const [creditNotes, setCreditNotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => { api.listCreditNotes().then(setCreditNotes).finally(() => setLoading(false)); }, []);
+
+  const filteredCreditNotes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return creditNotes;
+    return creditNotes.filter((c) =>
+      (c.customer_name || "").toLowerCase().includes(q) ||
+      (c.credit_note_number || "").toLowerCase().includes(q) ||
+      (c.invoice_number || "").toLowerCase().includes(q)
+    );
+  }, [creditNotes, search]);
 
   return (
     <div>
@@ -28,10 +39,25 @@ export default function CreditNotes() {
       {!loading && creditNotes.length === 0 && <p className="muted">No credit notes yet.</p>}
 
       {creditNotes.length > 0 && (
+        <div className="list-toolbar">
+          <input
+            type="search"
+            placeholder="Search by customer, credit note #, or invoice #..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
+      {creditNotes.length > 0 && filteredCreditNotes.length === 0 && (
+        <p className="list-empty-filtered">No credit notes match your search.</p>
+      )}
+
+      {filteredCreditNotes.length > 0 && (
         <table className="table">
           <thead><tr><th>#</th><th>Customer</th><th>Against Invoice</th><th>Date</th><th>Total</th></tr></thead>
           <tbody>
-            {creditNotes.map((c) => (
+            {filteredCreditNotes.map((c) => (
               <tr key={c.id}>
                 <td><Link to={`/credit-notes/${c.id}`}>{c.credit_note_number}</Link></td>
                 <td>{c.customer_name || "—"}</td>
