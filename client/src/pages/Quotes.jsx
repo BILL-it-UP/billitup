@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatDate } from "../lib/format";
 import { exportSheet } from "../lib/exportExcel";
+import { useDateFormat } from "../lib/useDateFormat";
 
 const STATUS_LABEL = { draft: "Draft", sent: "Sent", accepted: "Accepted", declined: "Declined", converted: "Converted to Invoice" };
 
@@ -11,6 +12,7 @@ export default function Quotes() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const dateFormat = useDateFormat();
 
   useEffect(() => { api.listQuotes().then(setQuotes).finally(() => setLoading(false)); }, []);
 
@@ -74,7 +76,7 @@ export default function Quotes() {
               <tr key={q.id}>
                 <td><Link to={`/quotes/${q.id}`}>{q.quote_number}</Link></td>
                 <td>{q.customer_name || "—"}</td>
-                <td>{q.quote_date}</td>
+                <td>{formatDate(q.quote_date, dateFormat)}</td>
                 <td><span className={`badge badge-${q.status === "converted" ? "paid" : q.status}`}>{STATUS_LABEL[q.status] || q.status}</span></td>
                 <td>₹{formatMoney(q.total)}</td>
               </tr>

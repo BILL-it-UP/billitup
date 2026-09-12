@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatDate } from "../lib/format";
 import { exportSheet } from "../lib/exportExcel";
+import { useDateFormat } from "../lib/useDateFormat";
 
 export default function CreditNotes() {
   const [creditNotes, setCreditNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const dateFormat = useDateFormat();
 
   useEffect(() => { api.listCreditNotes().then(setCreditNotes).finally(() => setLoading(false)); }, []);
 
@@ -62,7 +64,7 @@ export default function CreditNotes() {
                 <td><Link to={`/credit-notes/${c.id}`}>{c.credit_note_number}</Link></td>
                 <td>{c.customer_name || "—"}</td>
                 <td>{c.invoice_number || "—"}</td>
-                <td>{c.credit_note_date}</td>
+                <td>{formatDate(c.credit_note_date, dateFormat)}</td>
                 <td>₹{formatMoney(c.total)}</td>
               </tr>
             ))}

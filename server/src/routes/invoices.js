@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { formatDate } from "../lib/formatDate.js";
 import { nextInvoiceNumber } from "../lib/invoiceNumbering.js";
 
 const router = express.Router();
@@ -262,7 +263,7 @@ router.post("/:id/send", async (req, res) => {
 
   try {
     const pdfBuffer = await renderDocumentPdf({
-      docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: invoice.invoice_date,
+      docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: formatDate(invoice.invoice_date, business.date_format),
       headlineLabel: "Balance Due", headlineValue: `Rs ${Number(invoice.balance_due).toFixed(2)}`,
       business, party: customer, partyLabel: "Bill To", lineItems, totals: invoice, notes: invoice.notes,
     });

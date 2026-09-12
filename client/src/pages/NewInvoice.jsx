@@ -13,7 +13,7 @@ export default function NewInvoice() {
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
   const [customerId, setCustomerId] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [reference, setReference] = useState("");
   const [subject, setSubject] = useState("");
@@ -164,7 +164,7 @@ export default function NewInvoice() {
             </select>
           </label>
           <label className="block">Invoice date
-            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} placeholder="Defaults to today" />
+            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
           </label>
           <label className="block">Due date (optional)
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />

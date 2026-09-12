@@ -70,6 +70,16 @@ export default function Settings() {
             Applies from your next new invoice onward — invoices you've already created keep their existing numbers.
           </p>
         )}
+        <label>Date format (used on invoices, quotes, credit notes, and everywhere dates are shown)
+          <select
+            value={business.date_format || "DD/MM/YYYY"}
+            onChange={(e) => setBusiness({ ...business, date_format: e.target.value })}
+          >
+            <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 09/09/2026)</option>
+            <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 09/09/2026)</option>
+            <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-09-09)</option>
+          </select>
+        </label>
         <label>Quote number prefix
           <input value={business.quote_prefix || ""} onChange={(e) => setBusiness({ ...business, quote_prefix: e.target.value })} />
         </label>
@@ -110,6 +120,8 @@ function FirmManagement() {
     window.location.assign("/");
   };
 
+  const hasPremiumFirm = businesses.some((b) => b.plan === "premium");
+
   return (
     <div className="staff-section">
       <h2>Your Firms</h2>
@@ -118,18 +130,24 @@ function FirmManagement() {
         numbering, and you switch into it anytime from the dropdown at the top, all under this same login.
       </p>
       <table className="table">
-        <thead><tr><th>Firm</th><th>Your Role</th><th /></tr></thead>
+        <thead><tr><th>Firm</th><th>Your Role</th><th>Plan</th><th /></tr></thead>
         <tbody>
           {businesses.map((b) => (
             <tr key={b.id}>
               <td>{b.name}{b.id === user.business_id && <span className="muted"> (active)</span>}</td>
               <td>{b.role}</td>
+              <td>{b.plan === "premium" ? "Premium" : "Free"}</td>
               <td>{b.id !== user.business_id && <button className="link-btn" onClick={() => switchTo(b.id)}>Switch to this firm</button>}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <Link className="link-btn" to="/add-firm">+ Add another firm</Link>
+      {!hasPremiumFirm && (
+        <p className="muted" style={{ marginTop: 8 }}>
+          Adding another firm needs a premium plan on at least one of your firms — everything else here stays free.
+        </p>
+      )}
     </div>
   );
 }

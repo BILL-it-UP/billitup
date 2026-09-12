@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
-import { formatMoney, formatQty } from "../lib/format";
+import { formatMoney, formatQty, formatDate } from "../lib/format";
 
 export default function CreditNoteView() {
   const { id } = useParams();
@@ -40,7 +40,7 @@ export default function CreditNoteView() {
             {customer?.billing_address && <p>{customer.billing_address}</p>}
           </div>
           <div className="invoice-dates">
-            <div><span>Date :</span><span>{creditNote.credit_note_date}</span></div>
+            <div><span>Date :</span><span>{formatDate(creditNote.credit_note_date, creditNote.business?.date_format)}</span></div>
             {creditNote.reason && <div><span>Reason :</span><span>{creditNote.reason}</span></div>}
           </div>
         </div>

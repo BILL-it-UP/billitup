@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
-import { formatMoney, formatQty } from "../lib/format";
+import { formatMoney, formatQty, formatDate } from "../lib/format";
 
 export default function QuoteView() {
   const { id } = useParams();
@@ -63,8 +63,8 @@ export default function QuoteView() {
             {customer?.billing_address && <p>{customer.billing_address}</p>}
           </div>
           <div className="invoice-dates">
-            <div><span>Quote Date :</span><span>{quote.quote_date}</span></div>
-            {quote.expiry_date && <div><span>Valid Until :</span><span>{quote.expiry_date}</span></div>}
+            <div><span>Quote Date :</span><span>{formatDate(quote.quote_date, quote.business?.date_format)}</span></div>
+            {quote.expiry_date && <div><span>Valid Until :</span><span>{formatDate(quote.expiry_date, quote.business?.date_format)}</span></div>}
             {quote.reference && <div><span>Reference :</span><span>{quote.reference}</span></div>}
           </div>
         </div>

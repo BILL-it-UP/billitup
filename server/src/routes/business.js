@@ -30,7 +30,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
-    reset_invoice_numbering_yearly,
+    reset_invoice_numbering_yearly, date_format,
   } = req.body;
 
   db.prepare(
@@ -60,7 +60,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       terms_and_conditions = COALESCE(?, terms_and_conditions),
       signature_data_url = COALESCE(?, signature_data_url),
       signature_name = COALESCE(?, signature_name),
-      reset_invoice_numbering_yearly = COALESCE(?, reset_invoice_numbering_yearly)
+      reset_invoice_numbering_yearly = COALESCE(?, reset_invoice_numbering_yearly),
+      date_format = COALESCE(?, date_format)
     WHERE id = ?`
   ).run(
     name, address, phone, email, website, gstin,
@@ -71,6 +72,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
     reset_invoice_numbering_yearly === undefined ? undefined : (reset_invoice_numbering_yearly ? 1 : 0),
+    date_format,
     req.auth.businessId
   );
 

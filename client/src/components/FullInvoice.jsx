@@ -1,6 +1,6 @@
 import DocumentBrandHeader from "./DocumentBrandHeader";
 import DocumentFooter from "./DocumentFooter";
-import { formatMoney, formatQty } from "../lib/format";
+import { formatMoney, formatQty, formatDate } from "../lib/format";
 
 // The actual A4 invoice document — shared by the authenticated Invoice
 // detail view, the master-detail Invoices list, and the public (no-login)
@@ -23,9 +23,9 @@ export default function FullInvoice({ invoice }) {
           {(invoice.gstin || customer?.gstin) && <p>GSTIN: {invoice.gstin || customer.gstin}</p>}
         </div>
         <div className="invoice-dates">
-          <div><span>Invoice Date :</span><span>{invoice.invoice_date}</span></div>
+          <div><span>Invoice Date :</span><span>{formatDate(invoice.invoice_date, invoice.business?.date_format)}</span></div>
           {invoice.terms && <div><span>Terms :</span><span>{invoice.terms}</span></div>}
-          {invoice.due_date && <div><span>Due Date :</span><span>{invoice.due_date}</span></div>}
+          {invoice.due_date && <div><span>Due Date :</span><span>{formatDate(invoice.due_date, invoice.business?.date_format)}</span></div>}
           {invoice.reference && <div><span>Reference :</span><span>{invoice.reference}</span></div>}
         </div>
       </div>

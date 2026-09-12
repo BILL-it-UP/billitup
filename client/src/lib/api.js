@@ -10,14 +10,29 @@ function getToken() {
   return localStorage.getItem("billitup_token");
 }
 
+// Small cache for the current business's date_format, read by
+// lib/useDateFormat.js — list pages (Dashboard, Quotes, Credit Notes) show a
+// raw date per row without a full business object attached, so they share
+// one fetch-once value instead of each re-requesting it. Lives here (rather
+// than in useDateFormat.js) so setSession/clearSession can invalidate it
+// without a circular import.
+let cachedDateFormat = null;
+export function getCachedDateFormat() { return cachedDateFormat; }
+export function setCachedDateFormat(value) { cachedDateFormat = value; }
+
 export function setSession(token, user) {
   localStorage.setItem("billitup_token", token);
   localStorage.setItem("billitup_user", JSON.stringify(user));
+  // A new session can mean a different business (login, switch-firm, add-firm)
+  // with its own date_format — drop the cached one so list pages refetch it
+  // instead of showing the previous business's setting.
+  cachedDateFormat = null;
 }
 
 export function clearSession() {
   localStorage.removeItem("billitup_token");
   localStorage.removeItem("billitup_user");
+  cachedDateFormat = null;
 }
 
 export function getUser() {

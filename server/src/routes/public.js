@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../db.js";
 import { renderDocumentPdf } from "../lib/mailer.js";
+import { formatDate } from "../lib/formatDate.js";
 
 // Unauthenticated routes for the "Copy shareable link" feature on an
 // invoice — a customer with the link can view (and download a PDF of)
@@ -17,12 +18,12 @@ function publicBusinessFields(business) {
   const {
     name, address, phone, email, website, gstin, logo_data_url,
     bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
-    terms_and_conditions, signature_data_url, signature_name,
+    terms_and_conditions, signature_data_url, signature_name, date_format,
   } = business;
   return {
     name, address, phone, email, website, gstin, logo_data_url,
     bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
-    terms_and_conditions, signature_data_url, signature_name,
+    terms_and_conditions, signature_data_url, signature_name, date_format,
   };
 }
 
@@ -48,7 +49,7 @@ router.get("/invoices/:token/pdf", async (req, res) => {
   const { invoice, lineItems, customer, business } = found;
   try {
     const pdfBuffer = await renderDocumentPdf({
-      docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: invoice.invoice_date,
+      docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: formatDate(invoice.invoice_date, business.date_format),
       headlineLabel: "Balance Due", headlineValue: `Rs ${Number(invoice.balance_due).toFixed(2)}`,
       business: publicBusinessFields(business), party: customer, partyLabel: "Bill To",
       lineItems, totals: invoice, notes: invoice.notes,

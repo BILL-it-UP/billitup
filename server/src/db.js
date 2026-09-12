@@ -378,6 +378,19 @@ ensureColumn("businesses", "terms_and_conditions", "terms_and_conditions TEXT");
 ensureColumn("businesses", "signature_data_url", "signature_data_url TEXT");
 ensureColumn("businesses", "signature_name", "signature_name TEXT");
 ensureColumn("businesses", "reset_invoice_numbering_yearly", "reset_invoice_numbering_yearly INTEGER DEFAULT 0");
+// How dates print everywhere in the app (invoices, quotes, credit notes,
+// list pages) — a business-level choice since different customers/regions
+// expect different conventions. DD/MM/YYYY matches how dates are written
+// day to day in India, so that's the default for a business that hasn't
+// picked one.
+ensureColumn("businesses", "date_format", "date_format TEXT DEFAULT 'DD/MM/YYYY'");
+// Free vs premium. Enforced server-side only where it matters (adding more
+// than one firm under a login) — see routes/auth.js. Since BillItUp's code
+// is public, this only actually gates anything on installs we control
+// ourselves; a self-hosted copy's owner has their own database anyway, and
+// everything else in the app stays free for everyone regardless of this
+// value.
+ensureColumn("businesses", "plan", "plan TEXT DEFAULT 'free'");
 
 // items
 ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");

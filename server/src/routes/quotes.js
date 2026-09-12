@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { formatDate } from "../lib/formatDate.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -149,8 +150,8 @@ router.post("/:id/send", async (req, res) => {
 
   try {
     const pdfBuffer = await renderDocumentPdf({
-      docLabel: "Quote", docNumber: quote.quote_number, docDate: quote.quote_date,
-      extraMeta: quote.expiry_date ? [`Valid Until: ${quote.expiry_date}`] : [],
+      docLabel: "Quote", docNumber: quote.quote_number, docDate: formatDate(quote.quote_date, business.date_format),
+      extraMeta: quote.expiry_date ? [`Valid Until: ${formatDate(quote.expiry_date, business.date_format)}`] : [],
       headlineLabel: "Total", headlineValue: `Rs ${Number(quote.total).toFixed(2)}`,
       business, party: customer, partyLabel: "To", lineItems, totals: quote, notes: quote.notes,
     });

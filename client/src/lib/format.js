@@ -20,3 +20,24 @@ export function formatDateTime(value) {
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString();
 }
+
+// Renders a plain "YYYY-MM-DD" date (as stored/sent by the server for
+// invoice/quote/credit-note dates) according to a business's chosen
+// date_format. Falls back to DD/MM/YYYY when no format is set, and returns
+// the raw value unchanged if it isn't a plain date string — that way a
+// missing/malformed value never disappears, it just isn't reformatted.
+export function formatDate(value, format) {
+  if (!value) return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+  const [, yyyy, mm, dd] = match;
+  switch (format) {
+    case "MM/DD/YYYY":
+      return `${mm}/${dd}/${yyyy}`;
+    case "YYYY-MM-DD":
+      return `${yyyy}-${mm}-${dd}`;
+    case "DD/MM/YYYY":
+    default:
+      return `${dd}/${mm}/${yyyy}`;
+  }
+}

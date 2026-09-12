@@ -2,6 +2,7 @@ import express from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { formatDate } from "../lib/formatDate.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -112,7 +113,7 @@ router.post("/:id/send", async (req, res) => {
 
   try {
     const pdfBuffer = await renderDocumentPdf({
-      docLabel: "Credit Note", docNumber: creditNote.credit_note_number, docDate: creditNote.credit_note_date,
+      docLabel: "Credit Note", docNumber: creditNote.credit_note_number, docDate: formatDate(creditNote.credit_note_date, business.date_format),
       extraMeta: creditNote.reason ? [`Reason: ${creditNote.reason}`] : [],
       headlineLabel: "Total Credit", headlineValue: `Rs ${Number(creditNote.total).toFixed(2)}`,
       business, party: customer, partyLabel: "To", lineItems, totals: creditNote, notes: creditNote.notes,

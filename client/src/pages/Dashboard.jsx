@@ -4,7 +4,8 @@ import { api, getUser } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
 import InvoiceDetail from "../components/InvoiceDetail";
 import { relativeDueLabel } from "../lib/invoiceStatus";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatDate } from "../lib/format";
+import { useDateFormat } from "../lib/useDateFormat";
 import { exportSheet } from "../lib/exportExcel";
 
 export default function Dashboard() {
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const user = getUser();
   const isOwnerOrAdmin = user?.role === "owner" || user?.role === "admin";
+  const dateFormat = useDateFormat();
 
   const loadInvoices = () =>
     api.listInvoices().then((rows) => {
@@ -160,7 +162,7 @@ export default function Dashboard() {
                       <span className="invoice-list-item-amount">₹{formatMoney(inv.total)}</span>
                     </div>
                     <div className="invoice-list-item-bottom">
-                      <span className="muted">{inv.invoice_number} · {inv.invoice_date}</span>
+                      <span className="muted">{inv.invoice_number} · {formatDate(inv.invoice_date, dateFormat)}</span>
                       <span className={`due-label due-label-${label.tone}`}>{label.text}</span>
                     </div>
                   </button>

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatDate } from "../lib/format";
 import { exportWorkbook } from "../lib/exportExcel";
+import { useDateFormat } from "../lib/useDateFormat";
 
 export default function Reports() {
   const [summary, setSummary] = useState(null);
+  const dateFormat = useDateFormat();
 
   useEffect(() => { api.getReportsSummary().then(setSummary); }, []);
 
@@ -91,7 +93,7 @@ export default function Reports() {
                 <tr key={inv.id}>
                   <td><a href={`/invoices/${inv.id}`}>{inv.invoice_number}</a></td>
                   <td>{inv.customer_name || "—"}</td>
-                  <td>{inv.due_date}</td>
+                  <td>{formatDate(inv.due_date, dateFormat)}</td>
                   <td>₹{formatMoney(inv.balance_due)}</td>
                 </tr>
               ))}

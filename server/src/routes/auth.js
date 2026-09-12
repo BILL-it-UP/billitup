@@ -155,7 +155,7 @@ router.post("/reset-password", (req, res) => {
 router.get("/businesses", requireAuth, (req, res) => {
   const rows = db
     .prepare(
-      `SELECT businesses.id, businesses.name, businesses.gstin, memberships.role
+      `SELECT businesses.id, businesses.name, businesses.gstin, businesses.plan, memberships.role
        FROM memberships JOIN businesses ON businesses.id = memberships.business_id
        WHERE memberships.user_id = ?
        ORDER BY businesses.created_at`
@@ -188,6 +188,23 @@ router.post("/switch-business", requireAuth, (req, res) => {
 router.post("/firms", requireAuth, requireRole("owner"), (req, res) => {
   const { businessName, gstin } = req.body;
   if (!businessName) return res.status(400).json({ error: "businessName is required" });
+
+  // Basic invoicing is free forever, in one firm. Running more than one firm
+  // under the same login is the premium feature — this login needs at least
+  // one firm already marked premium (flipped by hand after being paid
+  // directly, see routes/admin.js) before it can add another.
+  const hasPremiumFirm = db
+    .prepare(
+      `SELECT 1 FROM memberships m JOIN businesses b ON b.id = m.business_id
+       WHERE m.user_id = ? AND b.plan = 'premium' LIMIT 1`
+    )
+    .get(req.auth.userId);
+  if (!hasPremiumFirm) {
+    return res.status(403).json({
+      error: "Adding another firm needs a premium plan. Get in touch to upgrade — everything else stays free.",
+      code: "PREMIUM_REQUIRED",
+    });
+  }
 
   const businessResult = db.prepare("INSERT INTO businesses (name, gstin) VALUES (?, ?)").run(businessName, gstin || null);
   const businessId = businessResult.lastInsertRowid;

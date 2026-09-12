@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { formatDate } from "../lib/format";
+import { useDateFormat } from "../lib/useDateFormat";
 
 const FREQUENCY_LABEL = { weekly: "Weekly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly" };
 const STATUS_LABEL = { active: "Active", paused: "Paused", ended: "Ended" };
@@ -10,6 +12,7 @@ export default function RecurringInvoices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const dateFormat = useDateFormat();
 
   const load = () => api.listRecurringInvoices().then(setRows).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
@@ -75,7 +78,7 @@ export default function RecurringInvoices() {
               <tr key={row.id}>
                 <td>{row.customer_name || "—"}</td>
                 <td>{FREQUENCY_LABEL[row.frequency] || row.frequency}{row.interval_count > 1 ? ` (every ${row.interval_count})` : ""}</td>
-                <td>{row.status === "active" ? row.next_invoice_date : "—"}</td>
+                <td>{row.status === "active" ? formatDate(row.next_invoice_date, dateFormat) : "—"}</td>
                 <td><span className={`badge badge-${row.status === "active" ? "sent" : row.status === "ended" ? "draft" : "partially_paid"}`}>{STATUS_LABEL[row.status] || row.status}</span></td>
                 <td>
                   {row.status !== "ended" && (
