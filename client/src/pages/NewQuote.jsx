@@ -74,18 +74,18 @@ export default function NewQuote() {
 
         <table className="table line-item-table">
           <thead>
-            <tr><th>Item</th><th>Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
+            <tr><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
           </thead>
           <tbody>
             {lines.map((line, i) => (
               <tr key={i}>
-                <td>
+                <td className="line-item-details">
                   <select value={line.item_id} onChange={(e) => pickItem(i, e.target.value)}>
-                    <option value="">Custom</option>
+                    <option value="">Custom item</option>
                     {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
                   </select>
+                  <textarea rows={2} value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })} placeholder="Description — add a line break to list multiple items under one line" required />
                 </td>
-                <td><textarea rows={2} value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })} placeholder="Add a line break to list multiple items under one line" required /></td>
                 <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>

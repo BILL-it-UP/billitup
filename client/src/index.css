@@ -153,6 +153,11 @@ textarea { resize: vertical; }
 .line-item-table input, .line-item-table select, .line-item-table textarea { margin-top: 0; }
 .line-item-table td { padding: 4px; }
 .line-item-table textarea { resize: vertical; min-height: 38px; font-size: 14px; }
+/* Item picker + description live in ONE cell, stacked, so the row reads as a
+   single "Item & Description" block (matching how Zoho's item table has one
+   combined column) instead of two cramped side-by-side columns. */
+.line-item-details { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
+.line-item-details select { font-size: 12px; color: var(--muted); padding: 4px 6px; }
 
 .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
 .badge-draft { background: #eee; color: #555; }
@@ -286,6 +291,12 @@ textarea { resize: vertical; }
 .doc-signature { margin-top: 32px; text-align: right; font-size: 13px; }
 .doc-signature-img { max-height: 48px; max-width: 180px; display: inline-block; margin-bottom: 4px; }
 .doc-signature-line { border-top: 1px solid var(--ink); width: 180px; margin-left: auto; margin-bottom: 6px; }
+.doc-powered-by {
+  margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px; font-size: 10px;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+}
+.doc-powered-by img { height: 14px; display: block; }
 
 /* ---- Print ----
    Printing an invoice/quote/credit note can happen from a standalone page

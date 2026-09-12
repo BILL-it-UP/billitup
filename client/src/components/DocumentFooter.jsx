@@ -36,6 +36,11 @@ export default function DocumentFooter({ business, total }) {
           <p>Authorized Signature{business.signature_name ? ` — ${business.signature_name}` : ""}</p>
         </div>
       )}
+
+      <div className="doc-powered-by">
+        <span>Powered by</span>
+        <img src="/logo-header.png" alt="BillItUp" />
+      </div>
     </div>
   );
 }
