@@ -25,6 +25,8 @@ import NewRecurringInvoice from "./pages/NewRecurringInvoice";
 import PublicInvoiceView from "./pages/PublicInvoiceView";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import AdminLogin from "./pages/AdminLogin";
+import AdminPanel from "./pages/AdminPanel";
 import { api, getUser, clearSession, setSession } from "./lib/api";
 
 function RequireAuth({ children }) {
@@ -159,6 +161,11 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/view/invoice/:token" element={<PublicInvoiceView />} />
+      {/* Not part of the regular business login — a separate, unlinked
+          console guarded by ADMIN_SECRET (see server/src/routes/admin.js),
+          for flipping a business between free/premium by hand. */}
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin" element={<AdminPanel />} />
       <Route path="/" element={<RequireAuth><Shell><Dashboard /></Shell></RequireAuth>} />
       <Route path="/customers" element={<RequireAuth><Shell><Customers /></Shell></RequireAuth>} />
       <Route path="/items" element={<RequireAuth><Shell><Items /></Shell></RequireAuth>} />
