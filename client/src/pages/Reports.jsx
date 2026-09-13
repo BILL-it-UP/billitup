@@ -90,6 +90,112 @@ function Gstr1Panel() {
   );
 }
 
+// A GSTR-3B-style helper — the summary return where actual tax liability is
+// declared and paid each month, separate from the line-by-line GSTR-1 above.
+// This pulls together output tax already collected (from invoices) and a
+// candidate input tax credit figure (from the Purchases log) into one rough
+// net-payable number. See server/src/lib/gstr3b.js for exactly what this
+// does and doesn't cover — it's a starting point for your tax advisor, not a
+// final filing figure.
+function Gstr3bPanel() {
+  const [month, setMonth] = useState(currentMonthStr());
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setSummary(await api.getGstr3bSummary(month));
+    } catch (err) {
+      setError(err.message);
+      setSummary(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    if (!summary) return;
+    exportWorkbook(`gstr3b-helper-${summary.month}.xlsx`, [
+      {
+        name: "Summary",
+        rows: [
+          { Section: "Regular outward supplies (3.1a) - Taxable Value", Amount: summary.outward.regular.taxableValue },
+          { Section: "Regular outward supplies (3.1a) - CGST", Amount: summary.outward.regular.cgst },
+          { Section: "Regular outward supplies (3.1a) - SGST", Amount: summary.outward.regular.sgst },
+          { Section: "Regular outward supplies (3.1a) - IGST", Amount: summary.outward.regular.igst },
+          { Section: "Reverse charge outward (3.1a, tax paid by recipient) - Taxable Value", Amount: summary.outward.reverseCharge.taxableValue },
+          { Section: "Nil rated / no GST - Value", Amount: summary.outward.nilRated.taxableValue },
+          { Section: "Total output tax collected", Amount: summary.taxCollected },
+          { Section: "Purchases logged - Taxable Value", Amount: summary.purchases.taxableValue },
+          { Section: "Purchases logged - Tax (candidate ITC, Table 4)", Amount: summary.purchases.taxAmount },
+          { Section: "Rough net payable (tax collected minus candidate ITC)", Amount: summary.roughNetPayable },
+        ],
+      },
+    ]);
+  };
+
+  return (
+    <div className="panel" style={{ marginBottom: 32 }}>
+      <h2>GSTR-3B Helper</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Pulls together the output tax already collected on your invoices and a candidate input tax credit figure
+        from your Purchases log into one rough summary for the month. This is a starting point for filing, not a
+        final figure, since real GSTR-3B eligibility also depends on things this software doesn't track, such as
+        your suppliers' own filing status and any credit carried forward. Please confirm the final numbers with
+        your tax advisor before filing.
+      </p>
+      <div className="list-toolbar">
+        <input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setSummary(null); }} />
+        <button type="button" onClick={handleGenerate} disabled={loading}>{loading ? "Generating..." : "Generate"}</button>
+        {summary && <button type="button" className="link-btn" onClick={handleExport}>Export to Excel</button>}
+      </div>
+      {error && <p className="error">{error}</p>}
+      {summary && (
+        <>
+          <table className="table">
+            <thead><tr><th></th><th>Invoices</th><th>Taxable Value</th><th>CGST</th><th>SGST</th><th>IGST</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Regular (forward charge)</td>
+                <td>{summary.outward.regular.count}</td>
+                <td>₹{formatMoney(summary.outward.regular.taxableValue)}</td>
+                <td>₹{formatMoney(summary.outward.regular.cgst)}</td>
+                <td>₹{formatMoney(summary.outward.regular.sgst)}</td>
+                <td>₹{formatMoney(summary.outward.regular.igst)}</td>
+              </tr>
+              <tr>
+                <td>Reverse charge (tax paid by recipient)</td>
+                <td>{summary.outward.reverseCharge.count}</td>
+                <td>₹{formatMoney(summary.outward.reverseCharge.taxableValue)}</td>
+                <td>—</td><td>—</td><td>—</td>
+              </tr>
+              <tr>
+                <td>Nil rated / no GST</td>
+                <td>{summary.outward.nilRated.count}</td>
+                <td>₹{formatMoney(summary.outward.nilRated.taxableValue)}</td>
+                <td>—</td><td>—</td><td>—</td>
+              </tr>
+            </tbody>
+          </table>
+          <table className="table" style={{ marginTop: 16 }}>
+            <tbody>
+              <tr><td>Total output tax collected</td><td><strong>₹{formatMoney(summary.taxCollected)}</strong></td></tr>
+              <tr>
+                <td>Purchases logged ({summary.purchases.count}) - taxable value ₹{formatMoney(summary.purchases.taxableValue)}</td>
+                <td>Candidate ITC: <strong>₹{formatMoney(summary.purchases.taxAmount)}</strong></td>
+              </tr>
+              <tr><td>Rough net payable</td><td><strong>₹{formatMoney(summary.roughNetPayable)}</strong></td></tr>
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Reports() {
   const [summary, setSummary] = useState(null);
   const dateFormat = useDateFormat();
@@ -138,6 +244,7 @@ export default function Reports() {
       </div>
 
       <Gstr1Panel />
+      <Gstr3bPanel />
 
       <div className="report-columns">
         <div className="panel">

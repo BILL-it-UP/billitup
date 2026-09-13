@@ -2,6 +2,7 @@ import express from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { buildGstr1Report } from "../lib/gstr1.js";
+import { buildGstr3bSummary } from "../lib/gstr3b.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -165,6 +166,18 @@ router.get("/gstr1", (req, res) => {
     return res.status(400).json({ error: "month is required, as YYYY-MM" });
   }
   res.json(buildGstr1Report(req.auth.businessId, month));
+});
+
+// A GSTR-3B-style summary for one month — outward tax collected (excluding
+// reverse-charge, which the recipient pays) plus a candidate input tax
+// credit figure from the Purchases log. See lib/gstr3b.js for exactly what
+// this does and doesn't cover.
+router.get("/gstr3b", (req, res) => {
+  const month = req.query.month;
+  if (!/^\d{4}-\d{2}$/.test(month || "")) {
+    return res.status(400).json({ error: "month is required, as YYYY-MM" });
+  }
+  res.json(buildGstr3bSummary(req.auth.businessId, month));
 });
 
 export default router;

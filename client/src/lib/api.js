@@ -123,6 +123,7 @@ export const api = {
 
   getReportsSummary: () => request("/api/reports/summary"),
   getGstr1Report: (month) => request(`/api/reports/gstr1?month=${encodeURIComponent(month)}`),
+  getGstr3bSummary: (month) => request(`/api/reports/gstr3b?month=${encodeURIComponent(month)}`),
 
   listPayments: () => request("/api/payments"),
 
@@ -132,6 +133,11 @@ export const api = {
   listPurchases: () => request("/api/purchases"),
   createPurchase: (payload) => request("/api/purchases", { method: "POST", body: payload }),
   deletePurchase: (id) => request(`/api/purchases/${id}`, { method: "DELETE" }),
+
+  createSuggestion: (message) => request("/api/suggestions", { method: "POST", body: { message } }),
+  listSuggestions: () => request("/api/suggestions"),
+  setSuggestionStatus: (id, status) => request(`/api/suggestions/${id}/status`, { method: "PUT", body: { status } }),
+  deleteSuggestion: (id) => request(`/api/suggestions/${id}`, { method: "DELETE" }),
 
   listRecurringInvoices: () => request("/api/recurring-invoices"),
   getRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}`),

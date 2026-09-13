@@ -68,8 +68,21 @@ export default function Settings() {
               <input value={business.name || ""} onChange={(e) => setBusiness({ ...business, name: e.target.value })} />
             </label>
             <label>Address
-              <input value={business.address || ""} onChange={(e) => setBusiness({ ...business, address: e.target.value })} />
+              <textarea
+                rows={3}
+                placeholder="Building, street, area..."
+                value={business.address || ""}
+                onChange={(e) => setBusiness({ ...business, address: e.target.value })}
+              />
             </label>
+            <div className="field-row">
+              <label>PIN code
+                <input value={business.pincode || ""} onChange={(e) => setBusiness({ ...business, pincode: e.target.value })} />
+              </label>
+              <label>Country
+                <input value={business.country || ""} onChange={(e) => setBusiness({ ...business, country: e.target.value })} />
+              </label>
+            </div>
             <div className="field-row">
               <label>Phone
                 <input value={business.phone || ""} onChange={(e) => setBusiness({ ...business, phone: e.target.value })} />

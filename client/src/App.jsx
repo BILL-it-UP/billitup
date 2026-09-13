@@ -3,8 +3,9 @@ import { Routes, Route, Navigate, Link, NavLink, useNavigate } from "react-route
 import {
   IconDashboard, IconQuote, IconCreditNote, IconRecurring,
   IconCustomers, IconItems, IconReports, IconSettings, IconLogout, IconChevron,
-  IconVendors, IconPurchases, IconPayments,
+  IconVendors, IconPurchases, IconPayments, IconSuggestion,
 } from "./components/Icons";
+import SuggestionBox from "./components/SuggestionBox";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -28,6 +29,7 @@ import PaymentsTimeline from "./pages/PaymentsTimeline";
 import Vendors from "./pages/Vendors";
 import Purchases from "./pages/Purchases";
 import Reports from "./pages/Reports";
+import Suggestions from "./pages/Suggestions";
 import Settings from "./pages/Settings";
 import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
@@ -50,6 +52,7 @@ const NAV_ITEMS = [
   { to: "/customers", label: "Customers", icon: IconCustomers },
   { to: "/items", label: "Items", icon: IconItems },
   { to: "/reports", label: "Reports", icon: IconReports, ownerOnly: true },
+  { to: "/suggestions", label: "Suggestions", icon: IconSuggestion, ownerOnly: true },
   { to: "/settings", label: "Settings", icon: IconSettings, ownerOnly: true },
 ];
 
@@ -130,6 +133,8 @@ function Shell({ children }) {
           ))}
         </nav>
 
+        <SuggestionBox />
+
         <button type="button" className="sidebar-toggle" onClick={toggleCollapsed} title={collapsed ? "Expand" : "Collapse"}>
           <IconChevron direction={collapsed ? "right" : "left"} size={16} />
           <span className="sidebar-link-label">Collapse</span>
@@ -191,6 +196,7 @@ export default function App() {
       <Route path="/vendors" element={<RequireAuth><Shell><Vendors /></Shell></RequireAuth>} />
       <Route path="/purchases" element={<RequireAuth><Shell><Purchases /></Shell></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Shell><Reports /></Shell></RequireAuth>} />
+      <Route path="/suggestions" element={<RequireAuth><Shell><Suggestions /></Shell></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Shell><Settings /></Shell></RequireAuth>} />
       <Route path="/add-firm" element={<RequireAuth><Shell><AddFirm /></Shell></RequireAuth>} />
     </Routes>

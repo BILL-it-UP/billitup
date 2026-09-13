@@ -25,7 +25,7 @@ router.get("/me", (req, res) => {
 // Settings update: profile, tax, numbering prefixes, SMTP, and invoice branding.
 router.put("/me", requireRole("owner", "admin"), (req, res) => {
   const {
-    name, address, phone, email, website, gstin, state,
+    name, address, pincode, country, phone, email, website, gstin, state,
     invoice_prefix, quote_prefix, credit_note_prefix,
     smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
@@ -37,6 +37,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     `UPDATE businesses SET
       name = COALESCE(?, name),
       address = COALESCE(?, address),
+      pincode = COALESCE(?, pincode),
+      country = COALESCE(?, country),
       phone = COALESCE(?, phone),
       email = COALESCE(?, email),
       website = COALESCE(?, website),
@@ -65,7 +67,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       date_format = COALESCE(?, date_format)
     WHERE id = ?`
   ).run(
-    name, address, phone, email, website, gstin, state,
+    name, address, pincode, country, phone, email, website, gstin, state,
     invoice_prefix, quote_prefix, credit_note_prefix,
     smtp_host, smtp_port === undefined || smtp_port === "" ? smtp_port : Number(smtp_port),
     smtp_secure === undefined ? undefined : (smtp_secure ? 1 : 0),

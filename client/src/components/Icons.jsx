@@ -211,6 +211,16 @@ export function IconPayments({ size = 18 }) {
   );
 }
 
+export function IconSuggestion({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M9 18.5h6M10 21h4" />
+      <path d="M12 3a5.5 5.5 0 0 0-3.2 10c.6.4 1 1.1 1 1.9v.6h4.4v-.6c0-.8.4-1.5 1-1.9A5.5 5.5 0 0 0 12 3Z" />
+      <path d="M12 6.5c-1.4 0-2.5 1.1-2.5 2.5" />
+    </svg>
+  );
+}
+
 export function IconTrash({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>

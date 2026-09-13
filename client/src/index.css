@@ -75,6 +75,17 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 }
 .sidebar-toggle:hover { color: var(--sidebar-ink-hover); }
 
+.suggestion-box { position: relative; border-top: 1px solid var(--sidebar-border); }
+.suggestion-popover {
+  position: absolute; bottom: calc(100% + 6px); left: 12px; right: 12px;
+  background: white; color: var(--ink); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); z-index: 20;
+}
+.suggestion-popover label { margin-bottom: 8px; }
+.suggestion-popover textarea { margin-top: 6px; }
+.suggestion-popover-actions { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
+.sidebar-collapsed .suggestion-popover { left: 8px; right: -160px; width: 260px; }
+
 .sidebar-collapsed .sidebar-brand { justify-content: center; padding: 18px 0; }
 .sidebar-collapsed .sidebar-link { justify-content: center; }
 .sidebar-collapsed .sidebar-toggle { justify-content: center; }
@@ -145,6 +156,8 @@ textarea { resize: vertical; }
 
 .inline-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
 .inline-form input { width: auto; margin-top: 0; }
+.inline-form textarea { width: 220px; margin-top: 0; resize: vertical; }
+.inline-form .pincode-input, .inline-form .country-input { width: 110px; }
 
 .list-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .list-toolbar input[type="search"] { width: 260px; max-width: 100%; margin-top: 0; }

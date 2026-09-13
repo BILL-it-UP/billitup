@@ -16,6 +16,7 @@ import adminRouter from "./routes/admin.js";
 import paymentsRouter from "./routes/payments.js";
 import vendorsRouter from "./routes/vendors.js";
 import purchasesRouter from "./routes/purchases.js";
+import suggestionsRouter from "./routes/suggestions.js";
 import { startBackupSchedule } from "./lib/backup.js";
 
 const app = express();
@@ -41,6 +42,7 @@ app.use("/api/admin", adminRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/vendors", vendorsRouter);
 app.use("/api/purchases", purchasesRouter);
+app.use("/api/suggestions", suggestionsRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {

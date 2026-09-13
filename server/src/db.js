@@ -367,6 +367,21 @@ CREATE TABLE IF NOT EXISTS purchases (
   notes TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- A lightweight in-app feedback box — any logged-in user (any role) can
+-- suggest an improvement to the software itself, and an Owner/Admin can
+-- review the list and mark items done. Deliberately simple (no categories,
+-- no voting) — just a running log, the same spirit as the Vendors/Purchases
+-- log above.
+CREATE TABLE IF NOT EXISTS suggestions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  user_id INTEGER REFERENCES users(id),
+  user_name TEXT,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',   -- open | done
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------
@@ -432,12 +447,26 @@ ensureColumn("businesses", "plan", "plan TEXT DEFAULT 'free'");
 // customer's state to work out whether a supply is intra-state (CGST+SGST)
 // or inter-state (IGST). See server/src/lib/gst.js.
 ensureColumn("businesses", "state", "state TEXT");
+// Split out of the old single "address" line, so there's room to actually
+// write a full address plus a proper PIN code and country rather than
+// cramming everything into one input. "address" itself keeps whatever was
+// already typed there (usually the street/building/area line) — nothing is
+// backfilled or reparsed automatically.
+ensureColumn("businesses", "pincode", "pincode TEXT");
+ensureColumn("businesses", "country", "country TEXT DEFAULT 'India'");
 
 // items
 ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");
 
 // customers
 ensureColumn("customers", "state", "state TEXT");
+ensureColumn("customers", "pincode", "pincode TEXT");
+ensureColumn("customers", "country", "country TEXT DEFAULT 'India'");
+
+// vendors — pincode/country added alongside the address split above; state
+// already existed on vendors from when the table was first created.
+ensureColumn("vendors", "pincode", "pincode TEXT");
+ensureColumn("vendors", "country", "country TEXT DEFAULT 'India'");
 
 // users
 ensureColumn("users", "last_login_at", "last_login_at TEXT");

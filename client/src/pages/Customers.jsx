@@ -5,7 +5,7 @@ import { INDIAN_STATES } from "../lib/gst";
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", gstin: "", state: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", pincode: "", country: "India", gstin: "", state: "" });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const canManage = ["owner", "admin"].includes(getUser()?.role);
@@ -29,7 +29,7 @@ export default function Customers() {
     setError("");
     try {
       await api.createCustomer(form);
-      setForm({ name: "", phone: "", email: "", billing_address: "", gstin: "", state: "" });
+      setForm({ name: "", phone: "", email: "", billing_address: "", pincode: "", country: "India", gstin: "", state: "" });
       load();
     } catch (err) {
       setError(err.message);
@@ -51,7 +51,15 @@ export default function Customers() {
           <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input placeholder="Billing address" value={form.billing_address} onChange={(e) => setForm({ ...form, billing_address: e.target.value })} />
+          <textarea
+            className="address-textarea"
+            rows={2}
+            placeholder="Address (building, street, area...)"
+            value={form.billing_address}
+            onChange={(e) => setForm({ ...form, billing_address: e.target.value })}
+          />
+          <input className="pincode-input" placeholder="PIN code" value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
+          <input className="country-input" placeholder="Country" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
           <input placeholder="GSTIN (optional)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} />
           <select value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })}>
             <option value="">State (for CGST/SGST vs IGST)</option>
@@ -80,10 +88,14 @@ export default function Customers() {
       )}
 
       <table className="table">
-        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>GSTIN</th><th>State</th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th></tr></thead>
         <tbody>
           {filteredCustomers.map((c) => (
-            <tr key={c.id}><td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td><td>{c.gstin}</td><td>{c.state}</td></tr>
+            <tr key={c.id}>
+              <td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td>
+              <td>{[c.billing_address, c.pincode, c.country].filter(Boolean).join(", ")}</td>
+              <td>{c.gstin}</td><td>{c.state}</td>
+            </tr>
           ))}
         </tbody>
       </table>
@@ -97,7 +109,10 @@ function exportCustomersToExcel(customers) {
     Phone: c.phone || "",
     Email: c.email || "",
     "Billing Address": c.billing_address || "",
+    "PIN Code": c.pincode || "",
+    Country: c.country || "",
     GSTIN: c.gstin || "",
+    State: c.state || "",
   }));
   exportSheet("customers.xlsx", "Customers", rows);
 }
