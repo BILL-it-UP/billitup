@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
+import { GstBreakdown, GstNote } from "../components/GstBreakdown";
 import { formatMoney, formatQty, formatDate } from "../lib/format";
 
 export default function CreditNoteView() {
@@ -61,9 +62,10 @@ export default function CreditNoteView() {
         <div className="totals-box">
           <div><span>Sub Total</span><span>₹{formatMoney(creditNote.sub_total)}</span></div>
           <div><span>Discount</span><span>-₹{formatMoney(creditNote.discount)}</span></div>
-          <div><span>Tax</span><span>₹{formatMoney(creditNote.tax_total)}</span></div>
+          <GstBreakdown doc={creditNote} />
           <div className="grand-total"><span>Total Credit</span><span>₹{formatMoney(creditNote.total)}</span></div>
         </div>
+        <GstNote doc={creditNote} />
 
         {creditNote.notes && <p className="invoice-notes">{creditNote.notes}</p>}
         {invoice && (

@@ -4,6 +4,8 @@ import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
 import ItemPicker from "../components/ItemPicker";
+import TaxRateInput from "../components/TaxRateInput";
+import { GST_TREATMENTS } from "../lib/gst";
 
 export default function NewInvoice() {
   const navigate = useNavigate();
@@ -18,6 +20,7 @@ export default function NewInvoice() {
   const [reference, setReference] = useState("");
   const [subject, setSubject] = useState("");
   const [gstin, setGstin] = useState("");
+  const [gstTreatment, setGstTreatment] = useState("gst");
   const [terms, setTerms] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState([emptyLine()]);
@@ -43,6 +46,7 @@ export default function NewInvoice() {
       setReference(inv.reference || "");
       setSubject(inv.subject || "");
       setGstin(inv.gstin || "");
+      setGstTreatment(inv.gst_treatment || "gst");
       setTerms(inv.terms || "");
       setNotes(inv.notes || "");
       setLines(
@@ -112,7 +116,14 @@ export default function NewInvoice() {
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()]);
   const removeLine = (index) => setLines((prev) => prev.filter((_, i) => i !== index));
-  const { subTotal, discountTotal, taxTotal, total } = computeTotals(lines);
+  const rawTotals = computeTotals(lines);
+  const { subTotal, discountTotal, taxTotal } = rawTotals;
+  // Mirrors server/src/lib/gst.js: RCM and "no GST" don't add the tax to the
+  // amount the customer actually owes — this is just the on-screen preview,
+  // the server always recomputes and is the source of truth.
+  const total = gstTreatment === "none" ? subTotal - discountTotal
+    : gstTreatment === "rcm" ? subTotal - discountTotal
+    : rawTotals.total;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -126,6 +137,7 @@ export default function NewInvoice() {
         reference: reference || null,
         subject: subject || null,
         gstin: gstin || null,
+        gst_treatment: gstTreatment,
         terms: terms || null,
         notes: notes || null,
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
@@ -180,7 +192,21 @@ export default function NewInvoice() {
           <label className="block" style={{ flex: 2 }}>Subject (optional)
             <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Let your customer know what this invoice is for" />
           </label>
+          <label className="block">GST Treatment
+            <select value={gstTreatment} onChange={(e) => setGstTreatment(e.target.value)}>
+              {GST_TREATMENTS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </label>
         </div>
+        {gstTreatment === "rcm" && (
+          <p className="muted">
+            Reverse charge: the tax below is shown for your customer's own GST filing, but is not added to what
+            they owe you. They pay that GST directly to the government.
+          </p>
+        )}
+        {gstTreatment === "none" && (
+          <p className="muted">No GST will be added to this invoice, whatever tax % is set on a line below.</p>
+        )}
 
         <table className="table line-item-table">
           <thead>
@@ -205,7 +231,7 @@ export default function NewInvoice() {
                 <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
-                <td><input type="number" step="0.01" className="num" value={line.tax_rate} onChange={(e) => updateLine(i, { tax_rate: e.target.value })} /></td>
+                <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
                 <td className="num">₹{formatMoney(lineAmount(line))}</td>
                 <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
               </tr>
@@ -217,7 +243,7 @@ export default function NewInvoice() {
         <div className="totals-box">
           <div><span>Sub Total</span><span>₹{formatMoney(subTotal)}</span></div>
           <div><span>Discount</span><span>-₹{formatMoney(discountTotal)}</span></div>
-          <div><span>Tax</span><span>₹{formatMoney(taxTotal)}</span></div>
+          <div><span>{gstTreatment === "rcm" ? "Tax (reverse charge)" : "Tax"}</span><span>₹{formatMoney(gstTreatment === "none" ? 0 : taxTotal)}</span></div>
           <div className="grand-total"><span>Total</span><span>₹{formatMoney(total)}</span></div>
         </div>
 

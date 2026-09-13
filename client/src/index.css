@@ -402,6 +402,12 @@ textarea { resize: vertical; }
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
 }
 .doc-powered-by img { height: 14px; display: block; }
+.doc-made-in-india { text-transform: none; letter-spacing: normal; }
+.doc-gst-note { font-size: 12px; margin: 6px 0 0; max-width: 420px; margin-left: auto; text-align: right; }
+
+.tax-rate-input { display: flex; align-items: center; gap: 6px; }
+.tax-rate-input input { width: 70px; }
+.tax-rate-back { font-size: 11px; white-space: nowrap; }
 
 /* ---- Print ----
    Printing an invoice/quote/credit note can happen from a standalone page

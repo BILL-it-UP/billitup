@@ -4,6 +4,8 @@ import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
 import ItemPicker from "../components/ItemPicker";
+import TaxRateInput from "../components/TaxRateInput";
+import { GST_TREATMENTS } from "../lib/gst";
 
 export default function NewCreditNote() {
   const navigate = useNavigate();
@@ -14,6 +16,7 @@ export default function NewCreditNote() {
   const [customerId, setCustomerId] = useState("");
   const [invoiceId, setInvoiceId] = useState("");
   const [reason, setReason] = useState("");
+  const [gstTreatment, setGstTreatment] = useState("gst");
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -35,6 +38,7 @@ export default function NewCreditNote() {
     setInvoiceId(id);
     const invoice = invoices.find((inv) => String(inv.id) === String(id));
     if (invoice && !customerId) setCustomerId(invoice.customer_id || "");
+    if (invoice?.gst_treatment) setGstTreatment(invoice.gst_treatment);
   };
 
   const updateLine = (index, patch) => {
@@ -63,7 +67,9 @@ export default function NewCreditNote() {
   };
   const addLine = () => setLines((prev) => [...prev, emptyLine()]);
   const removeLine = (index) => setLines((prev) => prev.filter((_, i) => i !== index));
-  const { subTotal, discountTotal, taxTotal, total } = computeTotals(lines);
+  const rawTotals = computeTotals(lines);
+  const { subTotal, discountTotal, taxTotal } = rawTotals;
+  const total = gstTreatment === "gst" ? rawTotals.total : subTotal - discountTotal;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,6 +80,9 @@ export default function NewCreditNote() {
         customer_id: customerId || null,
         invoice_id: invoiceId || null,
         reason: reason || null,
+        // When credited against an invoice, leave this out so the server
+        // reuses that invoice's own GST treatment instead of overriding it.
+        gst_treatment: invoiceId ? undefined : gstTreatment,
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
       });
       navigate(`/credit-notes/${creditNote.id}`);
@@ -105,6 +114,14 @@ export default function NewCreditNote() {
         <label className="block">Reason
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Returned goods, billing correction" />
         </label>
+        {!invoiceId && (
+          <label className="block">GST Treatment
+            <select value={gstTreatment} onChange={(e) => setGstTreatment(e.target.value)}>
+              {GST_TREATMENTS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </label>
+        )}
+        {invoiceId && <p className="muted">GST treatment follows the invoice this credit note is against.</p>}
 
         <table className="table line-item-table">
           <thead>
@@ -118,17 +135,18 @@ export default function NewCreditNote() {
                     items={items}
                     itemId={line.item_id}
                     itemName={line.item_name}
+                    description={line.description}
                     canManage={canManageItems}
                     onSelect={(item) => pickItem(i, item)}
                     onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
+                    onDescriptionChange={(text) => updateLine(i, { description: text })}
                     onItemCreated={(item) => handleItemCreated(i, item)}
                   />
-                  <textarea rows={2} value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })} placeholder="Description — add a line break to list multiple items under one line" required />
                 </td>
                 <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
-                <td><input type="number" step="0.01" className="num" value={line.tax_rate} onChange={(e) => updateLine(i, { tax_rate: e.target.value })} /></td>
+                <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
                 <td className="num">₹{formatMoney(lineAmount(line))}</td>
                 <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
               </tr>
@@ -140,7 +158,7 @@ export default function NewCreditNote() {
         <div className="totals-box">
           <div><span>Sub Total</span><span>₹{formatMoney(subTotal)}</span></div>
           <div><span>Discount</span><span>-₹{formatMoney(discountTotal)}</span></div>
-          <div><span>Tax</span><span>₹{formatMoney(taxTotal)}</span></div>
+          <div><span>Tax</span><span>₹{formatMoney(gstTreatment === "none" ? 0 : taxTotal)}</span></div>
           <div className="grand-total"><span>Total Credit</span><span>₹{formatMoney(total)}</span></div>
         </div>
         {invoiceId && <p className="muted">This amount will be deducted from that invoice's balance due.</p>}

@@ -2,6 +2,7 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -45,12 +46,13 @@ export function generateInvoiceFromRecurring(recurringId) {
   if (templateLines.length === 0) throw new Error("This recurring invoice has no line items to bill");
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(recurring.business_id);
+  const customer = recurring.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(recurring.customer_id) : null;
   const invoiceNumber = `${business.invoice_prefix || "INV-"}${String(business.next_invoice_number).padStart(6, "0")}`;
   const invoiceDate = recurring.next_invoice_date;
   const dueDate = recurring.due_in_days ? addDays(invoiceDate, recurring.due_in_days) : null;
 
-  let subTotal = 0, taxTotal = 0, discountTotal = 0;
-  const computedLines = templateLines.map((line) => {
+  let subTotal = 0, rawTaxTotal = 0, discountTotal = 0;
+  const rawComputedLines = templateLines.map((line) => {
     const qty = Number(line.qty) || 0;
     const rate = Number(line.rate) || 0;
     const discount = Number(line.discount) || 0;
@@ -59,16 +61,21 @@ export function generateInvoiceFromRecurring(recurringId) {
     const lineTax = lineBase * (taxRate / 100);
     subTotal += qty * rate;
     discountTotal += discount;
-    taxTotal += lineTax;
+    rawTaxTotal += lineTax;
     return { ...line, qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
   });
-  const total = subTotal - discountTotal + taxTotal;
+  const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
+    subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: recurring.gst_treatment,
+    businessState: business.state, customerState: customer?.state,
+  });
+  const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, status,
-       sub_total, discount, tax_total, total, balance_due, notes, public_token, recurring_invoice_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, balance_due, notes, public_token, recurring_invoice_id,
+       gst_treatment, cgst, sgst, igst)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -84,7 +91,8 @@ export function generateInvoiceFromRecurring(recurringId) {
       recurring.business_id, recurring.customer_id, invoiceNumber, invoiceDate, dueDate,
       recurring.terms || null, recurring.reference || null,
       subTotal, discountTotal, taxTotal, total, total, recurring.notes || null,
-      randomUUID().replace(/-/g, ""), recurring.id
+      randomUUID().replace(/-/g, ""), recurring.id,
+      treatment, cgst, sgst, igst
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
@@ -144,7 +152,7 @@ router.get("/:id", (req, res) => {
 router.post("/", requireRole("owner", "admin"), (req, res) => {
   const {
     customer_id, frequency, interval_count, start_date, end_date,
-    due_in_days, reference, terms, notes, lineItems,
+    due_in_days, reference, terms, notes, lineItems, gst_treatment,
   } = req.body;
 
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
@@ -158,8 +166,8 @@ router.post("/", requireRole("owner", "admin"), (req, res) => {
   const insertRecurring = db.prepare(
     `INSERT INTO recurring_invoices
       (business_id, customer_id, frequency, interval_count, start_date, next_invoice_date, end_date,
-       due_in_days, reference, terms, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       due_in_days, reference, terms, notes, gst_treatment)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO recurring_invoice_line_items (recurring_invoice_id, item_id, description, qty, rate, discount, tax_rate)
@@ -171,7 +179,8 @@ router.post("/", requireRole("owner", "admin"), (req, res) => {
       req.auth.businessId, customer_id || null, frequency, Number(interval_count) || 1,
       start_date, start_date, end_date || null,
       due_in_days === undefined || due_in_days === "" ? null : Number(due_in_days),
-      reference || null, terms || null, notes || null
+      reference || null, terms || null, notes || null,
+      ["gst", "rcm", "none"].includes(gst_treatment) ? gst_treatment : "gst"
     );
     const id = result.lastInsertRowid;
     for (const line of lineItems) {

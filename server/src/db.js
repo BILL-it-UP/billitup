@@ -391,9 +391,16 @@ ensureColumn("businesses", "date_format", "date_format TEXT DEFAULT 'DD/MM/YYYY'
 // everything else in the app stays free for everyone regardless of this
 // value.
 ensureColumn("businesses", "plan", "plan TEXT DEFAULT 'free'");
+// The business's own state (e.g. "Tamil Nadu") — compared against a
+// customer's state to work out whether a supply is intra-state (CGST+SGST)
+// or inter-state (IGST). See server/src/lib/gst.js.
+ensureColumn("businesses", "state", "state TEXT");
 
 // items
 ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");
+
+// customers
+ensureColumn("customers", "state", "state TEXT");
 
 // users
 ensureColumn("users", "last_login_at", "last_login_at TEXT");
@@ -405,6 +412,26 @@ ensureColumn("invoices", "public_token", "public_token TEXT");
 ensureColumn("invoices", "recurring_invoice_id", "recurring_invoice_id INTEGER REFERENCES recurring_invoices(id)");
 ensureColumn("invoices", "subject", "subject TEXT");
 ensureColumn("invoices", "gstin", "gstin TEXT");
+// GST treatment (regular / reverse charge / no GST) and the CGST/SGST/IGST
+// split of tax_total, worked out at save time from the treatment plus the
+// business's and customer's state — see server/src/lib/gst.js. Stored (not
+// just computed on the fly) so a document keeps showing the split it was
+// actually created with even if the customer's state is edited later.
+ensureColumn("invoices", "gst_treatment", "gst_treatment TEXT DEFAULT 'gst'");
+ensureColumn("invoices", "cgst", "cgst REAL DEFAULT 0");
+ensureColumn("invoices", "sgst", "sgst REAL DEFAULT 0");
+ensureColumn("invoices", "igst", "igst REAL DEFAULT 0");
+
+// quotes / credit notes / recurring invoices — same GST treatment + split
+ensureColumn("quotes", "gst_treatment", "gst_treatment TEXT DEFAULT 'gst'");
+ensureColumn("quotes", "cgst", "cgst REAL DEFAULT 0");
+ensureColumn("quotes", "sgst", "sgst REAL DEFAULT 0");
+ensureColumn("quotes", "igst", "igst REAL DEFAULT 0");
+ensureColumn("credit_notes", "gst_treatment", "gst_treatment TEXT DEFAULT 'gst'");
+ensureColumn("credit_notes", "cgst", "cgst REAL DEFAULT 0");
+ensureColumn("credit_notes", "sgst", "sgst REAL DEFAULT 0");
+ensureColumn("credit_notes", "igst", "igst REAL DEFAULT 0");
+ensureColumn("recurring_invoices", "gst_treatment", "gst_treatment TEXT DEFAULT 'gst'");
 
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the

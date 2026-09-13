@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
+import TaxRateInput from "../components/TaxRateInput";
 
 export default function Items() {
   const [items, setItems] = useState([]);
@@ -48,7 +49,7 @@ export default function Items() {
           <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <input placeholder="Unit (pcs, hrs...)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
           <input placeholder="Rate (₹)" type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} required />
-          <input placeholder="Tax %" type="number" step="0.01" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
+          <TaxRateInput value={form.tax_rate} onChange={(v) => setForm({ ...form, tax_rate: v })} />
           <input placeholder="HSN/SAC (optional)" value={form.hsn_sac_code} onChange={(e) => setForm({ ...form, hsn_sac_code: e.target.value })} />
           <button type="submit">Add item</button>
         </form>

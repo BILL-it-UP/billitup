@@ -1,5 +1,6 @@
 import DocumentBrandHeader from "./DocumentBrandHeader";
 import DocumentFooter from "./DocumentFooter";
+import { GstBreakdown, GstNote } from "./GstBreakdown";
 import { formatMoney, formatQty, formatDate } from "../lib/format";
 
 // The actual A4 invoice document — shared by the authenticated Invoice
@@ -48,10 +49,11 @@ export default function FullInvoice({ invoice }) {
       <div className="totals-box">
         <div><span>Sub Total</span><span>₹{formatMoney(invoice.sub_total)}</span></div>
         <div><span>Discount</span><span>-₹{formatMoney(invoice.discount)}</span></div>
-        <div><span>Tax</span><span>₹{formatMoney(invoice.tax_total)}</span></div>
+        <GstBreakdown doc={invoice} />
         <div className="grand-total"><span>Total</span><span>₹{formatMoney(invoice.total)}</span></div>
         <div className="doc-balance-due-row"><span>Balance Due</span><span>₹{formatMoney(invoice.balance_due)}</span></div>
       </div>
+      <GstNote doc={invoice} />
 
       {invoice.notes && <p className="invoice-notes">{invoice.notes}</p>}
 

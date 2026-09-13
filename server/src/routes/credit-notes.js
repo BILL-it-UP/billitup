@@ -3,6 +3,7 @@ import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
+import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -36,7 +37,7 @@ router.get("/:id", (req, res) => {
 // against that invoice's balance_due immediately (like a negative payment) —
 // clamped at zero, and the invoice is marked paid once fully credited.
 router.post("/", (req, res) => {
-  const { customer_id, invoice_id, credit_note_date, reason, notes, lineItems } = req.body;
+  const { customer_id, invoice_id, credit_note_date, reason, notes, lineItems, gst_treatment } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
@@ -48,10 +49,13 @@ router.post("/", (req, res) => {
   }
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const customer = customer_id
+    ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id)
+    : (invoice?.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null);
   const creditNoteNumber = `${business.credit_note_prefix || "CN-"}${String(business.next_credit_note_number).padStart(6, "0")}`;
 
-  let subTotal = 0, taxTotal = 0, discountTotal = 0;
-  const computedLines = lineItems.map((line) => {
+  let subTotal = 0, rawTaxTotal = 0, discountTotal = 0;
+  const rawComputedLines = lineItems.map((line) => {
     const qty = Number(line.qty) || 0;
     const rate = Number(line.rate) || 0;
     const discount = Number(line.discount) || 0;
@@ -60,16 +64,20 @@ router.post("/", (req, res) => {
     const lineTax = lineBase * (taxRate / 100);
     subTotal += qty * rate;
     discountTotal += discount;
-    taxTotal += lineTax;
+    rawTaxTotal += lineTax;
     return { ...line, qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
   });
-  const total = subTotal - discountTotal + taxTotal;
+  const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
+    subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: gst_treatment || invoice?.gst_treatment,
+    businessState: business.state, customerState: customer?.state,
+  });
+  const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertCreditNote = db.prepare(
     `INSERT INTO credit_notes
       (business_id, customer_id, invoice_id, credit_note_number, credit_note_date, reason,
-       sub_total, discount, tax_total, total, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, notes, gst_treatment, cgst, sgst, igst)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -81,7 +89,8 @@ router.post("/", (req, res) => {
     const result = insertCreditNote.run(
       req.auth.businessId, customer_id || invoice?.customer_id || null, invoice_id || null,
       creditNoteNumber, credit_note_date || new Date().toISOString().slice(0, 10),
-      reason || null, subTotal, discountTotal, taxTotal, total, notes || null
+      reason || null, subTotal, discountTotal, taxTotal, total, notes || null,
+      treatment, cgst, sgst, igst
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {

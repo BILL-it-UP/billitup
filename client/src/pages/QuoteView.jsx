@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import SendEmailButton from "../components/SendEmailButton";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
+import { GstBreakdown, GstNote } from "../components/GstBreakdown";
 import { formatMoney, formatQty, formatDate } from "../lib/format";
 
 export default function QuoteView() {
@@ -85,9 +86,10 @@ export default function QuoteView() {
         <div className="totals-box">
           <div><span>Sub Total</span><span>₹{formatMoney(quote.sub_total)}</span></div>
           <div><span>Discount</span><span>-₹{formatMoney(quote.discount)}</span></div>
-          <div><span>Tax</span><span>₹{formatMoney(quote.tax_total)}</span></div>
+          <GstBreakdown doc={quote} />
           <div className="grand-total"><span>Total</span><span>₹{formatMoney(quote.total)}</span></div>
         </div>
+        <GstNote doc={quote} />
 
         {quote.notes && <p className="invoice-notes">{quote.notes}</p>}
 

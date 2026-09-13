@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
+import { INDIAN_STATES } from "../lib/gst";
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", gstin: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", gstin: "", state: "" });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const canManage = ["owner", "admin"].includes(getUser()?.role);
@@ -28,7 +29,7 @@ export default function Customers() {
     setError("");
     try {
       await api.createCustomer(form);
-      setForm({ name: "", phone: "", email: "", billing_address: "", gstin: "" });
+      setForm({ name: "", phone: "", email: "", billing_address: "", gstin: "", state: "" });
       load();
     } catch (err) {
       setError(err.message);
@@ -52,6 +53,10 @@ export default function Customers() {
           <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <input placeholder="Billing address" value={form.billing_address} onChange={(e) => setForm({ ...form, billing_address: e.target.value })} />
           <input placeholder="GSTIN (optional)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} />
+          <select value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })}>
+            <option value="">State (for CGST/SGST vs IGST)</option>
+            {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
           <button type="submit">Add customer</button>
         </form>
       ) : (
@@ -75,10 +80,10 @@ export default function Customers() {
       )}
 
       <table className="table">
-        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>GSTIN</th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>GSTIN</th><th>State</th></tr></thead>
         <tbody>
           {filteredCustomers.map((c) => (
-            <tr key={c.id}><td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td><td>{c.gstin}</td></tr>
+            <tr key={c.id}><td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td><td>{c.gstin}</td><td>{c.state}</td></tr>
           ))}
         </tbody>
       </table>

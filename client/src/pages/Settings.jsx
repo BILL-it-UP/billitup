@@ -5,6 +5,7 @@ import { formatDateTime } from "../lib/format";
 import {
   IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash,
 } from "../components/Icons";
+import { INDIAN_STATES } from "../lib/gst";
 
 // A small header block shared by every card below — an icon in a colored
 // badge plus a title and one-line description, so each section of the
@@ -85,6 +86,12 @@ export default function Settings() {
                 <input value={business.gstin || ""} onChange={(e) => setBusiness({ ...business, gstin: e.target.value })} />
               </label>
             </div>
+            <label>State (used to work out CGST/SGST vs IGST on invoices)
+              <select value={business.state || ""} onChange={(e) => setBusiness({ ...business, state: e.target.value })}>
+                <option value="">Select your state</option>
+                {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
             <label>Date format (used on invoices, quotes, credit notes, and everywhere dates are shown)
               <select
                 value={business.date_format || "DD/MM/YYYY"}

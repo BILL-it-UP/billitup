@@ -106,10 +106,19 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
 
     doc.moveTo(40, y + 4).lineTo(560, y + 4).strokeColor("#ddd").stroke();
     y += 14;
+    const taxSuffix = totals.gst_treatment === "rcm" ? " (reverse charge)" : "";
+    const cgst = Number(totals.cgst) || 0, sgst = Number(totals.sgst) || 0, igst = Number(totals.igst) || 0;
+    const taxLines = (cgst || sgst || igst)
+      ? [
+          ...(cgst ? [[`CGST${taxSuffix}`, cgst]] : []),
+          ...(sgst ? [[`SGST${taxSuffix}`, sgst]] : []),
+          ...(igst ? [[`IGST${taxSuffix}`, igst]] : []),
+        ]
+      : [[`Tax${taxSuffix}`, totals.tax_total]];
     const totalLines = [
       ["Sub Total", totals.sub_total],
       ["Discount", -totals.discount],
-      ["Tax", totals.tax_total],
+      ...taxLines,
       ["Total", totals.total],
     ];
     totalLines.forEach(([label, val]) => {
@@ -119,7 +128,17 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     });
 
     doc.y = y + 10;
-    doc.fontSize(9).fillColor("#555").text(`Total In Words: ${amountToWords(totals.total)}`, 40);
+    if (totals.gst_treatment === "rcm") {
+      doc.fontSize(8).fillColor("#555").text(
+        "Tax payable on reverse charge basis: Yes. GST shown above is payable by the recipient directly to the government and is not included in the total.",
+        40, doc.y, { width: 500 }
+      );
+      doc.moveDown(0.5);
+    } else if (totals.gst_treatment === "none") {
+      doc.fontSize(8).fillColor("#555").text("No GST charged on this document.", 40, doc.y);
+      doc.moveDown(0.5);
+    }
+    doc.fontSize(9).fillColor("#555").text(`Total In Words: ${amountToWords(totals.total)}`, 40, doc.y);
     doc.fillColor("#000");
 
     if (notes) {
@@ -161,6 +180,9 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       }
       doc.fontSize(9).text(`Authorized Signature${business.signature_name ? ` — ${business.signature_name}` : ""}`, sigX, lineY + 6, { width: 160 });
     }
+
+    doc.fontSize(7).fillColor("#999").text("Powered by BillItUp · Made with love in India", 40, 800, { width: 520, align: "center" });
+    doc.fillColor("#000");
 
     doc.end();
   });

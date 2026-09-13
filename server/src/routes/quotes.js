@@ -4,6 +4,7 @@ import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
+import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -31,16 +32,17 @@ router.get("/:id", (req, res) => {
 });
 
 router.post("/", (req, res) => {
-  const { customer_id, quote_date, expiry_date, reference, notes, lineItems } = req.body;
+  const { customer_id, quote_date, expiry_date, reference, notes, lineItems, gst_treatment } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const customer = customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id) : null;
   const quoteNumber = `${business.quote_prefix || "QUO-"}${String(business.next_quote_number).padStart(6, "0")}`;
 
-  let subTotal = 0, taxTotal = 0, discountTotal = 0;
-  const computedLines = lineItems.map((line) => {
+  let subTotal = 0, rawTaxTotal = 0, discountTotal = 0;
+  const rawComputedLines = lineItems.map((line) => {
     const qty = Number(line.qty) || 0;
     const rate = Number(line.rate) || 0;
     const discount = Number(line.discount) || 0;
@@ -49,16 +51,20 @@ router.post("/", (req, res) => {
     const lineTax = lineBase * (taxRate / 100);
     subTotal += qty * rate;
     discountTotal += discount;
-    taxTotal += lineTax;
+    rawTaxTotal += lineTax;
     return { ...line, qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
   });
-  const total = subTotal - discountTotal + taxTotal;
+  const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
+    subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: gst_treatment,
+    businessState: business.state, customerState: customer?.state,
+  });
+  const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertQuote = db.prepare(
     `INSERT INTO quotes
       (business_id, customer_id, quote_number, quote_date, expiry_date, reference, status,
-       sub_total, discount, tax_total, total, notes)
-     VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, notes, gst_treatment, cgst, sgst, igst)
+     VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -70,7 +76,8 @@ router.post("/", (req, res) => {
     const result = insertQuote.run(
       req.auth.businessId, customer_id || null, quoteNumber,
       quote_date || new Date().toISOString().slice(0, 10), expiry_date || null,
-      reference || null, subTotal, discountTotal, taxTotal, total, notes || null
+      reference || null, subTotal, discountTotal, taxTotal, total, notes || null,
+      treatment, cgst, sgst, igst
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
@@ -107,8 +114,8 @@ router.post("/:id/convert", (req, res) => {
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, reference, status,
-       sub_total, discount, tax_total, total, balance_due, notes, public_token)
-     VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, balance_due, notes, public_token, gst_treatment, cgst, sgst, igst)
+     VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -122,7 +129,7 @@ router.post("/:id/convert", (req, res) => {
       req.auth.businessId, quote.customer_id, invoiceNumber,
       new Date().toISOString().slice(0, 10), `Converted from ${quote.quote_number}`,
       quote.sub_total, quote.discount, quote.tax_total, quote.total, quote.total, quote.notes,
-      randomUUID().replace(/-/g, "")
+      randomUUID().replace(/-/g, ""), quote.gst_treatment || "gst", quote.cgst || 0, quote.sgst || 0, quote.igst || 0
     );
     const id = result.lastInsertRowid;
     for (const line of lineItems) {

@@ -40,6 +40,7 @@ export default function DocumentFooter({ business, total }) {
       <div className="doc-powered-by">
         <span>Powered by</span>
         <img src="/logo-header.png" alt="BillItUp" />
+        <span className="doc-made-in-india">· Made with love in India</span>
       </div>
     </div>
   );

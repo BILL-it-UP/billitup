@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
 import { nextInvoiceNumber } from "../lib/invoiceNumbering.js";
+import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -68,7 +69,7 @@ router.get("/:id", (req, res) => {
 // Create an invoice with its line items in one call. Server computes all totals —
 // the client sends qty/rate/discount/tax_rate per line, never trusts client-side amounts.
 router.post("/", (req, res) => {
-  const { customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems } = req.body;
+  const { customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
@@ -76,13 +77,19 @@ router.post("/", (req, res) => {
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   const { invoiceNumber, commit: commitInvoiceNumber } = nextInvoiceNumber(business);
 
-  const { computedLines, subTotal, discountTotal, taxTotal, total } = computeLineTotals(lineItems);
+  const customer = customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id) : null;
+  const { computedLines: rawComputedLines, subTotal, discountTotal, taxTotal: rawTaxTotal } = computeLineTotals(lineItems);
+  const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
+    subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: gst_treatment,
+    businessState: business.state, customerState: customer?.state,
+  });
+  const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, subject, gstin, status,
-       sub_total, discount, tax_total, total, balance_due, notes, public_token)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, balance_due, notes, public_token, gst_treatment, cgst, sgst, igst)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -95,7 +102,7 @@ router.post("/", (req, res) => {
       invoice_date || new Date().toISOString().slice(0, 10), due_date || null,
       terms || null, reference || null, subject || null, gstin || null,
       subTotal, discountTotal, taxTotal, total, total, notes || null,
-      randomUUID().replace(/-/g, "")
+      randomUUID().replace(/-/g, ""), treatment, cgst, sgst, igst
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
@@ -118,13 +125,20 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
-  const { customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems } = req.body;
+  const { customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
 
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const customer = customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id) : null;
   const existingLineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
-  const { computedLines, subTotal, discountTotal, taxTotal, total } = computeLineTotals(lineItems);
+  const { computedLines: rawComputedLines, subTotal, discountTotal, taxTotal: rawTaxTotal } = computeLineTotals(lineItems);
+  const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
+    subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: gst_treatment || invoice.gst_treatment,
+    businessState: business.state, customerState: customer?.state,
+  });
+  const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   // Editing a line item never touches payments already recorded — it only
   // changes what's owed. Re-derive balance_due/status from the amount
@@ -165,12 +179,14 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
     db.prepare(
       `UPDATE invoices SET
         customer_id = ?, invoice_date = ?, due_date = ?, terms = ?, reference = ?, subject = ?, gstin = ?, notes = ?,
-        sub_total = ?, discount = ?, tax_total = ?, total = ?, balance_due = ?, status = ?
+        sub_total = ?, discount = ?, tax_total = ?, total = ?, balance_due = ?, status = ?,
+        gst_treatment = ?, cgst = ?, sgst = ?, igst = ?
        WHERE id = ?`
     ).run(
       customer_id || null, invoice_date || invoice.invoice_date, due_date || null,
       terms || null, reference || null, subject || null, gstin || null, notes || null,
       subTotal, discountTotal, taxTotal, total, newBalanceDue, newStatus,
+      treatment, cgst, sgst, igst,
       invoice.id
     );
 
