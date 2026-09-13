@@ -370,9 +370,9 @@ CREATE TABLE IF NOT EXISTS purchases (
 
 -- A lightweight in-app feedback box — any logged-in user (any role) can
 -- suggest an improvement to the software itself, and an Owner/Admin can
--- review the list and mark items done. Deliberately simple (no categories,
--- no voting) — just a running log, the same spirit as the Vendors/Purchases
--- log above.
+-- review the list and mark items done. A category column was added just
+-- after this table shipped (see ensureColumn below), so Naveen could tell
+-- at a glance which part of the software a suggestion is about.
 CREATE TABLE IF NOT EXISTS suggestions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   business_id INTEGER NOT NULL REFERENCES businesses(id),
@@ -468,6 +468,16 @@ ensureColumn("customers", "country", "country TEXT DEFAULT 'India'");
 ensureColumn("vendors", "pincode", "pincode TEXT");
 ensureColumn("vendors", "country", "country TEXT DEFAULT 'India'");
 
+// customers — a per-customer no-login portal link (their own "Copy
+// shareable link", same idea as invoices.public_token) so each client can
+// see the status of every invoice addressed to them without an account.
+ensureColumn("customers", "portal_token", "portal_token TEXT");
+
+// suggestions — which part of the software a suggestion is about (Invoices,
+// Reports, etc.), added right after the table itself so someone reviewing
+// the list can tell at a glance instead of reading every message.
+ensureColumn("suggestions", "category", "category TEXT DEFAULT 'general'");
+
 // users
 ensureColumn("users", "last_login_at", "last_login_at TEXT");
 
@@ -510,6 +520,18 @@ if (invoicesMissingToken.length > 0) {
     for (const row of rows) setToken.run(randomUUID().replace(/-/g, ""), row.id);
   });
   backfill(invoicesMissingToken);
+}
+
+// Backfill: any customer created before portal_token existed won't have one
+// yet — same reasoning as the invoice public_token backfill above, so the
+// "Copy portal link" button always has something to share.
+const customersMissingPortalToken = db.prepare("SELECT id FROM customers WHERE portal_token IS NULL").all();
+if (customersMissingPortalToken.length > 0) {
+  const setPortalToken = db.prepare("UPDATE customers SET portal_token = ? WHERE id = ?");
+  const backfillPortalTokens = db.transaction((rows) => {
+    for (const row of rows) setPortalToken.run(randomUUID().replace(/-/g, ""), row.id);
+  });
+  backfillPortalTokens(customersMissingPortalToken);
 }
 
 // Backfill: every user created before the memberships table existed needs a

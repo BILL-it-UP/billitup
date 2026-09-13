@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
 import { formatMoney, formatDate } from "../lib/format";
-import { exportWorkbook } from "../lib/exportExcel";
+import { exportWorkbook, exportSheet } from "../lib/exportExcel";
 import { useDateFormat } from "../lib/useDateFormat";
 
 function currentMonthStr() {
@@ -126,6 +126,7 @@ function Gstr3bPanel() {
           { Section: "Regular outward supplies (3.1a) - CGST", Amount: summary.outward.regular.cgst },
           { Section: "Regular outward supplies (3.1a) - SGST", Amount: summary.outward.regular.sgst },
           { Section: "Regular outward supplies (3.1a) - IGST", Amount: summary.outward.regular.igst },
+          { Section: "Regular outward supplies (3.1a) - Tax not split by CGST/SGST/IGST (older invoices)", Amount: summary.outward.regular.unsplitTax },
           { Section: "Reverse charge outward (3.1a, tax paid by recipient) - Taxable Value", Amount: summary.outward.reverseCharge.taxableValue },
           { Section: "Nil rated / no GST - Value", Amount: summary.outward.nilRated.taxableValue },
           { Section: "Total output tax collected", Amount: summary.taxCollected },
@@ -156,7 +157,7 @@ function Gstr3bPanel() {
       {summary && (
         <>
           <table className="table">
-            <thead><tr><th></th><th>Invoices</th><th>Taxable Value</th><th>CGST</th><th>SGST</th><th>IGST</th></tr></thead>
+            <thead><tr><th></th><th>Invoices</th><th>Taxable Value</th><th>CGST</th><th>SGST</th><th>IGST</th><th>Not split (older invoices)</th></tr></thead>
             <tbody>
               <tr>
                 <td>Regular (forward charge)</td>
@@ -165,21 +166,29 @@ function Gstr3bPanel() {
                 <td>₹{formatMoney(summary.outward.regular.cgst)}</td>
                 <td>₹{formatMoney(summary.outward.regular.sgst)}</td>
                 <td>₹{formatMoney(summary.outward.regular.igst)}</td>
+                <td>{summary.outward.regular.unsplitTax > 0 ? `₹${formatMoney(summary.outward.regular.unsplitTax)}` : "—"}</td>
               </tr>
               <tr>
                 <td>Reverse charge (tax paid by recipient)</td>
                 <td>{summary.outward.reverseCharge.count}</td>
                 <td>₹{formatMoney(summary.outward.reverseCharge.taxableValue)}</td>
-                <td>—</td><td>—</td><td>—</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td>
               </tr>
               <tr>
                 <td>Nil rated / no GST</td>
                 <td>{summary.outward.nilRated.count}</td>
                 <td>₹{formatMoney(summary.outward.nilRated.taxableValue)}</td>
-                <td>—</td><td>—</td><td>—</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td>
               </tr>
             </tbody>
           </table>
+          {summary.outward.regular.unsplitTax > 0 && (
+            <p className="muted" style={{ marginTop: 8 }}>
+              The "Not split" column is tax from invoices saved before this software tracked CGST/SGST/IGST
+              separately (or where a state wasn't set at the time). It is still included in the total below,
+              just not broken out by CGST/SGST/IGST.
+            </p>
+          )}
           <table className="table" style={{ marginTop: 16 }}>
             <tbody>
               <tr><td>Total output tax collected</td><td><strong>₹{formatMoney(summary.taxCollected)}</strong></td></tr>
@@ -191,6 +200,184 @@ function Gstr3bPanel() {
             </tbody>
           </table>
         </>
+      )}
+    </div>
+  );
+}
+
+const REPORT_CATEGORY_ORDER = ["Sales", "Receivables", "Payments Received", "Purchases and Expenses"];
+
+// The Report Library — pick one of a catalog of named reports (Sales by
+// Customer, Invoice Details, AR Aging Summary, and so on), narrow it down
+// with whichever filters that report supports (date range, customer,
+// vendor, status), then export the result as Excel or PDF. See
+// server/src/lib/reportsCatalog.js for the full list and why a few
+// Zoho-style reports (Profit and Loss, Vendor Balance Summary, and similar)
+// aren't in this list — they need features BillItUp doesn't have yet.
+function ReportLibraryPanel() {
+  const [catalog, setCatalog] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [category, setCategory] = useState("Sales");
+  const [reportKey, setReportKey] = useState("");
+  const [filters, setFilters] = useState({ from: "", to: "", customerId: "", vendorId: "", status: "" });
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [error, setError] = useState("");
+  const dateFormat = useDateFormat();
+
+  useEffect(() => {
+    api.getReportLibraryCatalog().then((list) => {
+      setCatalog(list);
+      const first = list.find((r) => r.category === "Sales");
+      if (first) setReportKey(first.key);
+    });
+    api.listCustomers().then(setCustomers).catch(() => {});
+    api.listVendors().then(setVendors).catch(() => {});
+  }, []);
+
+  const reportsInCategory = useMemo(() => (catalog || []).filter((r) => r.category === category), [catalog, category]);
+  const def = useMemo(() => (catalog || []).find((r) => r.key === reportKey), [catalog, reportKey]);
+
+  const handleCategoryChange = (value) => {
+    setCategory(value);
+    const first = (catalog || []).find((r) => r.category === value);
+    setReportKey(first ? first.key : "");
+    setResult(null);
+  };
+
+  const buildParams = () => {
+    const params = {};
+    if (!def) return params;
+    if (def.filters.includes("from") && filters.from) params.from = filters.from;
+    if (def.filters.includes("to") && filters.to) params.to = filters.to;
+    if (def.filters.includes("customerId") && filters.customerId) params.customerId = filters.customerId;
+    if (def.filters.includes("vendorId") && filters.vendorId) params.vendorId = filters.vendorId;
+    if (def.filters.includes("status") && filters.status) params.status = filters.status;
+    return params;
+  };
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setResult(await api.runReportLibrary(reportKey, buildParams()));
+    } catch (err) {
+      setError(err.message);
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!result) return;
+    const rows = result.rows.map((row) => {
+      const out = {};
+      for (const col of result.columns) out[col.label] = row[col.key];
+      return out;
+    });
+    exportSheet(`${reportKey}.xlsx`, result.name.slice(0, 31), rows);
+  };
+
+  const handleExportPdf = async () => {
+    setPdfLoading(true);
+    setError("");
+    try {
+      const url = await api.downloadReportLibraryPdf(reportKey, buildParams());
+      window.open(url, "_blank");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const formatCell = (value, type) => {
+    if (value === null || value === undefined || value === "") return "—";
+    if (type === "money") return `₹${formatMoney(value)}`;
+    if (type === "date") return formatDate(value, dateFormat);
+    return String(value);
+  };
+
+  if (!catalog) return null;
+
+  return (
+    <div className="panel" style={{ marginBottom: 32 }}>
+      <h2>Report Library</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Pick a report, narrow it down by date range, customer, or vendor, and export it as Excel or PDF.
+      </p>
+
+      <div className="list-toolbar">
+        <select value={category} onChange={(e) => handleCategoryChange(e.target.value)}>
+          {REPORT_CATEGORY_ORDER.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={reportKey} onChange={(e) => { setReportKey(e.target.value); setResult(null); }}>
+          {reportsInCategory.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}
+        </select>
+      </div>
+
+      {def && <p className="muted" style={{ marginTop: -4 }}>{def.description}</p>}
+
+      {def && (
+        <div className="list-toolbar">
+          {def.filters.includes("from") && (
+            <input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} title="From date" />
+          )}
+          {def.filters.includes("to") && (
+            <input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} title="To date" />
+          )}
+          {def.filters.includes("customerId") && (
+            <select value={filters.customerId} onChange={(e) => setFilters({ ...filters, customerId: e.target.value })}>
+              <option value="">All customers</option>
+              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          {def.filters.includes("vendorId") && (
+            <select value={filters.vendorId} onChange={(e) => setFilters({ ...filters, vendorId: e.target.value })}>
+              <option value="">All vendors</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          )}
+          {def.filters.includes("status") && (
+            <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+              <option value="">All statuses</option>
+              {(def.statusOptions || []).map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+            </select>
+          )}
+          <button type="button" onClick={handleGenerate} disabled={loading}>{loading ? "Generating..." : "Generate"}</button>
+          {result && <button type="button" className="link-btn" onClick={handleExportExcel}>Export to Excel</button>}
+          {result && (
+            <button type="button" className="link-btn" onClick={handleExportPdf} disabled={pdfLoading}>
+              {pdfLoading ? "Preparing PDF..." : "Export to PDF"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {error && <p className="error">{error}</p>}
+
+      {result && (
+        result.rows.length === 0 ? (
+          <p className="muted">No data for the selected filters.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="table">
+              <thead>
+                <tr>{result.columns.map((col) => <th key={col.key}>{col.label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {result.rows.map((row, i) => (
+                  <tr key={i}>
+                    {result.columns.map((col) => <td key={col.key}>{formatCell(row[col.key], col.type)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
     </div>
   );
@@ -242,6 +429,8 @@ export default function Reports() {
           <span className="stat-value">₹{formatMoney(summary.overdueAmount)}</span>
         </div>
       </div>
+
+      <ReportLibraryPanel />
 
       <Gstr1Panel />
       <Gstr3bPanel />

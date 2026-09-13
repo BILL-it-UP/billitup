@@ -8,7 +8,22 @@ export default function Customers() {
   const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", pincode: "", country: "India", gstin: "", state: "" });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [copiedId, setCopiedId] = useState(null);
   const canManage = ["owner", "admin"].includes(getUser()?.role);
+
+  // Each customer's own no-login "portal" link — shows them every invoice
+  // addressed to them and its status, so they don't have to email or call
+  // to ask what they still owe. Same idea as an invoice's own shareable link.
+  const copyPortalLink = async (customer) => {
+    const url = `${window.location.origin}/view/customer/${customer.portal_token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(customer.id);
+      setTimeout(() => setCopiedId((id) => (id === customer.id ? null : id)), 2000);
+    } catch {
+      window.prompt("Copy this link:", url);
+    }
+  };
 
   const load = () => api.listCustomers().then(setCustomers);
   useEffect(() => { load(); }, []);
@@ -88,13 +103,20 @@ export default function Customers() {
       )}
 
       <table className="table">
-        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th></th></tr></thead>
         <tbody>
           {filteredCustomers.map((c) => (
             <tr key={c.id}>
               <td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td>
               <td>{[c.billing_address, c.pincode, c.country].filter(Boolean).join(", ")}</td>
               <td>{c.gstin}</td><td>{c.state}</td>
+              <td>
+                {c.portal_token && (
+                  <button type="button" className="link-btn" onClick={() => copyPortalLink(c)} title="Copy a link this customer can use to see their own invoice status, with no login">
+                    {copiedId === c.id ? "Link copied!" : "Copy portal link"}
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

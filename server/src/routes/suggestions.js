@@ -5,16 +5,25 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 const router = express.Router();
 router.use(requireAuth);
 
+// Kept in sync with client/src/components/SuggestionBox.jsx's dropdown —
+// a fixed, small list so the review page can group by area at a glance
+// instead of everything landing in one undifferentiated pile.
+export const SUGGESTION_CATEGORIES = [
+  "Invoices", "Quotes", "Credit Notes", "Customers", "Items",
+  "Vendors & Purchases", "Payments", "Reports", "Settings", "Other",
+];
+
 // Any logged-in role (Owner, Admin, or Cashier) can submit a suggestion —
 // this is meant to capture feedback from whoever actually uses the software
 // day to day, not just the business owner.
 router.post("/", (req, res) => {
-  const { message } = req.body;
+  const { message, category } = req.body;
   if (!message || !message.trim()) return res.status(400).json({ error: "message is required" });
+  const finalCategory = SUGGESTION_CATEGORIES.includes(category) ? category : "Other";
   const user = db.prepare("SELECT name FROM users WHERE id = ?").get(req.auth.userId);
   const result = db
-    .prepare(`INSERT INTO suggestions (business_id, user_id, user_name, message) VALUES (?, ?, ?, ?)`)
-    .run(req.auth.businessId, req.auth.userId, user?.name || null, message.trim());
+    .prepare(`INSERT INTO suggestions (business_id, user_id, user_name, message, category) VALUES (?, ?, ?, ?, ?)`)
+    .run(req.auth.businessId, req.auth.userId, user?.name || null, message.trim(), finalCategory);
   res.status(201).json(db.prepare("SELECT * FROM suggestions WHERE id = ?").get(result.lastInsertRowid));
 });
 

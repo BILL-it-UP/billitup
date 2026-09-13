@@ -75,16 +75,21 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 }
 .sidebar-toggle:hover { color: var(--sidebar-ink-hover); }
 
-.suggestion-box { position: relative; border-top: 1px solid var(--sidebar-border); }
-.suggestion-popover {
-  position: absolute; bottom: calc(100% + 6px); left: 12px; right: 12px;
-  background: white; color: var(--ink); border: 1px solid var(--border); border-radius: 10px;
-  padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); z-index: 20;
+.suggestion-box { border-top: 1px solid var(--sidebar-border); }
+.suggestion-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(10, 20, 35, 0.5);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; box-sizing: border-box; z-index: 100;
 }
-.suggestion-popover label { margin-bottom: 8px; }
-.suggestion-popover textarea { margin-top: 6px; }
-.suggestion-popover-actions { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
-.sidebar-collapsed .suggestion-popover { left: 8px; right: -160px; width: 260px; }
+.suggestion-modal {
+  background: white; color: var(--ink); border-radius: 12px;
+  padding: 24px; width: 420px; max-width: 100%;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+}
+.suggestion-modal h2 { margin-top: 0; }
+.suggestion-modal label { margin-bottom: 14px; }
+.suggestion-modal select, .suggestion-modal textarea { margin-top: 6px; }
+.suggestion-modal-actions { display: flex; justify-content: flex-end; gap: 16px; align-items: center; }
 
 .sidebar-collapsed .sidebar-brand { justify-content: center; padding: 18px 0; }
 .sidebar-collapsed .sidebar-link { justify-content: center; }

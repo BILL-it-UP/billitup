@@ -125,6 +125,28 @@ export const api = {
   getGstr1Report: (month) => request(`/api/reports/gstr1?month=${encodeURIComponent(month)}`),
   getGstr3bSummary: (month) => request(`/api/reports/gstr3b?month=${encodeURIComponent(month)}`),
 
+  // Report Library — a catalog of named, filterable reports (Sales by
+  // Customer, Invoice Details, AR Aging Summary, ...). See
+  // server/src/lib/reportsCatalog.js for the full list and what each one
+  // does and doesn't cover.
+  getReportLibraryCatalog: () => request("/api/reports-library/catalog"),
+  runReportLibrary: (key, params) => request(`/api/reports-library/run/${key}?${new URLSearchParams(params)}`),
+  // The PDF endpoint is authenticated (unlike the public invoice PDF), so it
+  // can't just be an <a href> — that wouldn't carry the login token. Fetch
+  // it as a blob with the token attached, then hand the caller an object
+  // URL it can open in a new tab.
+  downloadReportLibraryPdf: async (key, params) => {
+    const res = await fetch(`${BASE_URL}/api/reports-library/${key}/pdf?${new URLSearchParams(params)}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error || "Failed to generate PDF");
+    }
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
+
   listPayments: () => request("/api/payments"),
 
   listVendors: () => request("/api/vendors"),
@@ -134,7 +156,7 @@ export const api = {
   createPurchase: (payload) => request("/api/purchases", { method: "POST", body: payload }),
   deletePurchase: (id) => request(`/api/purchases/${id}`, { method: "DELETE" }),
 
-  createSuggestion: (message) => request("/api/suggestions", { method: "POST", body: { message } }),
+  createSuggestion: (message, category) => request("/api/suggestions", { method: "POST", body: { message, category } }),
   listSuggestions: () => request("/api/suggestions"),
   setSuggestionStatus: (id, status) => request(`/api/suggestions/${id}/status`, { method: "PUT", body: { status } }),
   deleteSuggestion: (id) => request(`/api/suggestions/${id}`, { method: "DELETE" }),
@@ -154,4 +176,12 @@ export const api = {
     return data;
   }),
   publicInvoicePdfUrl: (token) => `${BASE_URL}/api/public/invoices/${token}/pdf`,
+
+  // Unauthenticated — the customer portal, reached from a customer's own
+  // "Copy portal link" button on the Customers page.
+  getPublicCustomerPortal: (token) => fetch(`${BASE_URL}/api/public/customers/${token}`).then(async (res) => {
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "Not found");
+    return data;
+  }),
 };

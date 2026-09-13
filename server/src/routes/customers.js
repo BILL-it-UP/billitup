@@ -1,4 +1,5 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
@@ -17,13 +18,14 @@ router.get("/", (req, res) => {
 router.post("/", requireRole("owner", "admin"), (req, res) => {
   const { name, phone, email, billing_address, shipping_address, pincode, country, gstin, state } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
+  const portalToken = randomUUID().replace(/-/g, "");
   const result = db
     .prepare(
-      `INSERT INTO customers (business_id, name, phone, email, billing_address, shipping_address, pincode, country, gstin, state)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO customers (business_id, name, phone, email, billing_address, shipping_address, pincode, country, gstin, state, portal_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(req.auth.businessId, name, phone, email, billing_address, shipping_address, pincode || null, country || "India", gstin, state || null);
-  res.status(201).json({ id: result.lastInsertRowid, name, phone, email, billing_address, shipping_address, pincode, country, gstin, state });
+    .run(req.auth.businessId, name, phone, email, billing_address, shipping_address, pincode || null, country || "India", gstin, state || null, portalToken);
+  res.status(201).json({ id: result.lastInsertRowid, name, phone, email, billing_address, shipping_address, pincode, country, gstin, state, portal_token: portalToken });
 });
 
 router.put("/:id", requireRole("owner", "admin"), (req, res) => {

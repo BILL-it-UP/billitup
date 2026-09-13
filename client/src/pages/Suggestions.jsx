@@ -70,12 +70,13 @@ export default function Suggestions() {
             <p className="list-empty-filtered">Nothing here.</p>
           ) : (
             <table className="table">
-              <thead><tr><th>Date</th><th>From</th><th>Suggestion</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Date</th><th>From</th><th>Area</th><th>Suggestion</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 {filtered.map((s) => (
                   <tr key={s.id}>
                     <td>{String(s.created_at).slice(0, 10)}</td>
                     <td>{s.user_name || "—"}</td>
+                    <td>{s.category || "General"}</td>
                     <td style={{ whiteSpace: "pre-wrap" }}>{s.message}</td>
                     <td>
                       <button type="button" className="link-btn" onClick={() => handleToggle(s)}>

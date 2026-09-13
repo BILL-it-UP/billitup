@@ -2,11 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 
-// A Zoho-style "type or click to select an item" combobox: type to search the
-// item catalog, click a result to select it, or just keep typing free text to
-// bill a custom (non-catalog) line. Owners/Admins also get an inline "+ Add
-// New Item" option so they can add to the catalog without leaving the form.
-export default function ItemPicker({ items, itemId, itemName, canManage, onSelect, onTextChange, onItemCreated }) {
+// A single Zoho-style "Item Details" cell: before anything is picked it's
+// just a type-to-search combobox. Once an item is selected (or free-typed
+// text is confirmed by leaving the field), that becomes a fixed label and a
+// description box appears underneath it — one combined widget, not two
+// separate always-visible fields. Owners/Admins also get an inline "+ Add
+// New Item" option in the dropdown so they can add to the catalog without
+// leaving the form.
+export default function ItemPicker({
+  items,
+  itemId,
+  itemName,
+  description,
+  canManage,
+  onSelect,
+  onTextChange,
+  onDescriptionChange,
+  onItemCreated,
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(itemName || "");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -43,15 +56,47 @@ export default function ItemPicker({ items, itemId, itemName, canManage, onSelec
     onTextChange(text);
   };
 
+  const handleClear = () => {
+    setQuery("");
+    onSelect(null);
+  };
+
+  // "Confirmed" — the search box has closed with a name in it (picked from
+  // the catalog or free-typed custom text). While the dropdown is open we're
+  // still editing/searching, so we never show the confirmed view mid-type.
+  const confirmed = Boolean((itemName || "").trim()) && !open;
+  // Once there's a description at all, keep showing its box even if the item
+  // name is later cleared — clearing the item should never hide text the
+  // user already typed.
+  const showDescription = confirmed || Boolean((description || "").trim());
+
   return (
     <div className="item-picker" ref={wrapRef}>
-      <input
-        type="text"
-        value={query}
-        placeholder="Type or click to select an item"
-        onFocus={() => setOpen(true)}
-        onChange={handleInputChange}
-      />
+      {confirmed ? (
+        <div className="item-picker-locked">
+          <button type="button" className="item-picker-locked-name" onClick={() => setOpen(true)}>
+            {itemName}
+          </button>
+          <button type="button" className="item-picker-locked-clear" onClick={handleClear} title="Clear item" aria-label="Clear item">
+            &times;
+          </button>
+        </div>
+      ) : (
+        <input
+          type="text"
+          value={query}
+          placeholder="Type or click to select an item"
+          onFocus={() => setOpen(true)}
+          onChange={handleInputChange}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.target.blur();
+            }
+          }}
+        />
+      )}
       {open && (
         <div className="item-picker-dropdown">
           {filtered.length === 0 && (
@@ -85,6 +130,15 @@ export default function ItemPicker({ items, itemId, itemName, canManage, onSelec
             </button>
           )}
         </div>
+      )}
+      {showDescription && (
+        <textarea
+          className="item-picker-description"
+          rows={2}
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+          placeholder="Add a description to your item"
+        />
       )}
       {showAddModal && (
         <AddItemModal
