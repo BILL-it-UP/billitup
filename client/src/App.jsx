@@ -25,7 +25,9 @@ import CreditNoteView from "./pages/CreditNoteView";
 import RecurringInvoices from "./pages/RecurringInvoices";
 import NewRecurringInvoice from "./pages/NewRecurringInvoice";
 import PublicInvoiceView from "./pages/PublicInvoiceView";
-import PublicCustomerPortal from "./pages/PublicCustomerPortal";
+import PortalLogin from "./pages/PortalLogin";
+import PortalSetPassword from "./pages/PortalSetPassword";
+import PortalDashboard from "./pages/PortalDashboard";
 import PaymentsTimeline from "./pages/PaymentsTimeline";
 import Vendors from "./pages/Vendors";
 import Purchases from "./pages/Purchases";
@@ -174,7 +176,9 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/view/invoice/:token" element={<PublicInvoiceView />} />
-      <Route path="/view/customer/:token" element={<PublicCustomerPortal />} />
+      <Route path="/portal/login" element={<PortalLogin />} />
+      <Route path="/portal/set-password/:token" element={<PortalSetPassword />} />
+      <Route path="/portal" element={<PortalDashboard />} />
       {/* Not part of the regular business login — a separate, unlinked
           console guarded by ADMIN_SECRET (see server/src/routes/admin.js),
           for flipping a business between free/premium by hand. */}

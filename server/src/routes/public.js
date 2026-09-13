@@ -36,29 +36,11 @@ function loadInvoiceByToken(token) {
   return { invoice, lineItems, customer, business };
 }
 
-// The customer portal — reached with no login from a customer's own
-// "Copy portal link" button on the Customers page. Shows that one customer
-// every invoice raised against them (status, total, balance due), each
-// linking to the same no-login invoice view/PDF the "Copy shareable link"
-// button already produces. Nothing else about the business (other
-// customers, settings, totals across customers) is reachable through it.
-router.get("/customers/:token", (req, res) => {
-  const customer = db.prepare("SELECT * FROM customers WHERE portal_token = ?").get(req.params.token);
-  if (!customer) return res.status(404).json({ error: "Not found" });
-  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(customer.business_id);
-  const invoices = db
-    .prepare(
-      `SELECT id, invoice_number, invoice_date, due_date, status, total, balance_due, public_token
-       FROM invoices WHERE business_id = ? AND customer_id = ? AND status <> 'cancelled'
-       ORDER BY invoice_date DESC, id DESC`
-    )
-    .all(customer.business_id, customer.id);
-  res.json({
-    customer: { name: customer.name, email: customer.email, phone: customer.phone },
-    business: publicBusinessFields(business),
-    invoices,
-  });
-});
+// The customer portal used to live here as a no-login link. It's now a real
+// login (email + password, turned on/off per customer) — see
+// routes/portalAuth.js (set password / log in) and routes/portal.js (the
+// logged-in view), both behind requireCustomerAuth so access can actually
+// be revoked, which a plain link could never do.
 
 router.get("/invoices/:token", (req, res) => {
   const found = loadInvoiceByToken(req.params.token);

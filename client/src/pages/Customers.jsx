@@ -8,21 +8,48 @@ export default function Customers() {
   const [form, setForm] = useState({ name: "", phone: "", email: "", billing_address: "", pincode: "", country: "India", gstin: "", state: "" });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [copiedId, setCopiedId] = useState(null);
+  const [portalBusyId, setPortalBusyId] = useState(null);
+  const [portalNotes, setPortalNotes] = useState({}); // customer id -> { message, link }
   const canManage = ["owner", "admin"].includes(getUser()?.role);
 
-  // Each customer's own no-login "portal" link — shows them every invoice
-  // addressed to them and its status, so they don't have to email or call
-  // to ask what they still owe. Same idea as an invoice's own shareable link.
-  const copyPortalLink = async (customer) => {
-    const url = `${window.location.origin}/view/customer/${customer.portal_token}`;
+  // Each customer's own portal login — a real email + password account they
+  // set up from a link we email them, so they can see every invoice
+  // addressed to them and its status without calling to ask. Turning it off
+  // cuts them off right away (checked on every portal request server-side,
+  // not just at login) rather than just hiding a link.
+  const setNote = (customerId, note) => setPortalNotes((prev) => ({ ...prev, [customerId]: note }));
+
+  const togglePortal = async (customer) => {
+    const turningOn = customer.portal_status === "off" || customer.portal_status === "no_email";
+    setPortalBusyId(customer.id);
+    setNote(customer.id, null);
     try {
-      await navigator.clipboard.writeText(url);
-      setCopiedId(customer.id);
-      setTimeout(() => setCopiedId((id) => (id === customer.id ? null : id)), 2000);
-    } catch {
-      window.prompt("Copy this link:", url);
+      const updated = await api.setCustomerPortalEnabled(customer.id, turningOn);
+      setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, ...updated } : c)));
+      if (updated.email_warning) setNote(customer.id, { message: updated.email_warning, link: updated.invite_link });
+      else if (turningOn && updated.portal_status === "invited") setNote(customer.id, { message: "Invite emailed to the customer." });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPortalBusyId(null);
     }
+  };
+
+  const resendInvite = async (customer) => {
+    setPortalBusyId(customer.id);
+    setNote(customer.id, null);
+    try {
+      const result = await api.resendCustomerPortalInvite(customer.id);
+      setNote(customer.id, result.email_warning ? { message: result.email_warning, link: result.invite_link } : { message: "Invite emailed to the customer." });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPortalBusyId(null);
+    }
+  };
+
+  const copyInviteLink = async (link) => {
+    try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy this link:", link); }
   };
 
   const load = () => api.listCustomers().then(setCustomers);
@@ -103,22 +130,58 @@ export default function Customers() {
       )}
 
       <table className="table">
-        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th>Portal</th></tr></thead>
         <tbody>
-          {filteredCustomers.map((c) => (
-            <tr key={c.id}>
-              <td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td>
-              <td>{[c.billing_address, c.pincode, c.country].filter(Boolean).join(", ")}</td>
-              <td>{c.gstin}</td><td>{c.state}</td>
-              <td>
-                {c.portal_token && (
-                  <button type="button" className="link-btn" onClick={() => copyPortalLink(c)} title="Copy a link this customer can use to see their own invoice status, with no login">
-                    {copiedId === c.id ? "Link copied!" : "Copy portal link"}
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
+          {filteredCustomers.map((c) => {
+            const busy = portalBusyId === c.id;
+            const note = portalNotes[c.id];
+            return (
+              <tr key={c.id}>
+                <td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td>
+                <td>{[c.billing_address, c.pincode, c.country].filter(Boolean).join(", ")}</td>
+                <td>{c.gstin}</td><td>{c.state}</td>
+                <td>
+                  {c.portal_status === "no_email" && (
+                    <span className="muted" title="Add an email address to give this customer portal access">Add email to enable</span>
+                  )}
+                  {c.portal_status === "off" && (
+                    <button type="button" className="link-btn" disabled={busy} onClick={() => togglePortal(c)}>
+                      {busy ? "Turning on..." : "Turn on portal access"}
+                    </button>
+                  )}
+                  {c.portal_status === "invited" && (
+                    <>
+                      <span className="muted">Invite sent</span>
+                      {" · "}
+                      <button type="button" className="link-btn" disabled={busy} onClick={() => resendInvite(c)}>Resend</button>
+                      {" · "}
+                      <button type="button" className="link-btn" disabled={busy} onClick={() => togglePortal(c)}>Turn off</button>
+                    </>
+                  )}
+                  {c.portal_status === "active" && (
+                    <>
+                      <span className="muted">Active</span>
+                      {" · "}
+                      <button type="button" className="link-btn" disabled={busy} onClick={() => resendInvite(c)} title="Send a link to reset their password">Reset link</button>
+                      {" · "}
+                      <button type="button" className="link-btn" disabled={busy} onClick={() => togglePortal(c)}>Turn off</button>
+                    </>
+                  )}
+                  {note && (
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      {note.message}
+                      {note.link && (
+                        <>
+                          {" "}
+                          <button type="button" className="link-btn" onClick={() => copyInviteLink(note.link)}>Copy link</button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

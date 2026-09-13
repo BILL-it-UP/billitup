@@ -40,6 +40,55 @@ export function getUser() {
   return raw ? JSON.parse(raw) : null;
 }
 
+// The customer portal is a completely separate login from the business
+// side above — its own token, its own storage key — so a client's session
+// can never be mixed up with (or accidentally carry the permissions of) a
+// business user's session in the same browser.
+function getCustomerToken() {
+  return localStorage.getItem("billitup_customer_token");
+}
+
+export function setCustomerSession(token, customer) {
+  localStorage.setItem("billitup_customer_token", token);
+  localStorage.setItem("billitup_customer_user", JSON.stringify(customer));
+}
+
+export function clearCustomerSession() {
+  localStorage.removeItem("billitup_customer_token");
+  localStorage.removeItem("billitup_customer_user");
+}
+
+export function getCustomerUser() {
+  const raw = localStorage.getItem("billitup_customer_user");
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function portalRequest(path, { method = "GET", body } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  const token = getCustomerToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    // Access was turned off, or the session expired — either way, back to
+    // the portal login rather than sitting on a page with no data.
+    if (res.status === 401) {
+      clearCustomerSession();
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/portal/login")) {
+        window.location.assign("/portal/login?expired=1");
+      }
+    }
+    throw new Error(data?.error || `Request failed (${res.status})`);
+  }
+  return data;
+}
+
 async function request(path, { method = "GET", body } = {}) {
   const headers = { "Content-Type": "application/json" };
   const token = getToken();
@@ -91,6 +140,8 @@ export const api = {
 
   listCustomers: () => request("/api/customers"),
   createCustomer: (payload) => request("/api/customers", { method: "POST", body: payload }),
+  setCustomerPortalEnabled: (id, enabled) => request(`/api/customers/${id}/portal`, { method: "PUT", body: { enabled } }),
+  resendCustomerPortalInvite: (id) => request(`/api/customers/${id}/portal/resend-invite`, { method: "POST" }),
 
   listItems: () => request("/api/items"),
   createItem: (payload) => request("/api/items", { method: "POST", body: payload }),
@@ -177,11 +228,30 @@ export const api = {
   }),
   publicInvoicePdfUrl: (token) => `${BASE_URL}/api/public/invoices/${token}/pdf`,
 
-  // Unauthenticated — the customer portal, reached from a customer's own
-  // "Copy portal link" button on the Customers page.
-  getPublicCustomerPortal: (token) => fetch(`${BASE_URL}/api/public/customers/${token}`).then(async (res) => {
+  // Customer portal — a client's own login (email + password), separate
+  // from the business login above. See setCustomerSession/portalRequest.
+  getPortalInvite: (token) => fetch(`${BASE_URL}/api/portal-auth/invite/${token}`).then(async (res) => {
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || "Not found");
+    if (!res.ok) throw new Error(data?.error || "This link is invalid or no longer active.");
     return data;
   }),
+  setPortalPassword: (token, password) => fetch(`${BASE_URL}/api/portal-auth/set-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  }).then(async (res) => {
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "Couldn't set your password.");
+    return data;
+  }),
+  portalLogin: (email, password) => fetch(`${BASE_URL}/api/portal-auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).then(async (res) => {
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "Invalid email or password");
+    return data;
+  }),
+  getPortalMe: () => portalRequest("/api/portal/me"),
 };

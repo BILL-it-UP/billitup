@@ -468,10 +468,20 @@ ensureColumn("customers", "country", "country TEXT DEFAULT 'India'");
 ensureColumn("vendors", "pincode", "pincode TEXT");
 ensureColumn("vendors", "country", "country TEXT DEFAULT 'India'");
 
-// customers — a per-customer no-login portal link (their own "Copy
-// shareable link", same idea as invoices.public_token) so each client can
-// see the status of every invoice addressed to them without an account.
+// customers — a per-customer portal login so each client can see the
+// status of every invoice addressed to them. portal_token doubles as the
+// one-time "set your password" / "reset your password" link token (like
+// invoices.public_token, a long random value rather than the numeric id);
+// it's cleared once used and regenerated whenever a new invite or reset is
+// sent. portal_enabled is the on/off switch an Owner/Admin flips per
+// customer — checked fresh on every portal request (see requireCustomerAuth
+// in middleware/auth.js), not just at login, so turning it off cuts access
+// immediately even if the client is already logged in. portal_password_hash
+// stays set across an off/on toggle, so re-enabling doesn't force the
+// client to set a new password.
 ensureColumn("customers", "portal_token", "portal_token TEXT");
+ensureColumn("customers", "portal_enabled", "portal_enabled INTEGER DEFAULT 0");
+ensureColumn("customers", "portal_password_hash", "portal_password_hash TEXT");
 
 // suggestions — which part of the software a suggestion is about (Invoices,
 // Reports, etc.), added right after the table itself so someone reviewing
