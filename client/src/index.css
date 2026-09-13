@@ -246,7 +246,7 @@ textarea { resize: vertical; }
 .logo-preview { max-height: 60px; max-width: 200px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: white; }
 
 /* ---- Settings page ---- */
-.settings-page { max-width: 760px; display: flex; flex-direction: column; gap: 20px; }
+.settings-page { max-width: 1040px; display: flex; flex-direction: column; gap: 20px; }
 .settings-page > p.muted:first-child { margin-top: -8px; }
 
 .settings-card {
