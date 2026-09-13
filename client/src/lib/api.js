@@ -122,6 +122,16 @@ export const api = {
   sendCreditNoteEmail: (id, payload) => request(`/api/credit-notes/${id}/send`, { method: "POST", body: payload }),
 
   getReportsSummary: () => request("/api/reports/summary"),
+  getGstr1Report: (month) => request(`/api/reports/gstr1?month=${encodeURIComponent(month)}`),
+
+  listPayments: () => request("/api/payments"),
+
+  listVendors: () => request("/api/vendors"),
+  createVendor: (payload) => request("/api/vendors", { method: "POST", body: payload }),
+
+  listPurchases: () => request("/api/purchases"),
+  createPurchase: (payload) => request("/api/purchases", { method: "POST", body: payload }),
+  deletePurchase: (id) => request(`/api/purchases/${id}`, { method: "DELETE" }),
 
   listRecurringInvoices: () => request("/api/recurring-invoices"),
   getRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}`),

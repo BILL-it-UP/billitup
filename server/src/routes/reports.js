@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
+import { buildGstr1Report } from "../lib/gstr1.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -153,6 +154,17 @@ router.get("/summary", (req, res) => {
     ...totals, topCustomers, topItems, statusBreakdown, totalCredited, overdueInvoices, overdueAmount,
     receivables, cashFlow, arAging, salesByCustomer, salesByItem, customerBalances, paymentsReceived,
   });
+});
+
+// A GSTR-1-style breakdown of one month's outward invoices, for Naveen to
+// hand to his tax advisor or copy into the GST portal — see lib/gstr1.js for
+// exactly what this does and doesn't cover. month is "YYYY-MM".
+router.get("/gstr1", (req, res) => {
+  const month = req.query.month;
+  if (!/^\d{4}-\d{2}$/.test(month || "")) {
+    return res.status(400).json({ error: "month is required, as YYYY-MM" });
+  }
+  res.json(buildGstr1Report(req.auth.businessId, month));
 });
 
 export default router;

@@ -13,6 +13,9 @@ import creditNotesRouter from "./routes/credit-notes.js";
 import recurringInvoicesRouter, { runDueRecurringInvoices } from "./routes/recurring-invoices.js";
 import publicRouter from "./routes/public.js";
 import adminRouter from "./routes/admin.js";
+import paymentsRouter from "./routes/payments.js";
+import vendorsRouter from "./routes/vendors.js";
+import purchasesRouter from "./routes/purchases.js";
 import { startBackupSchedule } from "./lib/backup.js";
 
 const app = express();
@@ -35,6 +38,9 @@ app.use("/api/credit-notes", creditNotesRouter);
 app.use("/api/recurring-invoices", recurringInvoicesRouter);
 app.use("/api/public", publicRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/payments", paymentsRouter);
+app.use("/api/vendors", vendorsRouter);
+app.use("/api/purchases", purchasesRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {

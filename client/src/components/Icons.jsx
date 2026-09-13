@@ -179,6 +179,38 @@ export function IconCloud({ size = 18 }) {
   );
 }
 
+// Sidebar icons for the vendor/purchase log and the payments timeline
+// (2026-09-13) — same shared stroke weight as the rest of this set.
+export function IconVendors({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4 21V10.5L12 5l8 5.5V21" />
+      <path d="M4 10.5 12 5l8 5.5" />
+      <rect x="9.5" y="14" width="5" height="7" rx="0.4" />
+      <path d="M7.5 21v-3.5M16.5 21v-3.5" />
+    </svg>
+  );
+}
+
+export function IconPurchases({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M6 7.5h12l-1 12.5a1 1 0 0 1-1 .9H8a1 1 0 0 1-1-.9L6 7.5Z" />
+      <path d="M9 7.5V6a3 3 0 0 1 6 0v1.5" />
+    </svg>
+  );
+}
+
+export function IconPayments({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <circle cx="8.5" cy="9" r="5" />
+      <circle cx="15" cy="14.5" r="5" />
+      <path d="M8.5 7.7v2.6M7.3 9h2.4M13.8 13.2v2.6M12.6 14.5h2.4" />
+    </svg>
+  );
+}
+
 export function IconTrash({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>

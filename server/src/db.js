@@ -330,6 +330,43 @@ CREATE TABLE IF NOT EXISTS invoice_number_counters (
   next_number INTEGER NOT NULL DEFAULT 1,
   PRIMARY KEY (business_id, fy_key)
 );
+
+-- Vendors/suppliers a business buys from — kept deliberately separate from
+-- "customers" (who a business sells to) even though the shape is similar,
+-- since mixing the two into one table would make every sales report have to
+-- filter vendors back out. Basic record-keeping only, not a full purchase
+-- ledger with its own tax return.
+CREATE TABLE IF NOT EXISTS vendors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  gstin TEXT,
+  state TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- One row per bill/expense received from a vendor. tax_amount/total are
+-- computed and stored at save time (amount * tax_rate/100, and their sum) so
+-- they don't have to be recomputed from scratch every time the Purchases
+-- list or its totals are shown.
+CREATE TABLE IF NOT EXISTS purchases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  vendor_id INTEGER REFERENCES vendors(id),
+  purchase_date TEXT NOT NULL,
+  bill_number TEXT,
+  description TEXT,
+  amount REAL NOT NULL DEFAULT 0,
+  tax_rate REAL DEFAULT 0,
+  tax_amount REAL NOT NULL DEFAULT 0,
+  total REAL NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------

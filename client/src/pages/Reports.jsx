@@ -5,6 +5,91 @@ import { formatMoney, formatDate } from "../lib/format";
 import { exportWorkbook } from "../lib/exportExcel";
 import { useDateFormat } from "../lib/useDateFormat";
 
+function currentMonthStr() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+// GSTR-1-style export — a self-contained panel: picking a month fetches a
+// preview (counts + totals) so Naveen can sanity-check it before exporting,
+// and the actual Excel workbook is only built once he clicks Export. See
+// server/src/lib/gstr1.js for exactly what this does and doesn't cover.
+function Gstr1Panel() {
+  const [month, setMonth] = useState(currentMonthStr());
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setReport(await api.getGstr1Report(month));
+    } catch (err) {
+      setError(err.message);
+      setReport(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    if (!report) return;
+    exportWorkbook(`gstr1-${report.month}.xlsx`, [
+      {
+        name: "B2B Invoices",
+        rows: report.b2b.map((r) => ({
+          "GSTIN of Recipient": r.gstin, "Receiver Name": r.receiver_name,
+          "Invoice Number": r.invoice_number, "Invoice Date": r.invoice_date,
+          "Invoice Value": r.invoice_value, "Place of Supply": r.place_of_supply,
+          "Reverse Charge": r.reverse_charge, "Rate (%)": r.rate, "Taxable Value": r.taxable_value,
+          CGST: r.cgst, SGST: r.sgst, IGST: r.igst,
+        })),
+      },
+      {
+        name: "B2C Summary",
+        rows: report.b2cSummary.map((r) => ({
+          "Place of Supply": r.place_of_supply, "Rate (%)": r.rate,
+          "Taxable Value": r.taxable_value, CGST: r.cgst, SGST: r.sgst, IGST: r.igst,
+        })),
+      },
+      {
+        name: "Nil Rated - No GST",
+        rows: report.nilRated.map((r) => ({
+          "Invoice Number": r.invoice_number, "Invoice Date": r.invoice_date,
+          Customer: r.customer_name, "Place of Supply": r.place_of_supply, "Invoice Value": r.invoice_value,
+        })),
+      },
+    ]);
+  };
+
+  return (
+    <div className="panel" style={{ marginBottom: 32 }}>
+      <h2>GSTR-1 Export</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Builds a GSTR-1-style breakdown of one month's invoices (B2B, a B2C summary, and nil-rated/no-GST) as an
+        Excel file, for you or your tax advisor to use when filing. This assembles the numbers, it does not file
+        anything on its own.
+      </p>
+      <div className="list-toolbar">
+        <input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setReport(null); }} />
+        <button type="button" onClick={handleGenerate} disabled={loading}>{loading ? "Generating..." : "Generate"}</button>
+        {report && <button type="button" className="link-btn" onClick={handleExport}>Export to Excel</button>}
+      </div>
+      {error && <p className="error">{error}</p>}
+      {report && (
+        <table className="table">
+          <thead><tr><th></th><th>Invoices</th><th>Taxable Value</th><th>Tax</th></tr></thead>
+          <tbody>
+            <tr><td>B2B (customer has GSTIN)</td><td>{report.totals.b2bCount}</td><td>₹{formatMoney(report.totals.b2bTaxableValue)}</td><td>₹{formatMoney(report.totals.b2bTax)}</td></tr>
+            <tr><td>B2C (grouped by state + rate)</td><td>{report.totals.b2cCount} group(s)</td><td>₹{formatMoney(report.totals.b2cTaxableValue)}</td><td>₹{formatMoney(report.totals.b2cTax)}</td></tr>
+            <tr><td>Nil Rated / No GST</td><td>{report.totals.nilRatedCount}</td><td>₹{formatMoney(report.totals.nilRatedValue)}</td><td>—</td></tr>
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 export default function Reports() {
   const [summary, setSummary] = useState(null);
   const dateFormat = useDateFormat();
@@ -51,6 +136,8 @@ export default function Reports() {
           <span className="stat-value">₹{formatMoney(summary.overdueAmount)}</span>
         </div>
       </div>
+
+      <Gstr1Panel />
 
       <div className="report-columns">
         <div className="panel">
