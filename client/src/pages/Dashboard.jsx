@@ -6,7 +6,7 @@ import InvoiceDetail from "../components/InvoiceDetail";
 import { relativeDueLabel } from "../lib/invoiceStatus";
 import { formatMoney, formatDate } from "../lib/format";
 import { useDateFormat } from "../lib/useDateFormat";
-import { exportSheet } from "../lib/exportExcel";
+import ExportInvoicesModal from "../components/ExportInvoicesModal";
 
 export default function Dashboard() {
   const [invoices, setInvoices] = useState([]);
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showExportModal, setShowExportModal] = useState(false);
   const user = getUser();
   const isOwnerOrAdmin = user?.role === "owner" || user?.role === "admin";
   const dateFormat = useDateFormat();
@@ -122,7 +123,7 @@ export default function Dashboard() {
       <div className="page-header">
         <h2>Invoices</h2>
         {invoices.length > 0 && (
-          <button type="button" className="link-btn" onClick={() => exportInvoicesToExcel(invoices)}>
+          <button type="button" className="link-btn" onClick={() => setShowExportModal(true)}>
             Export to Excel
           </button>
         )}
@@ -185,19 +186,10 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {showExportModal && (
+        <ExportInvoicesModal invoices={invoices} onClose={() => setShowExportModal(false)} />
+      )}
     </div>
   );
-}
-
-function exportInvoicesToExcel(invoices) {
-  const rows = invoices.map((inv) => ({
-    "Invoice #": inv.invoice_number,
-    Customer: inv.customer_name || "Walk-in customer",
-    "Invoice Date": inv.invoice_date,
-    "Due Date": inv.due_date || "",
-    Status: inv.status,
-    Total: Number(inv.total),
-    "Balance Due": Number(inv.balance_due),
-  }));
-  exportSheet("invoices.xlsx", "Invoices", rows);
 }
