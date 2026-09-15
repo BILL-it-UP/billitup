@@ -568,6 +568,31 @@ textarea { resize: vertical; }
 .login-signup-note { color: var(--muted); }
 .login-signup-note a { color: var(--accent-amber); }
 
+/* Login's own "New here? Set up BillItUp" — 2026-09-15. The signup link used
+   to be a small line of muted text below Forgot Password (the .login-links/
+   .login-signup-note rules above, still used by Signup's own "Already have
+   an account?" footer) and people kept not seeing it. This makes it read as
+   an actual button — a divider to separate it from the login form, then a
+   full-width outlined button in the same amber already used for it, so
+   "click the orange one" (how Naveen was directing people verbally) still
+   points at the same color, just now with real button affordance. */
+.login-forgot-link {
+  display: block; text-align: center; font-size: 13px; font-weight: 600;
+  color: var(--accent); text-decoration: none; margin-bottom: 22px;
+}
+.login-forgot-link:hover { text-decoration: underline; }
+
+.login-divider { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+.login-divider::before, .login-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+.login-signup-cta {
+  display: block; width: 100%; box-sizing: border-box; text-align: center;
+  padding: 13px; border-radius: 8px; font-size: 14.5px; font-weight: 700;
+  border: 1.5px solid var(--accent-amber); color: var(--accent-amber);
+  text-decoration: none; transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.login-signup-cta:hover { background: var(--accent-amber); color: #fff; box-shadow: 0 8px 18px -10px rgba(217, 122, 31, 0.5); }
+
 .login-error-banner {
   background: #fdecea; border: 1px solid #f3c6c1; color: #8a2b23;
   padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;

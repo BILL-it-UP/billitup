@@ -111,10 +111,11 @@ export default function Login() {
             {loading ? "Logging in..." : "Log in"}
           </button>
 
-          <div className="login-links">
-            <Link to="/forgot-password">Forgot your password?</Link>
-            <span className="login-signup-note">New business? <Link to="/signup">Set up BillItUp</Link></span>
-          </div>
+          <Link to="/forgot-password" className="login-forgot-link">Forgot your password?</Link>
+
+          <div className="login-divider"><span>New to BillItUp?</span></div>
+
+          <Link to="/signup" className="login-signup-cta">Set up BillItUp</Link>
         </form>
       </div>
     </div>
