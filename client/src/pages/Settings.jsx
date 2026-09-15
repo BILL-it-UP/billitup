@@ -322,6 +322,81 @@ function InvoiceBrandingSettings({ business, setBusiness }) {
   );
 }
 
+// Provider presets so most people never have to know what an SMTP host or
+// port even is — pick the mail service they already use, get the right
+// host/port filled in automatically, and a short guide to the one thing
+// that actually trips people up: an app password is not their normal
+// mail password (2026-09-15).
+const EMAIL_PROVIDERS = [
+  {
+    id: "gmail",
+    label: "Gmail",
+    smtp_host: "smtp.gmail.com",
+    smtp_port: 587,
+    smtp_secure: false,
+    guide: (
+      <ol>
+        <li>Turn on 2-Step Verification on your Google account, if it isn't already (Google Account → Security).</li>
+        <li>
+          Go to{" "}
+          <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">
+            myaccount.google.com/apppasswords
+          </a>{" "}
+          and create an app password, name it "BillItUp".
+        </li>
+        <li>Paste that 16 character app password below as the SMTP password — not your normal Gmail password, that will not work.</li>
+        <li>SMTP username is your full Gmail address.</li>
+      </ol>
+    ),
+  },
+  {
+    id: "outlook",
+    label: "Outlook / Office 365",
+    smtp_host: "smtp-mail.outlook.com",
+    smtp_port: 587,
+    smtp_secure: false,
+    guide: (
+      <ol>
+        <li>
+          If your account has 2 step verification on, create an app password at{" "}
+          <a href="https://account.microsoft.com/security" target="_blank" rel="noreferrer">
+            account.microsoft.com/security
+          </a>{" "}
+          and use that below instead of your normal password.
+        </li>
+        <li>SMTP username is your full Outlook or Office 365 email address.</li>
+        <li>If this is a work or school account, your IT admin may need to turn on SMTP sending first — ask them if this keeps failing.</li>
+      </ol>
+    ),
+  },
+  {
+    id: "zoho",
+    label: "Zoho Mail",
+    smtp_host: "smtp.zoho.com",
+    smtp_port: 465,
+    smtp_secure: true,
+    guide: (
+      <ol>
+        <li>
+          Turn on 2 factor authentication in Zoho if it isn't already, then create an app password from{" "}
+          <a href="https://accounts.zoho.com/home#security/security_pref" target="_blank" rel="noreferrer">
+            your Zoho account security settings
+          </a>
+          .
+        </li>
+        <li>Use that app password below, not your normal Zoho password.</li>
+        <li>SMTP username is your full Zoho Mail address. If your account is on zoho.in rather than zoho.com, use smtp.zoho.in as the host instead.</li>
+      </ol>
+    ),
+  },
+  { id: "other", label: "Other / custom", smtp_host: "", smtp_port: "", smtp_secure: false, guide: null },
+];
+
+function detectProvider(host) {
+  const found = EMAIL_PROVIDERS.find((p) => p.id !== "other" && p.smtp_host === host);
+  return found ? found.id : (host ? "other" : "gmail");
+}
+
 function EmailSettings({ business, setBusiness }) {
   const user = getUser();
   const [saving, setSaving] = useState(false);
@@ -330,6 +405,15 @@ function EmailSettings({ business, setBusiness }) {
   const [testTo, setTestTo] = useState(user?.email || "");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [providerId, setProviderId] = useState(() => detectProvider(business.smtp_host));
+
+  const activeProvider = EMAIL_PROVIDERS.find((p) => p.id === providerId);
+
+  const handlePickProvider = (p) => {
+    setProviderId(p.id);
+    if (p.id === "other") return; // leave whatever host/port they already have
+    setBusiness({ ...business, smtp_host: p.smtp_host, smtp_port: p.smtp_port, smtp_secure: p.smtp_secure });
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -366,8 +450,26 @@ function EmailSettings({ business, setBusiness }) {
       <CardHeader
         icon={IconMail}
         title="Email (SMTP) Settings"
-        description="Used to email invoices/quotes/credit notes to customers as a PDF. Bring your own mail account (e.g. a Gmail address with an app password)."
+        description="Used to email invoices/quotes/credit notes to customers as a PDF. Pick your mail provider below for step by step setup, or choose Other for a custom SMTP account."
       />
+      <div className="smtp-provider-row">
+        {EMAIL_PROVIDERS.map((p) => (
+          <button
+            type="button"
+            key={p.id}
+            className={`smtp-provider-btn${providerId === p.id ? " active" : ""}`}
+            onClick={() => handlePickProvider(p)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      {activeProvider?.guide && (
+        <div className="smtp-guide">
+          <p>Setting up {activeProvider.label}:</p>
+          {activeProvider.guide}
+        </div>
+      )}
       <form onSubmit={handleSave} className="settings-form">
         <div className="field-row">
           <label>SMTP host
