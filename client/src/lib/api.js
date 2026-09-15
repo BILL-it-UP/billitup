@@ -223,6 +223,24 @@ export const api = {
   setSuggestionStatus: (id, status) => request(`/api/suggestions/${id}/status`, { method: "PUT", body: { status } }),
   deleteSuggestion: (id) => request(`/api/suggestions/${id}`, { method: "DELETE" }),
 
+  // Support chat with Naveen — raise a problem, then reply back and forth
+  // on the same thread. See server/src/routes/support.js.
+  listMySupportTickets: () => request("/api/support"),
+  createSupportTicket: (subject, message) => request("/api/support", { method: "POST", body: { subject, message } }),
+  getSupportTicketMessages: (id) => request(`/api/support/${id}/messages`),
+  sendSupportMessage: (id, message) => request(`/api/support/${id}/messages`, { method: "POST", body: { message } }),
+
+  // Announcements Naveen posts from Master Admin — shown as a popup once
+  // per login. See server/src/routes/announcements.js.
+  listUnreadAnnouncements: () => request("/api/announcements/unread"),
+  markAnnouncementRead: (id) => request(`/api/announcements/${id}/read`, { method: "POST" }),
+
+  // Fire-and-forget: a browser-side crash reports itself here so it shows up
+  // on this business's health page in Master Admin. Never allowed to throw
+  // back into whatever just crashed — see main.jsx and ErrorBoundary.jsx.
+  reportClientError: (message, route) =>
+    request("/api/client-errors", { method: "POST", body: { message, route } }).catch(() => {}),
+
   listRecurringInvoices: () => request("/api/recurring-invoices"),
   getRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}`),
   createRecurringInvoice: (payload) => request("/api/recurring-invoices", { method: "POST", body: payload }),

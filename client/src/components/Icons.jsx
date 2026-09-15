@@ -265,3 +265,25 @@ export function IconAlert({ size = 18 }) {
     </svg>
   );
 }
+
+// Support chat (2026-09-15) — a business raising a problem and chatting
+// with Naveen about it, both in the sidebar nav and Master Admin.
+export function IconChat({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4 5.5h16v10H9l-4 3.5v-3.5H4Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Announcements Naveen posts from Master Admin (2026-09-15) — a small
+// megaphone, used for the create-announcement section and the popup badge.
+export function IconAnnouncement({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4 10.5v3a1 1 0 0 0 1 1h1.5l1.2 4.3a1 1 0 0 0 1 .7h1a1 1 0 0 0 .96-1.28L9 14.5" strokeLinejoin="round" />
+      <path d="M6.5 10.5 17 6v13l-10.5-4.5Z" strokeLinejoin="round" />
+      <path d="M17 9.2a3 3 0 0 1 0 5.6" />
+    </svg>
+  );
+}

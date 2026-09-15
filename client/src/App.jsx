@@ -3,9 +3,10 @@ import { Routes, Route, Navigate, Link, NavLink, useNavigate } from "react-route
 import {
   IconDashboard, IconQuote, IconCreditNote, IconRecurring,
   IconCustomers, IconItems, IconReports, IconSettings, IconLogout, IconChevron,
-  IconVendors, IconPurchases, IconPayments, IconSuggestion,
+  IconVendors, IconPurchases, IconPayments, IconSuggestion, IconChat,
 } from "./components/Icons";
 import SuggestionBox from "./components/SuggestionBox";
+import AnnouncementPopup from "./components/AnnouncementPopup";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -35,9 +36,11 @@ import Vendors from "./pages/Vendors";
 import Purchases from "./pages/Purchases";
 import Reports from "./pages/Reports";
 import Suggestions from "./pages/Suggestions";
+import Support from "./pages/Support";
 import Settings from "./pages/Settings";
 import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
+import BusinessHealth from "./pages/BusinessHealth";
 import { api, getUser, clearSession, setSession } from "./lib/api";
 
 function RequireAuth({ children }) {
@@ -72,6 +75,7 @@ const NAV_ITEMS = [
   { to: "/customers", label: "Customers", icon: IconCustomers },
   { to: "/items", label: "Items", icon: IconItems },
   { to: "/reports", label: "Reports", icon: IconReports, ownerOnly: true },
+  { to: "/support", label: "Support", icon: IconChat },
   { to: "/suggestions", label: "Suggestions", icon: IconSuggestion, ownerOnly: true },
   { to: "/settings", label: "Settings", icon: IconSettings, ownerOnly: true },
 ];
@@ -161,6 +165,8 @@ function Shell({ children }) {
         </button>
       </aside>
 
+      <AnnouncementPopup />
+
       <div className="app-main-col">
         <header className="no-print topbar">
           <div className="topbar-spacer">
@@ -202,6 +208,7 @@ export default function App() {
           for flipping a business between free/premium by hand. */}
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<AdminPanel />} />
+      <Route path="/admin/businesses/:id" element={<BusinessHealth />} />
       <Route path="/" element={<Home />} />
       <Route path="/customers" element={<RequireAuth><Shell><Customers /></Shell></RequireAuth>} />
       <Route path="/items" element={<RequireAuth><Shell><Items /></Shell></RequireAuth>} />
@@ -221,6 +228,7 @@ export default function App() {
       <Route path="/purchases" element={<RequireAuth><Shell><Purchases /></Shell></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Shell><Reports /></Shell></RequireAuth>} />
       <Route path="/suggestions" element={<RequireAuth><Shell><Suggestions /></Shell></RequireAuth>} />
+      <Route path="/support" element={<RequireAuth><Shell><Support /></Shell></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Shell><Settings /></Shell></RequireAuth>} />
       <Route path="/add-firm" element={<RequireAuth><Shell><AddFirm /></Shell></RequireAuth>} />
     </Routes>

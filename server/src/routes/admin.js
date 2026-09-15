@@ -58,6 +58,8 @@ function attentionReasons(b) {
     : now - lastLoginMs > THIRTY_DAYS_MS;
   if (wentQuiet) reasons.push("inactive");
   if (b.cloud_backup_status === "error") reasons.push("backup_error");
+  if (b.open_error_count > 0) reasons.push("has_errors");
+  if (b.open_ticket_count > 0) reasons.push("has_open_ticket");
   return reasons;
 }
 
@@ -86,12 +88,31 @@ router.get("/businesses", (req, res) => {
                 WHEN EXISTS(SELECT 1 FROM cloud_backup_connections cbc WHERE cbc.business_id = b.id AND cbc.last_upload_status = 'error') THEN 'error'
                 WHEN EXISTS(SELECT 1 FROM cloud_backup_connections cbc WHERE cbc.business_id = b.id) THEN 'connected'
                 ELSE 'none'
-              END AS cloud_backup_status
+              END AS cloud_backup_status,
+              (SELECT COUNT(*) FROM error_log e WHERE e.business_id = b.id AND e.status = 'open') AS open_error_count,
+              (SELECT COUNT(*) FROM support_tickets t WHERE t.business_id = b.id AND t.status != 'resolved') AS open_ticket_count
        FROM businesses b
        ORDER BY b.created_at DESC`
     )
     .all();
   res.json(rows.map((b) => ({ ...b, attention: attentionReasons(b) })));
+});
+
+// One business's full profile for the Business Health page — includes the
+// logo (Naveen asked to see uploaded images so a business is recognizable
+// at a glance while diagnosing), never anything from their actual client
+// data (customers, invoices, and so on stay off this route entirely).
+router.get("/businesses/:id", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const business = db
+    .prepare(
+      `SELECT id, name, plan, created_at, email AS owner_email, phone AS owner_phone,
+              gstin, state, logo_data_url, signature_data_url
+       FROM businesses WHERE id = ?`
+    )
+    .get(req.params.id);
+  if (!business) return res.status(404).json({ error: "Not found" });
+  res.json(business);
 });
 
 // One business's own users — who's actually logging in under that business,
@@ -106,6 +127,127 @@ router.get("/businesses/:id/users", (req, res) => {
     )
     .all(req.params.id);
   res.json(rows);
+});
+
+// The "doctor's chart" for one business — every technical error tied to
+// their requests, newest first, never anything from the error's own request
+// body or a stack trace (see lib/errorLog.js for why). This is what the
+// Business Health page's Errors section reads.
+router.get("/businesses/:id/errors", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const rows = db
+    .prepare("SELECT * FROM error_log WHERE business_id = ? ORDER BY created_at DESC")
+    .all(req.params.id);
+  res.json(rows);
+});
+
+// Marking an error resolved (with an optional note on how) is the "history
+// of problem, status, and how we solved it" Naveen asked for — the row
+// itself becomes that history entry rather than needing a separate log.
+router.put("/errors/:id", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { status, resolution_notes } = req.body || {};
+  if (!["open", "resolved"].includes(status)) return res.status(400).json({ error: "Invalid status" });
+  db.prepare(
+    `UPDATE error_log SET status = ?, resolution_notes = ?, resolved_at = CASE WHEN ? = 'resolved' THEN datetime('now') ELSE NULL END
+     WHERE id = ?`
+  ).run(status, resolution_notes || null, status, req.params.id);
+  const updated = db.prepare("SELECT * FROM error_log WHERE id = ?").get(req.params.id);
+  if (!updated) return res.status(404).json({ error: "Not found" });
+  res.json(updated);
+});
+
+// One business's own support thread(s) — shown on their Business Health
+// page alongside the error log, so Naveen sees both what broke and what
+// they actually told him about it in one place.
+router.get("/businesses/:id/tickets", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const rows = db
+    .prepare(
+      `SELECT t.*,
+              (SELECT COUNT(*) FROM support_messages m WHERE m.ticket_id = t.id
+                AND m.sender = 'business' AND m.created_at > COALESCE(t.admin_last_seen_at, '1970-01-01')) AS unread_count
+       FROM support_tickets t WHERE t.business_id = ? ORDER BY t.updated_at DESC`
+    )
+    .all(req.params.id);
+  res.json(rows);
+});
+
+// Every open conversation across every business, in one feed — the admin
+// equivalent of a support inbox, so Naveen doesn't have to open each
+// business's page just to see who's waiting on a reply.
+router.get("/support/tickets", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const rows = db
+    .prepare(
+      `SELECT t.*, b.name AS business_name,
+              (SELECT COUNT(*) FROM support_messages m WHERE m.ticket_id = t.id
+                AND m.sender = 'business' AND m.created_at > COALESCE(t.admin_last_seen_at, '1970-01-01')) AS unread_count,
+              (SELECT message FROM support_messages m WHERE m.ticket_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_message
+       FROM support_tickets t JOIN businesses b ON b.id = t.business_id
+       ORDER BY t.updated_at DESC`
+    )
+    .all();
+  res.json(rows);
+});
+
+router.get("/support/tickets/:id/messages", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const messages = db
+    .prepare("SELECT * FROM support_messages WHERE ticket_id = ? ORDER BY created_at ASC")
+    .all(req.params.id);
+  db.prepare("UPDATE support_tickets SET admin_last_seen_at = datetime('now') WHERE id = ?").run(req.params.id);
+  res.json(messages);
+});
+
+router.post("/support/tickets/:id/messages", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { message } = req.body || {};
+  if (!message || !message.trim()) return res.status(400).json({ error: "message is required" });
+  const ticket = db.prepare("SELECT id FROM support_tickets WHERE id = ?").get(req.params.id);
+  if (!ticket) return res.status(404).json({ error: "Not found" });
+  db.prepare(`INSERT INTO support_messages (ticket_id, sender, sender_name, message) VALUES (?, 'admin', 'Naveen', ?)`)
+    .run(ticket.id, message.trim());
+  // A reply usually means work has started, not that it's already resolved
+  // — Naveen sets that explicitly with the status route below once it is.
+  db.prepare("UPDATE support_tickets SET status = CASE WHEN status = 'open' THEN 'in_progress' ELSE status END, updated_at = datetime('now'), admin_last_seen_at = datetime('now') WHERE id = ?")
+    .run(ticket.id);
+  const messages = db.prepare("SELECT * FROM support_messages WHERE ticket_id = ? ORDER BY created_at ASC").all(ticket.id);
+  res.status(201).json(messages);
+});
+
+router.put("/support/tickets/:id/status", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { status } = req.body || {};
+  if (!["open", "in_progress", "resolved"].includes(status)) return res.status(400).json({ error: "Invalid status" });
+  db.prepare("UPDATE support_tickets SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
+  const updated = db.prepare("SELECT * FROM support_tickets WHERE id = ?").get(req.params.id);
+  if (!updated) return res.status(404).json({ error: "Not found" });
+  res.json(updated);
+});
+
+// Announcements — Naveen writes one here, every business sees it as a
+// popup on their next visit (see routes/announcements.js for their side).
+router.get("/announcements", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  res.json(db.prepare("SELECT * FROM announcements ORDER BY created_at DESC").all());
+});
+
+router.post("/announcements", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { title, message } = req.body || {};
+  if (!title || !title.trim()) return res.status(400).json({ error: "title is required" });
+  if (!message || !message.trim()) return res.status(400).json({ error: "message is required" });
+  const result = db
+    .prepare("INSERT INTO announcements (title, message) VALUES (?, ?)")
+    .run(title.trim(), message.trim());
+  res.status(201).json(db.prepare("SELECT * FROM announcements WHERE id = ?").get(result.lastInsertRowid));
+});
+
+router.delete("/announcements/:id", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  db.prepare("DELETE FROM announcements WHERE id = ?").run(req.params.id);
+  res.status(204).end();
 });
 
 // One glance at how the whole install is doing — every business, whether
@@ -126,6 +268,8 @@ router.get("/stats", (req, res) => {
       "SELECT COUNT(DISTINCT business_id) AS n FROM login_events WHERE logged_in_at >= datetime('now', '-30 days')"
     ),
     openSuggestions: count("SELECT COUNT(*) AS n FROM suggestions WHERE status = 'open'"),
+    openErrors: count("SELECT COUNT(*) AS n FROM error_log WHERE status = 'open'"),
+    openSupportTickets: count("SELECT COUNT(*) AS n FROM support_tickets WHERE status != 'resolved'"),
   });
 });
 

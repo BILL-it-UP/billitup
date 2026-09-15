@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { adminApi, getAdminSecret, clearAdminSecret } from "../lib/adminApi";
 import { formatDateTime, formatMoney } from "../lib/format";
 import {
   IconTrash, IconBuilding, IconReports, IconCloud, IconTeam,
-  IconInvoice, IconDashboard, IconSuggestion,
+  IconInvoice, IconDashboard, IconSuggestion, IconChat, IconAnnouncement, IconAlert,
 } from "../components/Icons";
 import ConfirmDialog from "../components/ConfirmDialog";
+import { AdminTicketThread } from "./BusinessHealth";
 
 // The one super-admin screen — everything Naveen, as the creator of the
 // software, needs to keep an eye on this install from a single place: how
@@ -33,6 +34,8 @@ const STAT_TILES = [
   { key: "loginsToday", label: "Logins Today", icon: IconDashboard },
   { key: "loginsThisWeek", label: "Logins This Week", icon: IconCloud },
   { key: "openSuggestions", label: "Open Feedback", icon: IconSuggestion, attentionIfPositive: true },
+  { key: "openErrors", label: "Open Errors", icon: IconAlert, attentionIfPositive: true },
+  { key: "openSupportTickets", label: "Support Waiting", icon: IconChat, attentionIfPositive: true },
 ];
 
 function SectionHeader({ icon: Icon, title, description, badge }) {
@@ -55,6 +58,8 @@ const ATTENTION_LABELS = {
   no_contact: "No email or phone on file",
   inactive: "Hasn't logged in for a while",
   backup_error: "Cloud backup is connected but failing",
+  has_errors: "Has unresolved errors — open their health page",
+  has_open_ticket: "Waiting on a reply in Support",
 };
 
 // A plain, fully-labelled block instead of a raw table row — Naveen asked
@@ -79,6 +84,8 @@ function buildBusinessSummary(b) {
     `Last login: ${b.last_login_at ? formatDateTime(b.last_login_at) : "Never"}`,
     `Signed up: ${formatDateTime(b.created_at)}`,
     `Cloud backup: ${backupLine}`,
+    `Open errors: ${b.open_error_count || 0}`,
+    `Open support conversations: ${b.open_ticket_count || 0}`,
     ...(b.attention?.length ? [`Needs attention: ${b.attention.map((r) => ATTENTION_LABELS[r] || r).join("; ")}`] : []),
   ].join("\n");
 }
@@ -89,6 +96,11 @@ export default function AdminPanel() {
   const [stats, setStats] = useState(null);
   const [suggestions, setSuggestions] = useState(null);
   const [suggestionFilter, setSuggestionFilter] = useState("open");
+  const [tickets, setTickets] = useState(null);
+  const [expandedTicketId, setExpandedTicketId] = useState(null);
+  const [announcements, setAnnouncements] = useState(null);
+  const [announcementForm, setAnnouncementForm] = useState({ title: "", message: "" });
+  const [announcementBusy, setAnnouncementBusy] = useState(false);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [businessSearch, setBusinessSearch] = useState("");
@@ -102,11 +114,19 @@ export default function AdminPanel() {
   const [usersLoadingId, setUsersLoadingId] = useState(null);
 
   const load = () => {
-    Promise.all([adminApi.listBusinesses(), adminApi.getStats(), adminApi.listSuggestions()])
-      .then(([businessRows, statsData, suggestionRows]) => {
+    Promise.all([
+      adminApi.listBusinesses(),
+      adminApi.getStats(),
+      adminApi.listSuggestions(),
+      adminApi.listAllSupportTickets(),
+      adminApi.listAnnouncements(),
+    ])
+      .then(([businessRows, statsData, suggestionRows, ticketRows, announcementRows]) => {
         setBusinesses(businessRows);
         setStats(statsData);
         setSuggestions(suggestionRows);
+        setTickets(ticketRows);
+        setAnnouncements(announcementRows);
       })
       .catch((err) => {
         setError(err.message);
@@ -174,6 +194,32 @@ export default function AdminPanel() {
         .then((rows) => setBusinessUsers((prev) => ({ ...prev, [b.id]: rows })))
         .catch((err) => setError(err.message))
         .finally(() => setUsersLoadingId(null));
+    }
+  };
+
+  const submitAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!announcementForm.title.trim() || !announcementForm.message.trim()) return;
+    setAnnouncementBusy(true);
+    setError("");
+    try {
+      await adminApi.createAnnouncement(announcementForm.title.trim(), announcementForm.message.trim());
+      setAnnouncementForm({ title: "", message: "" });
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAnnouncementBusy(false);
+    }
+  };
+
+  const removeAnnouncement = async (id) => {
+    setError("");
+    try {
+      await adminApi.deleteAnnouncement(id);
+      load();
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -324,7 +370,7 @@ export default function AdminPanel() {
                 <tbody>
                   {filteredBusinesses.map((b) => {
                     const reasons = b.attention || [];
-                    const rowClass = reasons.includes("backup_error")
+                    const rowClass = reasons.includes("backup_error") || reasons.includes("has_errors")
                       ? "admin-row-danger"
                       : reasons.length
                         ? "admin-row-warn"
@@ -335,7 +381,7 @@ export default function AdminPanel() {
                     return (
                       <Fragment key={b.id}>
                         <tr className={rowClass} title={rowTitle}>
-                          <td>{b.name}</td>
+                          <td><Link to={`/admin/businesses/${b.id}`}>{b.name}</Link></td>
                           <td><span className={`badge ${b.plan === "premium" ? "badge-premium" : "badge-free"}`}>{b.plan === "premium" ? "Premium" : "Free"}</span></td>
                           <td className="admin-contact-cell">
                             {b.owner_email ? <div><a href={`mailto:${b.owner_email}`}>{b.owner_email}</a></div> : null}
@@ -417,6 +463,43 @@ export default function AdminPanel() {
 
         <div className="admin-section">
           <SectionHeader
+            icon={IconChat}
+            title="Support Requests"
+            description="Problems raised directly by businesses, across the whole install. Click one to open the conversation."
+          />
+          <div className="admin-table-card">
+            {tickets.length === 0 ? (
+              <p className="muted">No support conversations yet.</p>
+            ) : (
+              <div className="support-ticket-list support-ticket-list-wide">
+                {tickets.map((t) => (
+                  <div key={t.id}>
+                    <button
+                      type="button"
+                      className={`support-ticket-item${expandedTicketId === t.id ? " active" : ""}`}
+                      onClick={() => setExpandedTicketId((cur) => (cur === t.id ? null : t.id))}
+                    >
+                      <div className="support-ticket-item-top">
+                        <span><strong>{t.business_name}</strong> — {t.subject}</span>
+                        {t.unread_count > 0 && <span className="support-unread-dot" title={`${t.unread_count} new message`} />}
+                      </div>
+                      <div className="support-ticket-item-bottom">
+                        <span className={`badge support-status-${t.status}`}>
+                          {t.status === "open" ? "Open" : t.status === "in_progress" ? "In progress" : "Resolved"}
+                        </span>
+                        <span className="muted">{formatDateTime(t.updated_at)}</span>
+                      </div>
+                    </button>
+                    {expandedTicketId === t.id && <AdminTicketThread ticket={t} onUpdated={load} />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="admin-section">
+          <SectionHeader
             icon={IconSuggestion}
             title="Feedback"
             description="Every suggestion submitted from inside the app, across every business, newest first."
@@ -464,6 +547,53 @@ export default function AdminPanel() {
                   </table>
                 )}
               </>
+            )}
+          </div>
+        </div>
+
+        <div className="admin-section">
+          <SectionHeader
+            icon={IconAnnouncement}
+            title="Announcements"
+            description="Write something here and every business sees it as a popup the next time they open the app — a new feature, planned downtime, anything worth telling everyone at once."
+          />
+          <div className="admin-table-card">
+            <form className="announcement-form" onSubmit={submitAnnouncement}>
+              <input
+                type="text"
+                placeholder="Title, e.g. New: cloud backup to Dropbox"
+                value={announcementForm.title}
+                onChange={(e) => setAnnouncementForm((f) => ({ ...f, title: e.target.value }))}
+              />
+              <textarea
+                rows={3}
+                placeholder="What do you want every business to see?"
+                value={announcementForm.message}
+                onChange={(e) => setAnnouncementForm((f) => ({ ...f, message: e.target.value }))}
+              />
+              <button type="submit" className="btn" disabled={announcementBusy || !announcementForm.title.trim() || !announcementForm.message.trim()}>
+                {announcementBusy ? "Publishing..." : "Publish announcement"}
+              </button>
+            </form>
+
+            {announcements.length > 0 && (
+              <table className="table" style={{ marginTop: 18 }}>
+                <thead><tr><th>Date</th><th>Title</th><th>Message</th><th></th></tr></thead>
+                <tbody>
+                  {announcements.map((a) => (
+                    <tr key={a.id}>
+                      <td>{formatDateTime(a.created_at)}</td>
+                      <td>{a.title}</td>
+                      <td style={{ whiteSpace: "pre-wrap" }}>{a.message}</td>
+                      <td>
+                        <button type="button" className="link-btn" onClick={() => removeAnnouncement(a.id)} title="Delete">
+                          <IconTrash size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

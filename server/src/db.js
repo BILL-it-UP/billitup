@@ -403,6 +403,72 @@ CREATE TABLE IF NOT EXISTS cloud_backup_connections (
   connected_at TEXT DEFAULT (datetime('now')),
   UNIQUE(business_id, provider)
 );
+
+-- Technical errors (never customer/client data) tagged to whichever business
+-- was making the request when it happened, so Master Admin's per-business
+-- health page can show "what broke and where" without ever showing an
+-- invoice, a customer name, or anything else that business's clients typed
+-- in (2026-09-15). business_id is NULL for a crash that wasn't tied to any
+-- one business's request (a background job, a hit before login). "source"
+-- separates a server-side exception from a client-side one the browser
+-- reported itself (see routes/clientErrors.js) — both land in the same
+-- table so Naveen has one place to look, not two.
+CREATE TABLE IF NOT EXISTS error_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER REFERENCES businesses(id),
+  source TEXT NOT NULL DEFAULT 'server',  -- 'server' | 'client'
+  route TEXT,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',    -- open | resolved
+  resolution_notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  resolved_at TEXT
+);
+
+-- A business raises a problem, Naveen replies, back and forth — replaces the
+-- old one-way Suggestions box for anything that actually needs a
+-- conversation rather than a feature request (2026-09-15). *_last_seen_at
+-- is how each side's unread count is worked out (any message from the
+-- other side newer than this) without a separate "read receipts" table.
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  subject TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',    -- open | in_progress | resolved
+  business_last_seen_at TEXT DEFAULT (datetime('now')),
+  admin_last_seen_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS support_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL,                   -- 'business' | 'admin'
+  sender_name TEXT,
+  message TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Naveen writes one of these from Master Admin (e.g. "new feature X is
+-- live") and it's shown as a popup to every business the next time someone
+-- there opens the app (2026-09-15). announcement_reads tracks who has
+-- already seen it, per login (not per business), since different staff
+-- under the same business each get their own popup once.
+CREATE TABLE IF NOT EXISTS announcements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS announcement_reads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  read_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(announcement_id, user_id)
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------

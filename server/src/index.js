@@ -21,22 +21,29 @@ import vendorsRouter from "./routes/vendors.js";
 import purchasesRouter from "./routes/purchases.js";
 import suggestionsRouter from "./routes/suggestions.js";
 import cloudBackupRouter from "./routes/cloudBackup.js";
+import clientErrorsRouter from "./routes/clientErrors.js";
+import supportRouter from "./routes/support.js";
+import announcementsRouter from "./routes/announcements.js";
 import { startBackupSchedule } from "./lib/backup.js";
+import { logError } from "./lib/errorLog.js";
 
 // Last-resort crash guards. Without these, an error thrown somewhere that
 // isn't a normal Express request (a timer callback like the two scheduled
 // jobs below, a rejected promise nobody awaited) crashes the whole process
 // silently — Docker's "restart: unless-stopped" brings it back, but there's
 // no record of why and no way to tell a clean crash from a hung process.
-// Logging here at least leaves a trace in `docker compose logs`, and exiting
-// deliberately (rather than leaving Node in a possibly-broken state) means
-// every restart is a clean one (2026-09-15).
+// Logging here at least leaves a trace in `docker compose logs` AND in
+// error_log (so it shows up in Master Admin, not just a terminal Naveen
+// isn't watching), and exiting deliberately (rather than leaving Node in a
+// possibly-broken state) means every restart is a clean one (2026-09-15).
 process.on("uncaughtException", (err) => {
   console.error("FATAL uncaughtException — restarting:", err);
+  logError({ source: "server", route: "process", message: err?.message || String(err) });
   process.exit(1);
 });
 process.on("unhandledRejection", (reason) => {
   console.error("FATAL unhandledRejection — restarting:", reason);
+  logError({ source: "server", route: "process", message: reason?.message || String(reason) });
   process.exit(1);
 });
 
@@ -68,10 +75,23 @@ app.use("/api/vendors", vendorsRouter);
 app.use("/api/purchases", purchasesRouter);
 app.use("/api/suggestions", suggestionsRouter);
 app.use("/api/cloud-backup", cloudBackupRouter);
+app.use("/api/client-errors", clientErrorsRouter);
+app.use("/api/support", supportRouter);
+app.use("/api/announcements", announcementsRouter);
 
 // eslint-disable-next-line no-unused-vars
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   console.error(err);
+  // req.auth is only set on routes behind requireAuth — a failure before
+  // login (or on a public route) just logs with businessId: null rather
+  // than skipping the log entirely, same reasoning as the crash guards
+  // above (2026-09-15).
+  logError({
+    businessId: req.auth?.businessId ?? null,
+    source: "server",
+    route: `${req.method} ${req.path}`,
+    message: err?.message || String(err),
+  });
   res.status(500).json({ error: "Something went wrong" });
 });
 

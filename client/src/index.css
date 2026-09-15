@@ -1046,4 +1046,60 @@ textarea { resize: vertical; }
 .landing-page footer .brand img { height: 20px; }
 .landing-page footer .links { display: flex; gap: 20px; font-size: 13.5px; }
 .landing-page footer .links a { text-decoration: none; color: var(--l-muted); }
+
+/* ---- Support chat (2026-09-15) ---- Shared between the business-side
+   Support page and Master Admin's ticket views (AdminPanel, BusinessHealth)
+   — same list/thread/bubble look on both sides of the conversation. */
+.support-split { display: flex; gap: 20px; align-items: flex-start; }
+.support-ticket-list { display: flex; flex-direction: column; gap: 8px; width: 260px; flex-shrink: 0; }
+.support-ticket-list-wide { width: 100%; }
+.support-ticket-item {
+  display: block; width: 100%; text-align: left; background: white; border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit; color: inherit;
+}
+.support-ticket-item.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(26, 127, 90, 0.12); }
+.support-ticket-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.support-ticket-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; }
+.support-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-amber); flex-shrink: 0; }
+.support-status-open { background: #fdf1e6; color: var(--accent-amber); }
+.support-status-in_progress { background: #e7edf5; color: #2b4c7e; }
+.support-status-resolved { background: #dcfce7; color: #166534; }
+.support-detail-pane { flex: 1; min-width: 0; }
+.support-thread {
+  background: white; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 4px;
+}
+.support-thread-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.support-thread-header > div { display: flex; align-items: center; gap: 10px; }
+.support-messages { display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto; padding-right: 4px; }
+.support-bubble { max-width: 80%; padding: 8px 12px; border-radius: 10px; }
+.support-bubble p { margin: 4px 0 0; white-space: pre-wrap; font-size: 13.5px; }
+.support-bubble-meta { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.support-bubble-business { background: #f2f4f7; align-self: flex-start; }
+.support-bubble-admin { background: #eaf5ef; align-self: flex-end; }
+.support-reply-form { display: flex; gap: 8px; align-items: flex-end; margin-top: 12px; }
+.support-reply-form textarea { flex: 1; margin-top: 0; }
+.support-new-form { margin-bottom: 18px; }
+.support-new-form label { display: block; margin-top: 12px; font-size: 13px; }
+.support-new-form label:first-of-type { margin-top: 10px; }
+
+/* ---- Announcements (2026-09-15) ---- */
+.announcement-form { display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
+.announcement-modal { text-align: center; }
+.announcement-icon-badge {
+  width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 14px; color: var(--accent-amber); background: #fdf1e6;
+}
+.announcement-modal h3 { margin: 0 0 8px; }
+.announcement-modal p { color: var(--ink); font-size: 14px; line-height: 1.5; }
+
+/* ---- Business Health page (2026-09-15) ---- */
+.admin-back-link { display: inline-flex; align-items: center; gap: 4px; color: var(--sidebar-ink); font-size: 13px; font-weight: 600; text-decoration: none; }
+.admin-back-link:hover { color: white; }
+.business-health-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.business-health-header h1 { margin: 0 0 4px; }
+.business-health-header p { margin: 0; }
+.business-health-header > span { margin-left: auto; }
+.business-health-logo { width: 52px; height: 52px; border-radius: 10px; object-fit: contain; background: white; border: 1px solid var(--border); padding: 4px; }
+.badge-resolved { background: #dcfce7; color: #166534; }
+.error-route-cell { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; white-space: nowrap; }
 .landing-page footer .links a:hover { color: var(--l-ink); }
