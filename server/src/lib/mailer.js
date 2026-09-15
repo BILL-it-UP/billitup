@@ -194,14 +194,14 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       doc.fontSize(9).text(`Authorized Signature${business.signature_name ? ` — ${business.signature_name}` : ""}`, sigX, lineY + 6, { width: 160 });
     }
 
-    doc.fontSize(7).fillColor("#999").text("Powered by BillItUp · Made with love in India", 40, 800, { width: 520, align: "center" });
+    doc.fontSize(7).fillColor("#999").text("Powered by BillItUp", 40, 800, { width: 520, align: "center" });
     doc.fillColor("#000");
 
     doc.end();
   });
 }
 
-export async function sendDocumentEmail({ business, to, subject, text, pdfBuffer, pdfFilename }) {
+export async function sendDocumentEmail({ business, to, subject, text, html, pdfBuffer, pdfFilename }) {
   const transport = buildTransport(business);
   const fromEmail = business.smtp_from_email || business.smtp_user;
   const fromName = business.smtp_from_name || business.name || "BillItUp";
@@ -210,6 +210,62 @@ export async function sendDocumentEmail({ business, to, subject, text, pdfBuffer
     to,
     subject,
     text,
+    ...(html ? { html } : {}),
     attachments: [{ filename: pdfFilename, content: pdfBuffer }],
   });
+}
+
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+// A clean, branded HTML version of the email — sent alongside the plain
+// `text` above (most mail clients prefer html when both are present, and
+// text is the fallback for the ones that don't). summaryRows is a list of
+// [label, value] pairs (invoice number, amount, balance due, due date —
+// whichever apply) rendered as a small table; ctaUrl is only passed for
+// invoices, which have a public shareable link — quotes and credit notes
+// don't, so they render without a button (2026-09-15).
+export function renderEmailHtml({ business, bodyText, ctaLabel, ctaUrl, summaryRows = [] }) {
+  const brandName = escapeHtml(business.name || "BillItUp");
+  const headerInner = business.logo_data_url
+    ? `<img src="${business.logo_data_url}" alt="${brandName}" style="max-height:40px;max-width:180px;display:block;" />`
+    : `<span style="color:#ffffff;font-size:18px;font-weight:700;font-family:Arial,Helvetica,sans-serif;">${brandName}</span>`;
+
+  const summaryHtml = summaryRows.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 22px;border:1px solid #e2e5ea;border-radius:8px;overflow:hidden;">
+        ${summaryRows.map(([label, value], i) => `
+          <tr style="background:${i % 2 === 0 ? "#f7f8fa" : "#ffffff"};">
+            <td style="padding:9px 14px;font-size:12px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(label)}</td>
+            <td style="padding:9px 14px;font-size:13px;color:#1c1f26;text-align:right;font-weight:600;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(value)}</td>
+          </tr>`).join("")}
+      </table>`
+    : "";
+
+  const ctaHtml = ctaUrl
+    ? `<div style="margin-top:4px;"><a href="${ctaUrl}" style="display:inline-block;background:#1a7f5a;color:#ffffff;text-decoration:none;padding:11px 24px;border-radius:6px;font-size:13px;font-weight:700;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(ctaLabel || "View Document")}</a></div>`
+    : "";
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f7f8fa;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f8fa;padding:32px 12px;">
+      <tr><td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e2e5ea;">
+          <tr><td style="background:#0a2c50;padding:20px 28px;">${headerInner}</td></tr>
+          <tr><td style="padding:28px;">
+            <p style="margin:0 0 18px;font-size:14px;line-height:1.7;color:#1c1f26;white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(bodyText)}</p>
+            ${summaryHtml}
+            ${ctaHtml}
+          </td></tr>
+          <tr><td style="padding:16px 28px;border-top:1px solid #e2e5ea;">
+            <p style="margin:0;font-size:11px;color:#9aa0aa;text-align:center;font-family:Arial,Helvetica,sans-serif;">Powered by BillItUp</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
 }

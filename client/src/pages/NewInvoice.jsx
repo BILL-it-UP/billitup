@@ -148,8 +148,38 @@ export default function NewInvoice() {
     : gstTreatment === "rcm" ? subTotal - discountTotal
     : rawTotals.total;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const buildPayload = () => ({
+    customer_id: customerId || null,
+    invoice_date: invoiceDate || null,
+    due_date: dueDate || null,
+    reference: reference || null,
+    subject: subject || null,
+    gstin: gstin || null,
+    gst_treatment: gstTreatment,
+    terms: terms || null,
+    notes: notes || null,
+    ...(isPremium && {
+      eway_bill_number: ewayBillNumber || null,
+      eway_transporter_name: ewayTransporterName || null,
+      eway_transporter_id: ewayTransporterId || null,
+      eway_vehicle_number: ewayVehicleNumber || null,
+      eway_distance_km: ewayDistanceKm || null,
+    }),
+    lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
+  });
+
+  // A new invoice is always saved as a real, numbered document the moment
+  // it's created — "draft" vs "sent" is only ever a status label from here
+  // on, never about whether it has a number yet. So all three actions below
+  // share the same create call; they only differ in what happens right
+  // after: nothing (stays Draft), an immediate status flip to Sent with no
+  // email (mode "create" — handed over some other way), or landing on the
+  // invoice with the send popup already open (mode "send").
+  const selectedCustomer = customers.find((c) => String(c.id) === String(customerId));
+  const customerHasEmail = Boolean(selectedCustomer?.email);
+
+  const submit = async (mode) => {
+    // mode: "draft" | "create" | "send"
     setError("");
     // No more "walk-in / no customer" invoices — every BillItUp invoice is a
     // real GST document billed to someone, so a customer is required before
@@ -158,34 +188,22 @@ export default function NewInvoice() {
       setError("Please select or add a customer before creating this invoice.");
       return;
     }
-    setSaving(true);
+    if (mode === "send" && !customerHasEmail) {
+      setError("This customer has no email on file — add one to their record, or use Create instead and send the invoice another way.");
+      return;
+    }
+    setSaving(mode);
     try {
-      const payload = {
-        customer_id: customerId || null,
-        invoice_date: invoiceDate || null,
-        due_date: dueDate || null,
-        reference: reference || null,
-        subject: subject || null,
-        gstin: gstin || null,
-        gst_treatment: gstTreatment,
-        terms: terms || null,
-        notes: notes || null,
-        ...(isPremium && {
-          eway_bill_number: ewayBillNumber || null,
-          eway_transporter_name: ewayTransporterName || null,
-          eway_transporter_id: ewayTransporterId || null,
-          eway_vehicle_number: ewayVehicleNumber || null,
-          eway_distance_km: ewayDistanceKm || null,
-        }),
-        lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
-      };
       if (isEdit) {
-        await api.updateInvoice(id, payload);
+        await api.updateInvoice(id, buildPayload());
         navigate(`/invoices/${id}`);
-      } else {
-        const invoice = await api.createInvoice(payload);
-        navigate(`/invoices/${invoice.id}`);
+        return;
       }
+      const invoice = await api.createInvoice(buildPayload());
+      if (mode === "create") {
+        await api.setInvoiceStatus(invoice.id, "sent");
+      }
+      navigate(mode === "send" ? `/invoices/${invoice.id}?send=1` : `/invoices/${invoice.id}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -204,7 +222,7 @@ export default function NewInvoice() {
           invoice once you're done.
         </p>
       )}
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={(e) => e.preventDefault()}>
         <div className="form-row">
           <label className="block">Customer
             <CustomerPicker
@@ -331,9 +349,26 @@ export default function NewInvoice() {
         )}
 
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving..." : isEdit ? "Save Changes" : "Create Invoice"}
-        </button>
+        {isEdit ? (
+          <button type="button" disabled={saving} onClick={() => submit("create")}>
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        ) : (
+          <div className="form-submit-row">
+            <button type="button" className="btn-secondary" disabled={saving} onClick={() => submit("draft")}>
+              {saving === "draft" ? "Saving..." : "Save as Draft"}
+            </button>
+            <button type="button" className="btn-secondary" disabled={saving} onClick={() => submit("create")}>
+              {saving === "create" ? "Creating..." : "Create"}
+            </button>
+            <button type="button" disabled={saving || !customerHasEmail} title={!customerHasEmail ? "Add an email to this customer first" : undefined} onClick={() => submit("send")}>
+              {saving === "send" ? "Sending..." : "Create and Send"}
+            </button>
+            {customerId && !customerHasEmail && (
+              <p className="muted">This customer has no email on file, so Create and Send is disabled — add one on the Customers page, or use Create instead.</p>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

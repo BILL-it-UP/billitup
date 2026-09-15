@@ -2,9 +2,10 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
-import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { renderDocumentPdf, sendDocumentEmail, renderEmailHtml, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
 import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
+import { getTemplate, mergeTemplate } from "../lib/emailTemplates.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -155,6 +156,18 @@ router.post("/:id/send", async (req, res) => {
   const to = (req.body && req.body.to) || customer?.email;
   if (!to) return res.status(400).json({ error: "No recipient email — add one to the customer or enter one to send to" });
 
+  const templateVars = {
+    business_name: business.name || "",
+    customer_name: customer?.name || "there",
+    document_number: quote.quote_number,
+    amount: Number(quote.total).toFixed(2),
+    balance_due: "",
+    due_date: quote.expiry_date ? ` (valid until ${formatDate(quote.expiry_date, business.date_format)})` : "",
+  };
+  const template = getTemplate(business, "quote");
+  const subject = (req.body && req.body.subject) || mergeTemplate(template.subject, templateVars);
+  const bodyText = (req.body && req.body.message) || mergeTemplate(template.body, templateVars);
+
   try {
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Quote", docNumber: quote.quote_number, docDate: formatDate(quote.quote_date, business.date_format),
@@ -162,10 +175,16 @@ router.post("/:id/send", async (req, res) => {
       headlineLabel: "Total", headlineValue: `Rs ${Number(quote.total).toFixed(2)}`,
       business, party: customer, partyLabel: "To", lineItems, totals: quote, notes: quote.notes,
     });
+    const html = renderEmailHtml({
+      business, bodyText, ctaUrl: null,
+      summaryRows: [
+        ["Quote Number", quote.quote_number],
+        ["Amount", `Rs ${Number(quote.total).toFixed(2)}`],
+        ...(quote.expiry_date ? [["Valid Until", formatDate(quote.expiry_date, business.date_format)]] : []),
+      ],
+    });
     await sendDocumentEmail({
-      business, to,
-      subject: `Quote ${quote.quote_number} from ${business.name}`,
-      text: `Hi,\n\nPlease find attached quote ${quote.quote_number} for Rs ${Number(quote.total).toFixed(2)}.\n\nThanks,\n${business.name}`,
+      business, to, subject, text: bodyText, html,
       pdfBuffer, pdfFilename: `${quote.quote_number}.pdf`,
     });
     if (quote.status === "draft") {

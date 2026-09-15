@@ -1,9 +1,10 @@
 import express from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
-import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { renderDocumentPdf, sendDocumentEmail, renderEmailHtml, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
 import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
+import { getTemplate, mergeTemplate } from "../lib/emailTemplates.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -120,6 +121,18 @@ router.post("/:id/send", async (req, res) => {
   const to = (req.body && req.body.to) || customer?.email;
   if (!to) return res.status(400).json({ error: "No recipient email — add one to the customer or enter one to send to" });
 
+  const templateVars = {
+    business_name: business.name || "",
+    customer_name: customer?.name || "there",
+    document_number: creditNote.credit_note_number,
+    amount: Number(creditNote.total).toFixed(2),
+    balance_due: "",
+    due_date: "",
+  };
+  const template = getTemplate(business, "credit_note");
+  const subject = (req.body && req.body.subject) || mergeTemplate(template.subject, templateVars);
+  const bodyText = (req.body && req.body.message) || mergeTemplate(template.body, templateVars);
+
   try {
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Credit Note", docNumber: creditNote.credit_note_number, docDate: formatDate(creditNote.credit_note_date, business.date_format),
@@ -127,10 +140,15 @@ router.post("/:id/send", async (req, res) => {
       headlineLabel: "Total Credit", headlineValue: `Rs ${Number(creditNote.total).toFixed(2)}`,
       business, party: customer, partyLabel: "To", lineItems, totals: creditNote, notes: creditNote.notes,
     });
+    const html = renderEmailHtml({
+      business, bodyText, ctaUrl: null,
+      summaryRows: [
+        ["Credit Note Number", creditNote.credit_note_number],
+        ["Amount", `Rs ${Number(creditNote.total).toFixed(2)}`],
+      ],
+    });
     await sendDocumentEmail({
-      business, to,
-      subject: `Credit Note ${creditNote.credit_note_number} from ${business.name}`,
-      text: `Hi,\n\nPlease find attached credit note ${creditNote.credit_note_number} for Rs ${Number(creditNote.total).toFixed(2)}.\n\nThanks,\n${business.name}`,
+      business, to, subject, text: bodyText, html,
       pdfBuffer, pdfFilename: `${creditNote.credit_note_number}.pdf`,
     });
     res.json({ ok: true, sentTo: to });

@@ -31,6 +31,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
     reset_invoice_numbering_yearly, date_format,
+    email_subject_invoice, email_body_invoice, email_subject_quote, email_body_quote,
+    email_subject_credit_note, email_body_credit_note, email_subject_reminder, email_body_reminder,
   } = req.body;
 
   db.prepare(
@@ -64,7 +66,15 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       signature_data_url = COALESCE(?, signature_data_url),
       signature_name = COALESCE(?, signature_name),
       reset_invoice_numbering_yearly = COALESCE(?, reset_invoice_numbering_yearly),
-      date_format = COALESCE(?, date_format)
+      date_format = COALESCE(?, date_format),
+      email_subject_invoice = COALESCE(?, email_subject_invoice),
+      email_body_invoice = COALESCE(?, email_body_invoice),
+      email_subject_quote = COALESCE(?, email_subject_quote),
+      email_body_quote = COALESCE(?, email_body_quote),
+      email_subject_credit_note = COALESCE(?, email_subject_credit_note),
+      email_body_credit_note = COALESCE(?, email_body_credit_note),
+      email_subject_reminder = COALESCE(?, email_subject_reminder),
+      email_body_reminder = COALESCE(?, email_body_reminder)
     WHERE id = ?`
   ).run(
     name, address, pincode, country, phone, email, website, gstin, state,
@@ -76,6 +86,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     terms_and_conditions, signature_data_url, signature_name,
     reset_invoice_numbering_yearly === undefined ? undefined : (reset_invoice_numbering_yearly ? 1 : 0),
     date_format,
+    email_subject_invoice, email_body_invoice, email_subject_quote, email_body_quote,
+    email_subject_credit_note, email_body_credit_note, email_subject_reminder, email_body_reminder,
     req.auth.businessId
   );
 

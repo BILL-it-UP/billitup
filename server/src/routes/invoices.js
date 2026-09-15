@@ -2,10 +2,11 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { renderDocumentPdf, sendDocumentEmail, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { renderDocumentPdf, sendDocumentEmail, renderEmailHtml, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
 import { nextInvoiceNumber } from "../lib/invoiceNumbering.js";
 import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
+import { getTemplate, mergeTemplate } from "../lib/emailTemplates.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -318,6 +319,24 @@ router.post("/:id/send", async (req, res) => {
   const to = (req.body && req.body.to) || customer?.email;
   if (!to) return res.status(400).json({ error: "No recipient email — add one to the customer or enter one to send to" });
   const isReminder = !!(req.body && req.body.reminder);
+  const templateType = isReminder ? "reminder" : "invoice";
+
+  // Vars are pre-formatted strings, not raw numbers/dates — the template
+  // merge itself stays a dumb string replace (see lib/emailTemplates.js).
+  const templateVars = {
+    business_name: business.name || "",
+    customer_name: customer?.name || "there",
+    document_number: invoice.invoice_number,
+    amount: Number(invoice.total).toFixed(2),
+    balance_due: Number(invoice.balance_due).toFixed(2),
+    due_date: invoice.due_date ? ` (due ${formatDate(invoice.due_date, business.date_format)})` : "",
+  };
+  const template = getTemplate(business, templateType);
+  // The send popup in the app always sends its own edited subject/message —
+  // this template merge is really the fallback for any caller that doesn't
+  // (a future integration, or a request made directly against the API).
+  const subject = (req.body && req.body.subject) || mergeTemplate(template.subject, templateVars);
+  const bodyText = (req.body && req.body.message) || mergeTemplate(template.body, templateVars);
 
   try {
     const pdfBuffer = await renderDocumentPdf({
@@ -325,14 +344,20 @@ router.post("/:id/send", async (req, res) => {
       headlineLabel: "Balance Due", headlineValue: `Rs ${Number(invoice.balance_due).toFixed(2)}`,
       business, party: customer, partyLabel: "Bill To", lineItems, totals: invoice, notes: invoice.notes,
     });
+    // Invoices have a public no-login share link (public_token) — quotes and
+    // credit notes don't, so only invoice emails get a "View Invoice" button.
+    const ctaUrl = invoice.public_token ? `${req.protocol}://${req.get("host")}/view/invoice/${invoice.public_token}` : null;
+    const html = renderEmailHtml({
+      business, bodyText, ctaUrl, ctaLabel: "View Invoice",
+      summaryRows: [
+        ["Invoice Number", invoice.invoice_number],
+        ["Amount", `Rs ${Number(invoice.total).toFixed(2)}`],
+        ...(invoice.balance_due > 0 ? [["Balance Due", `Rs ${Number(invoice.balance_due).toFixed(2)}`]] : []),
+        ...(invoice.due_date ? [["Due Date", formatDate(invoice.due_date, business.date_format)]] : []),
+      ],
+    });
     await sendDocumentEmail({
-      business, to,
-      subject: isReminder
-        ? `Payment Reminder: Invoice ${invoice.invoice_number} from ${business.name}`
-        : `Invoice ${invoice.invoice_number} from ${business.name}`,
-      text: isReminder
-        ? `Hi,\n\nThis is a reminder that invoice ${invoice.invoice_number}${invoice.due_date ? ` (due ${invoice.due_date})` : ""} for Rs ${Number(invoice.total).toFixed(2)} has a balance of Rs ${Number(invoice.balance_due).toFixed(2)} still outstanding. The invoice is attached again for reference.\n\nThanks,\n${business.name}`
-        : `Hi,\n\nPlease find attached invoice ${invoice.invoice_number} for Rs ${Number(invoice.total).toFixed(2)}.\n\nThanks,\n${business.name}`,
+      business, to, subject, text: bodyText, html,
       pdfBuffer, pdfFilename: `${invoice.invoice_number}.pdf`,
     });
     if (invoice.status === "draft") {

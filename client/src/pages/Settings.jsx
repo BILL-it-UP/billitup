@@ -6,6 +6,7 @@ import {
   IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash,
 } from "../components/Icons";
 import { INDIAN_STATES } from "../lib/gst";
+import { DEFAULT_TEMPLATES as DEFAULT_EMAIL_TEMPLATES } from "../lib/emailTemplates";
 
 // A small header block shared by every card below — an icon in a colored
 // badge plus a title and one-line description, so each section of the
@@ -148,6 +149,8 @@ export default function Settings() {
         <InvoiceBrandingSettings business={business} setBusiness={setBusiness} />
 
         <EmailSettings business={business} setBusiness={setBusiness} />
+
+        <EmailTemplatesCard business={business} setBusiness={setBusiness} />
 
         {user?.role === "owner" && <FirmManagement />}
 
@@ -513,6 +516,94 @@ function EmailSettings({ business, setBusiness }) {
       </p>
       {testResult?.ok && <p className="muted">Test email sent to {testResult.to} — check your inbox (and spam folder).</p>}
       {testResult?.error && <p className="error">{testResult.error}</p>}
+    </div>
+  );
+}
+
+const EMAIL_TEMPLATE_TYPES = [
+  { id: "invoice", label: "Invoice" },
+  { id: "quote", label: "Quote" },
+  { id: "credit_note", label: "Credit Note" },
+  { id: "reminder", label: "Payment Reminder" },
+];
+
+// Lets a business rewrite the wording of every outgoing document email
+// without touching code — one subject/body pair per document type, with a
+// small set of {{placeholders}} filled in automatically when it's actually
+// sent. Leaving a field blank keeps the built-in default (shown as its
+// placeholder text), so nobody has to fill all four in just to get started
+// (2026-09-15).
+function EmailTemplatesCard({ business, setBusiness }) {
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+  const [error, setError] = useState("");
+  const [activeType, setActiveType] = useState("invoice");
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSavedMsg("");
+    setSaving(true);
+    try {
+      const updated = await api.updateBusiness(business);
+      setBusiness(updated);
+      setSavedMsg("Saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fallback = DEFAULT_EMAIL_TEMPLATES[activeType];
+  const subjectKey = `email_subject_${activeType}`;
+  const bodyKey = `email_body_${activeType}`;
+
+  return (
+    <div className="settings-card">
+      <CardHeader
+        icon={IconMail}
+        title="Email Templates"
+        description="What a customer sees when you email them an invoice, quote, credit note, or payment reminder. Leave a field blank to keep the default wording shown below it."
+      />
+      <div className="smtp-provider-row">
+        {EMAIL_TEMPLATE_TYPES.map((t) => (
+          <button
+            type="button"
+            key={t.id}
+            className={`smtp-provider-btn${activeType === t.id ? " active" : ""}`}
+            onClick={() => setActiveType(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={handleSave} className="settings-form">
+        <label>Subject
+          <input
+            value={business[subjectKey] || ""}
+            onChange={(e) => setBusiness({ ...business, [subjectKey]: e.target.value })}
+            placeholder={fallback.subject}
+          />
+        </label>
+        <label>Message
+          <textarea
+            rows={6}
+            value={business[bodyKey] || ""}
+            onChange={(e) => setBusiness({ ...business, [bodyKey]: e.target.value })}
+            placeholder={fallback.body}
+          />
+        </label>
+        <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
+          Placeholders you can use: {"{{customer_name}}"}, {"{{business_name}}"}, {"{{document_number}}"},{" "}
+          {"{{amount}}"}
+          {activeType === "reminder" && <>, {"{{balance_due}}"}, {"{{due_date}}"}</>}. Each is filled in automatically
+          when an email actually goes out.
+        </p>
+        {error && <p className="error">{error}</p>}
+        {savedMsg && <p className="muted">{savedMsg}</p>}
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save email templates"}</button>
+      </form>
     </div>
   );
 }

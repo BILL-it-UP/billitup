@@ -420,6 +420,18 @@ ensureColumn("businesses", "smtp_user", "smtp_user TEXT");
 ensureColumn("businesses", "smtp_pass", "smtp_pass TEXT");
 ensureColumn("businesses", "smtp_from_name", "smtp_from_name TEXT");
 ensureColumn("businesses", "smtp_from_email", "smtp_from_email TEXT");
+// Per-business custom wording for outgoing document emails — see
+// server/src/lib/emailTemplates.js. NULL/empty means "use the built-in
+// default for this type", so a business that never opens Settings still
+// gets a sensible, already-branded email (2026-09-15).
+ensureColumn("businesses", "email_subject_invoice", "email_subject_invoice TEXT");
+ensureColumn("businesses", "email_body_invoice", "email_body_invoice TEXT");
+ensureColumn("businesses", "email_subject_quote", "email_subject_quote TEXT");
+ensureColumn("businesses", "email_body_quote", "email_body_quote TEXT");
+ensureColumn("businesses", "email_subject_credit_note", "email_subject_credit_note TEXT");
+ensureColumn("businesses", "email_body_credit_note", "email_body_credit_note TEXT");
+ensureColumn("businesses", "email_subject_reminder", "email_subject_reminder TEXT");
+ensureColumn("businesses", "email_body_reminder", "email_body_reminder TEXT");
 ensureColumn("businesses", "logo_data_url", "logo_data_url TEXT");
 ensureColumn("businesses", "bank_account_name", "bank_account_name TEXT");
 ensureColumn("businesses", "bank_name", "bank_name TEXT");

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
-import SendEmailButton from "../components/SendEmailButton";
+import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
+import SendDocumentModal from "../components/SendDocumentModal";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
 import { GstBreakdown, GstNote } from "../components/GstBreakdown";
@@ -10,21 +11,34 @@ import { formatMoney, formatQty, formatDate } from "../lib/format";
 export default function CreditNoteView() {
   const { id } = useParams();
   const [creditNote, setCreditNote] = useState(null);
+  const [showSendModal, setShowSendModal] = useState(false);
 
-  useEffect(() => { api.getCreditNote(id).then(setCreditNote); }, [id]);
+  const load = () => api.getCreditNote(id).then(setCreditNote);
+  useEffect(() => { load(); }, [id]);
 
   if (!creditNote) return <p className="muted">Loading...</p>;
 
   const { business, customer, invoice, lineItems } = creditNote;
 
+  const sendTemplate = getTemplate(business, "credit_note");
+  const sendVars = {
+    business_name: business?.name || "",
+    customer_name: customer?.name || "there",
+    document_number: creditNote.credit_note_number,
+    amount: Number(creditNote.total).toFixed(2),
+    balance_due: "",
+    due_date: "",
+  };
+  const sendDefaults = {
+    subject: mergeTemplate(sendTemplate.subject, sendVars),
+    body: mergeTemplate(sendTemplate.body, sendVars),
+  };
+
   return (
     <div>
       <div className="no-print toolbar">
         <button onClick={() => window.print()}>Print / Save PDF</button>
-        <SendEmailButton
-          defaultTo={customer?.email}
-          onSend={(to) => api.sendCreditNoteEmail(id, { to })}
-        />
+        <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
       </div>
 
       <div className="invoice-doc invoice-full" style={{ width: "210mm" }}>
@@ -76,6 +90,20 @@ export default function CreditNoteView() {
 
         <DocumentFooter business={business} total={creditNote.total} />
       </div>
+
+      {showSendModal && (
+        <SendDocumentModal
+          title={`Email Credit Note ${creditNote.credit_note_number}`}
+          defaultTo={customer?.email}
+          defaultSubject={sendDefaults.subject}
+          defaultBody={sendDefaults.body}
+          onSend={async ({ to, subject, message }) => {
+            await api.sendCreditNoteEmail(id, { to, subject, message });
+            await load();
+          }}
+          onClose={() => setShowSendModal(false)}
+        />
+      )}
     </div>
   );
 }

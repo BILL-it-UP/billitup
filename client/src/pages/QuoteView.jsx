@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import SendEmailButton from "../components/SendEmailButton";
+import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
+import SendDocumentModal from "../components/SendDocumentModal";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
 import { GstBreakdown, GstNote } from "../components/GstBreakdown";
@@ -13,11 +14,26 @@ export default function QuoteView() {
   const [quote, setQuote] = useState(null);
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
 
   const load = () => api.getQuote(id).then(setQuote);
   useEffect(() => { load(); }, [id]);
 
   if (!quote) return <p className="muted">Loading...</p>;
+
+  const sendTemplate = getTemplate(quote.business, "quote");
+  const sendVars = {
+    business_name: quote.business?.name || "",
+    customer_name: quote.customer?.name || "there",
+    document_number: quote.quote_number,
+    amount: Number(quote.total).toFixed(2),
+    balance_due: "",
+    due_date: quote.expiry_date ? ` (valid until ${quote.expiry_date})` : "",
+  };
+  const sendDefaults = {
+    subject: mergeTemplate(sendTemplate.subject, sendVars),
+    body: mergeTemplate(sendTemplate.body, sendVars),
+  };
 
   const handleConvert = async () => {
     setError("");
@@ -38,10 +54,7 @@ export default function QuoteView() {
     <div>
       <div className="no-print toolbar">
         <button onClick={() => window.print()}>Print / Save PDF</button>
-        <SendEmailButton
-          defaultTo={quote.customer?.email}
-          onSend={(to) => api.sendQuoteEmail(id, { to })}
-        />
+        <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
         {quote.status !== "converted" && (
           <button onClick={handleConvert} disabled={converting}>
             {converting ? "Converting..." : "Convert to Invoice"}
@@ -95,6 +108,20 @@ export default function QuoteView() {
 
         <DocumentFooter business={business} total={quote.total} />
       </div>
+
+      {showSendModal && (
+        <SendDocumentModal
+          title={`Email Quote ${quote.quote_number}`}
+          defaultTo={quote.customer?.email}
+          defaultSubject={sendDefaults.subject}
+          defaultBody={sendDefaults.body}
+          onSend={async ({ to, subject, message }) => {
+            await api.sendQuoteEmail(id, { to, subject, message });
+            await load();
+          }}
+          onClose={() => setShowSendModal(false)}
+        />
+      )}
     </div>
   );
 }
