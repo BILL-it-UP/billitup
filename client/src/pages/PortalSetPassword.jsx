@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { IconLock, IconCheck } from "../components/Icons";
 
 // The destination of the one-time link a client is emailed when an
 // Owner/Admin turns their portal access on (or resends it). Works for both
 // the first-ever password (mode: "set") and a later reset (mode: "reset")
 // — see GET /api/portal-auth/invite/:token.
+// Redesigned 2026-09-15 onto the shared "simple auth" centered-card look
+// (see index.css), matching Forgot Password / Reset Password / Portal Login.
 export default function PortalSetPassword() {
   const { token } = useParams();
   const navigate = useNavigate();
@@ -43,40 +46,51 @@ export default function PortalSetPassword() {
   const heading = invite?.mode === "reset" ? "Reset your portal password" : "Set up your portal login";
 
   return (
-    <div className="auth-page">
-      <form className="auth-card" onSubmit={handleSubmit}>
-        <img src="/logo-header.png" alt="BillItUp" className="auth-logo" />
-        <h1>{heading}</h1>
+    <div className="simple-auth-shell">
+      <div className="simple-auth-card">
+        <img src="/logo-header.png" alt="BillItUp" className="simple-auth-logo" />
+
         {loadError ? (
-          <p className="error">{loadError}</p>
-        ) : !invite ? (
-          <p className="muted">Loading...</p>
-        ) : done ? (
-          <p className="muted">
-            Password set. You'll log in with <strong>{doneEmail}</strong>. Taking you to log in...
-          </p>
-        ) : (
           <>
-            <p className="muted">
+            <div className="simple-auth-icon-badge"><IconLock size={20} /></div>
+            <h1>This link isn't working</h1>
+            <p className="login-error-banner">{loadError}</p>
+          </>
+        ) : !invite ? (
+          <p className="simple-auth-subtitle">Loading...</p>
+        ) : done ? (
+          <div className="simple-auth-success">
+            <div className="simple-auth-success-check"><IconCheck size={22} /></div>
+            <h1>Password set</h1>
+            <p className="simple-auth-subtitle">
+              You'll log in with <strong>{doneEmail}</strong>. Taking you to log in...
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="simple-auth-icon-badge"><IconLock size={20} /></div>
+            <h1>{heading}</h1>
+            <p className="simple-auth-subtitle">
               {invite.customerName}, {invite.businessName} gave you online access to view your invoices. Choose a password below.
             </p>
             <p className="portal-login-email-note">
               You'll log in with: <strong>{invite.customerEmail}</strong>
             </p>
-            <label>
-              New password
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoFocus />
-            </label>
-            <label>
-              Confirm new password
-              <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
-            </label>
-            {error && <p className="error">{error}</p>}
-            <button type="submit" disabled={loading}>{loading ? "Saving..." : "Save password"}</button>
-          </>
+            <div className="login-field">
+              <label htmlFor="portal-set-password">New password</label>
+              <input id="portal-set-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoFocus />
+            </div>
+            <div className="login-field">
+              <label htmlFor="portal-set-confirm">Confirm new password</label>
+              <input id="portal-set-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+            </div>
+            {error && <p className="login-error-banner">{error}</p>}
+            <button type="submit" className="login-submit" disabled={loading}>{loading ? "Saving..." : "Save password"}</button>
+          </form>
         )}
-        <p className="muted"><Link to="/portal/login">Already have a password? Log in</Link></p>
-      </form>
+
+        <p className="simple-auth-links"><Link to="/portal/login">Already have a password? Log in</Link></p>
+      </div>
     </div>
   );
 }

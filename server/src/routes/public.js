@@ -2,6 +2,7 @@ import express from "express";
 import { db } from "../db.js";
 import { renderDocumentPdf } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
+import { upiQrForInvoice, upiQrPngBufferForInvoice } from "../lib/upiQr.js";
 
 // Unauthenticated routes for the "Copy shareable link" feature on an
 // invoice — a customer with the link can view (and download a PDF of)
@@ -42,11 +43,12 @@ function loadInvoiceByToken(token) {
 // logged-in view), both behind requireCustomerAuth so access can actually
 // be revoked, which a plain link could never do.
 
-router.get("/invoices/:token", (req, res) => {
+router.get("/invoices/:token", async (req, res) => {
   const found = loadInvoiceByToken(req.params.token);
   if (!found) return res.status(404).json({ error: "Not found" });
   const { invoice, lineItems, customer, business } = found;
-  res.json({ ...invoice, lineItems, customer, business: publicBusinessFields(business) });
+  const upiQr = await upiQrForInvoice(business, invoice);
+  res.json({ ...invoice, lineItems, customer, business: publicBusinessFields(business), upi_qr_data_url: upiQr?.dataUrl || null });
 });
 
 router.get("/invoices/:token/pdf", async (req, res) => {
@@ -54,11 +56,12 @@ router.get("/invoices/:token/pdf", async (req, res) => {
   if (!found) return res.status(404).json({ error: "Not found" });
   const { invoice, lineItems, customer, business } = found;
   try {
+    const upiQrPngBuffer = await upiQrPngBufferForInvoice(business, invoice);
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: formatDate(invoice.invoice_date, business.date_format),
       headlineLabel: "Balance Due", headlineValue: `Rs ${Number(invoice.balance_due).toFixed(2)}`,
       business: publicBusinessFields(business), party: customer, partyLabel: "Bill To",
-      lineItems, totals: invoice, notes: invoice.notes,
+      lineItems, totals: invoice, notes: invoice.notes, upiQrPngBuffer,
     });
     res.set("Content-Type", "application/pdf");
     res.set("Content-Disposition", `inline; filename="${invoice.invoice_number}.pdf"`);

@@ -71,7 +71,7 @@ export default function FullInvoice({ invoice }) {
 
       {invoice.notes && <p className="invoice-notes">{invoice.notes}</p>}
 
-      <DocumentFooter business={business} total={invoice.total} />
+      <DocumentFooter business={business} total={invoice.total} upiQrDataUrl={invoice.upi_qr_data_url} />
     </>
   );
 }

@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../db.js";
 import { requireCustomerAuth } from "../middleware/auth.js";
+import { upiQrForInvoice } from "../lib/upiQr.js";
 
 // The logged-in customer portal — everything here runs behind
 // requireCustomerAuth, which re-checks on every request that this
@@ -26,7 +27,7 @@ function publicBusinessFields(business) {
   };
 }
 
-router.get("/me", (req, res) => {
+router.get("/me", async (req, res) => {
   const customer = req.customer;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(customer.business_id);
   const invoices = db
@@ -36,11 +37,47 @@ router.get("/me", (req, res) => {
        ORDER BY invoice_date DESC, id DESC`
     )
     .all(customer.business_id, customer.id);
+
+  // A QR per unpaid invoice, generated only for the ones that actually still
+  // have something owing — a paid-off invoice never needs one, and this
+  // keeps the /me response from generating a QR for every invoice a
+  // long-standing client has ever received (2026-09-15).
+  const invoicesWithQr = await Promise.all(
+    invoices.map(async (inv) => ({
+      ...inv,
+      upi_qr_data_url: (await upiQrForInvoice(business, inv))?.dataUrl || null,
+    }))
+  );
+
   res.json({
-    customer: { name: customer.name, email: customer.email, phone: customer.phone },
+    // The portal's own Profile tab (2026-09-15) — a client's saved details,
+    // so they can see what's on file without having to ask the business.
+    customer: {
+      name: customer.name, email: customer.email, phone: customer.phone,
+      billing_address: customer.billing_address, gstin: customer.gstin,
+      state: customer.state, pincode: customer.pincode, country: customer.country,
+    },
     business: publicBusinessFields(business),
-    invoices,
+    invoices: invoicesWithQr,
   });
+});
+
+// Every payment recorded against any of this customer's own invoices,
+// newest first — the portal's Payment History tab (2026-09-15). Joined with
+// the invoice number/token so each row can still link back to that invoice.
+router.get("/payments", (req, res) => {
+  const customer = req.customer;
+  const rows = db
+    .prepare(
+      `SELECT payments.id, payments.amount, payments.mode, payments.notes, payments.paid_at,
+              invoices.invoice_number, invoices.public_token
+       FROM payments
+       JOIN invoices ON invoices.id = payments.invoice_id
+       WHERE invoices.business_id = ? AND invoices.customer_id = ?
+       ORDER BY payments.paid_at DESC, payments.id DESC`
+    )
+    .all(customer.business_id, customer.id);
+  res.json(rows);
 });
 
 export default router;

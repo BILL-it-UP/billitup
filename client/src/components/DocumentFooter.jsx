@@ -4,7 +4,7 @@ import { amountToWords } from "../lib/numberToWords";
 // details, terms & conditions, and a signature block. Each section only
 // renders if the business has actually filled it in, so a business that
 // hasn't set up bank details or T&C yet just gets a plain document.
-export default function DocumentFooter({ business, total }) {
+export default function DocumentFooter({ business, total, upiQrDataUrl }) {
   const hasBankDetails = business.bank_account_name || business.bank_account_number || business.bank_ifsc || business.bank_upi_id;
 
   return (
@@ -12,12 +12,20 @@ export default function DocumentFooter({ business, total }) {
       {total != null && <p className="doc-amount-words"><strong>Total In Words:</strong> {amountToWords(total)}</p>}
 
       {hasBankDetails && (
-        <div className="doc-footer-section">
-          {business.bank_account_name && <p>Account Name: {business.bank_account_name}</p>}
-          {business.bank_name && <p>Bank: {business.bank_name}</p>}
-          {business.bank_account_number && <p>Account Number: {business.bank_account_number}</p>}
-          {business.bank_ifsc && <p>IFSC Code: {business.bank_ifsc}</p>}
-          {business.bank_upi_id && <p>UPI: {business.bank_upi_id}</p>}
+        <div className="doc-footer-section doc-bank-and-qr">
+          <div>
+            {business.bank_account_name && <p>Account Name: {business.bank_account_name}</p>}
+            {business.bank_name && <p>Bank: {business.bank_name}</p>}
+            {business.bank_account_number && <p>Account Number: {business.bank_account_number}</p>}
+            {business.bank_ifsc && <p>IFSC Code: {business.bank_ifsc}</p>}
+            {business.bank_upi_id && <p>UPI: {business.bank_upi_id}</p>}
+          </div>
+          {upiQrDataUrl && (
+            <div className="doc-upi-qr">
+              <img src={upiQrDataUrl} alt="Scan to pay via UPI" />
+              <span>Scan to pay via UPI</span>
+            </div>
+          )}
         </div>
       )}
 

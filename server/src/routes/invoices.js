@@ -7,6 +7,7 @@ import { formatDate } from "../lib/formatDate.js";
 import { nextInvoiceNumber } from "../lib/invoiceNumbering.js";
 import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates.js";
+import { upiQrForInvoice, upiQrPngBufferForInvoice } from "../lib/upiQr.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -48,7 +49,7 @@ router.get("/", (req, res) => {
 });
 
 // Full invoice with line items + customer + business, shaped for the print/PDF view
-router.get("/:id", (req, res) => {
+router.get("/:id", async (req, res) => {
   const invoice = db
     .prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?")
     .get(req.params.id, req.auth.businessId);
@@ -63,8 +64,9 @@ router.get("/:id", (req, res) => {
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   const payments = db.prepare("SELECT * FROM payments WHERE invoice_id = ?").all(invoice.id);
   const isOverdue = !!(invoice.status !== "cancelled" && invoice.balance_due > 0 && invoice.due_date && invoice.due_date < new Date().toISOString().slice(0, 10));
+  const upiQr = await upiQrForInvoice(business, invoice);
 
-  res.json({ ...invoice, is_overdue: isOverdue, lineItems, customer, business, payments });
+  res.json({ ...invoice, is_overdue: isOverdue, lineItems, customer, business, payments, upi_qr_data_url: upiQr?.dataUrl || null });
 });
 
 // Create an invoice with its line items in one call. Server computes all totals —
@@ -347,10 +349,11 @@ router.post("/:id/send", async (req, res) => {
   const bodyText = (req.body && req.body.message) || mergeTemplate(template.body, templateVars);
 
   try {
+    const upiQrPngBuffer = await upiQrPngBufferForInvoice(business, invoice);
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: formatDate(invoice.invoice_date, business.date_format),
       headlineLabel: "Balance Due", headlineValue: `Rs ${Number(invoice.balance_due).toFixed(2)}`,
-      business, party: customer, partyLabel: "Bill To", lineItems, totals: invoice, notes: invoice.notes,
+      business, party: customer, partyLabel: "Bill To", lineItems, totals: invoice, notes: invoice.notes, upiQrPngBuffer,
     });
     // Invoices have a public no-login share link (public_token) — quotes and
     // credit notes don't, so only invoice emails get a "View Invoice" button.

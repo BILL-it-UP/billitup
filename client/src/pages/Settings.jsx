@@ -297,6 +297,9 @@ function InvoiceBrandingSettings({ business, setBusiness }) {
         <label>UPI ID
           <input value={business.bank_upi_id || ""} onChange={(e) => setBusiness({ ...business, bank_upi_id: e.target.value })} placeholder="yourname@bank" />
         </label>
+        <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
+          Set this and a scannable QR code is added automatically to every unpaid invoice, the emailed/downloaded PDF, and the customer portal — the client scans it in any UPI app to pay you directly. BillItUp never handles the payment itself; you still mark the invoice paid once you see it land in your account.
+        </p>
 
         <label>Terms &amp; Conditions
           <textarea rows={5} value={business.terms_and_conditions || ""} onChange={(e) => setBusiness({ ...business, terms_and_conditions: e.target.value })} placeholder="e.g. Payment due within 15 days. Late payments may attract interest." />

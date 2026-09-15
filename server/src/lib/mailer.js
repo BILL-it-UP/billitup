@@ -40,7 +40,7 @@ function dataUrlToBuffer(dataUrl) {
 // Renders a document (invoice, quote, or credit note all share the same
 // shape: branding header/parties/line-items/totals/footer) into a PDF
 // buffer, mirroring the on-screen print layout as closely as pdfkit allows.
-export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = [], business, party, partyLabel, lineItems, totals, notes, headlineLabel = "Total", headlineValue }) {
+export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = [], business, party, partyLabel, lineItems, totals, notes, headlineLabel = "Total", headlineValue, upiQrPngBuffer }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 40 });
     const chunks = [];
@@ -163,12 +163,30 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     const hasBankDetails = business.bank_account_name || business.bank_account_number || business.bank_ifsc || business.bank_upi_id;
     if (hasBankDetails) {
       doc.moveDown(1.5);
+      const bankBlockTop = doc.y;
       doc.fontSize(9).fillColor("#000");
       if (business.bank_account_name) doc.text(`Account Name: ${business.bank_account_name}`);
       if (business.bank_name) doc.text(`Bank: ${business.bank_name}`);
       if (business.bank_account_number) doc.text(`Account Number: ${business.bank_account_number}`);
       if (business.bank_ifsc) doc.text(`IFSC Code: ${business.bank_ifsc}`);
       if (business.bank_upi_id) doc.text(`UPI: ${business.bank_upi_id}`);
+      const textBottom = doc.y;
+
+      // The QR sits beside the bank text, not below it — drawn at a fixed
+      // position so it never disturbs pdfkit's own text flow, then doc.y is
+      // pushed past whichever of the two ran taller so Terms/signature below
+      // never overlaps it.
+      if (upiQrPngBuffer) {
+        try {
+          doc.image(upiQrPngBuffer, 450, bankBlockTop, { fit: [90, 90] });
+          doc.fontSize(7).fillColor("#555").text("Scan to pay via UPI", 440, bankBlockTop + 92, { width: 110, align: "center" });
+          doc.fillColor("#000");
+          doc.y = Math.max(textBottom, bankBlockTop + 106);
+        } catch {
+          // Shouldn't happen (qrcode always produces a valid PNG buffer), but
+          // never let a QR-drawing hiccup take down the whole PDF.
+        }
+      }
     }
 
     if (business.terms_and_conditions) {

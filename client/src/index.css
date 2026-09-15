@@ -450,6 +450,17 @@ textarea { resize: vertical; }
 .doc-footer-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .doc-footer-section p { margin: 2px 0; }
 .doc-footer-section h4 { margin: 0 0 8px; font-size: 14px; }
+
+/* Direct UPI payment on the invoice (2026-09-15) — the QR sits beside the
+   bank details rather than below them, so a client scanning to pay sees
+   both the account info and the scan option in one glance. */
+.doc-bank-and-qr { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.doc-upi-qr { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.doc-upi-qr img { width: 92px; height: 92px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: #fff; }
+.doc-upi-qr span { font-size: 11px; color: var(--muted); }
+@media (max-width: 640px) {
+  .doc-bank-and-qr { flex-direction: column; align-items: flex-start; }
+}
 .doc-terms { white-space: pre-wrap; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .doc-signature { margin-top: 32px; text-align: right; font-size: 13px; }
 .doc-signature-img { max-height: 48px; max-width: 180px; display: inline-block; margin-bottom: 4px; }
@@ -492,6 +503,50 @@ textarea { resize: vertical; }
 .public-invoice-page { background: var(--bg); min-height: 100vh; padding: 24px 0 60px; }
 .public-invoice-toolbar { max-width: 210mm; margin: 0 auto 16px; padding: 0 8px; display: flex; justify-content: space-between; align-items: center; }
 .public-invoice-toolbar img { height: 24px; }
+
+/* ---- Client portal dashboard (redesigned 2026-09-15) ---- A proper
+   branded shell (dark topbar, tabs) instead of the plain white page the
+   portal used before, so a client's view feels like part of the same
+   product rather than a bare data dump. */
+.portal-shell { min-height: 100vh; background: var(--bg); }
+.portal-topbar {
+  background: var(--sidebar-bg); color: #fff; padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.portal-topbar-brand img { height: 28px; display: block; background: #fff; border-radius: 6px; padding: 4px 8px; }
+.portal-topbar-brand strong { font-size: 15px; }
+.portal-topbar-right { display: flex; align-items: center; gap: 16px; }
+.portal-topbar-name { font-size: 13px; color: var(--sidebar-ink); }
+.portal-logout-btn { color: #fff !important; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.portal-logout-btn:hover { color: var(--sidebar-ink-hover) !important; }
+
+.portal-content { max-width: 900px; margin: 0 auto; padding: 32px 20px 60px; }
+.portal-hero h1 { margin: 0 0 2px; font-size: 24px; }
+.portal-hero > p.muted { margin-top: 0; }
+.portal-stat-tiles { grid-template-columns: repeat(3, 1fr); margin: 20px 0 28px; }
+
+.portal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.portal-tab {
+  background: none; border: none; padding: 10px 16px; font: inherit; font-size: 14px; font-weight: 600;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.portal-tab:hover { color: var(--ink); }
+.portal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.portal-table-wrap { overflow-x: auto; }
+.portal-invoice-actions { white-space: nowrap; }
+.portal-pay-qr { display: flex; align-items: center; gap: 16px; padding: 12px 4px; }
+.portal-pay-qr img { width: 120px; height: 120px; border: 1px solid var(--border); border-radius: 8px; padding: 6px; background: #fff; flex: none; }
+.portal-pay-qr p { margin: 0 0 6px; }
+
+.portal-profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.portal-profile-grid .panel p { margin: 3px 0; font-size: 14px; }
+@media (max-width: 720px) {
+  .portal-stat-tiles { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .portal-profile-grid { grid-template-columns: 1fr; }
+  .portal-topbar { padding: 12px 16px; }
+}
 
 /* ---- Login page (split-screen redesign, 2026-09-15) ----
    First page in a page-by-page visual pass over the app: keep the existing
