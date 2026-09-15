@@ -26,6 +26,10 @@ export const DEFAULT_TEMPLATES = {
     subject: "Payment Reminder: Invoice {{document_number}} from {{business_name}}",
     body: "Hi {{customer_name}},\n\nThis is a reminder that invoice {{document_number}}{{due_date}} for Rs {{amount}} has a balance of Rs {{balance_due}} still outstanding. The invoice is attached again for reference.\n\nThanks,\n{{business_name}}",
   },
+  receipt: {
+    subject: "Payment received for Invoice {{document_number}} from {{business_name}}",
+    body: "Hi {{customer_name}},\n\nThank you. We've received your payment of Rs {{amount_paid}} for invoice {{document_number}}.{{status_line}}\n\nThanks,\n{{business_name}}",
+  },
 };
 
 // Vars are passed in already display-formatted (amounts as "1234.00",

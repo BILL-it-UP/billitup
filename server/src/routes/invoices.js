@@ -319,10 +319,14 @@ router.post("/:id/send", async (req, res) => {
   const to = (req.body && req.body.to) || customer?.email;
   if (!to) return res.status(400).json({ error: "No recipient email — add one to the customer or enter one to send to" });
   const isReminder = !!(req.body && req.body.reminder);
-  const templateType = isReminder ? "reminder" : "invoice";
+  const isReceipt = !!(req.body && req.body.receipt);
+  const templateType = isReceipt ? "receipt" : isReminder ? "reminder" : "invoice";
 
   // Vars are pre-formatted strings, not raw numbers/dates — the template
   // merge itself stays a dumb string replace (see lib/emailTemplates.js).
+  // amount_paid/status_line only matter for the receipt template, but there's
+  // no harm computing them unconditionally — a template that doesn't
+  // reference a placeholder just never sees it.
   const templateVars = {
     business_name: business.name || "",
     customer_name: customer?.name || "there",
@@ -330,6 +334,10 @@ router.post("/:id/send", async (req, res) => {
     amount: Number(invoice.total).toFixed(2),
     balance_due: Number(invoice.balance_due).toFixed(2),
     due_date: invoice.due_date ? ` (due ${formatDate(invoice.due_date, business.date_format)})` : "",
+    amount_paid: Number(invoice.total - invoice.balance_due).toFixed(2),
+    status_line: invoice.balance_due > 0
+      ? ` A balance of Rs ${Number(invoice.balance_due).toFixed(2)} is still outstanding.`
+      : " Your invoice is now fully paid.",
   };
   const template = getTemplate(business, templateType);
   // The send popup in the app always sends its own edited subject/message —
@@ -349,12 +357,18 @@ router.post("/:id/send", async (req, res) => {
     const ctaUrl = invoice.public_token ? `${req.protocol}://${req.get("host")}/view/invoice/${invoice.public_token}` : null;
     const html = renderEmailHtml({
       business, bodyText, ctaUrl, ctaLabel: "View Invoice",
-      summaryRows: [
-        ["Invoice Number", invoice.invoice_number],
-        ["Amount", `Rs ${Number(invoice.total).toFixed(2)}`],
-        ...(invoice.balance_due > 0 ? [["Balance Due", `Rs ${Number(invoice.balance_due).toFixed(2)}`]] : []),
-        ...(invoice.due_date ? [["Due Date", formatDate(invoice.due_date, business.date_format)]] : []),
-      ],
+      summaryRows: isReceipt
+        ? [
+            ["Invoice Number", invoice.invoice_number],
+            ["Amount Paid", `Rs ${templateVars.amount_paid}`],
+            ...(invoice.balance_due > 0 ? [["Balance Due", `Rs ${Number(invoice.balance_due).toFixed(2)}`]] : []),
+          ]
+        : [
+            ["Invoice Number", invoice.invoice_number],
+            ["Amount", `Rs ${Number(invoice.total).toFixed(2)}`],
+            ...(invoice.balance_due > 0 ? [["Balance Due", `Rs ${Number(invoice.balance_due).toFixed(2)}`]] : []),
+            ...(invoice.due_date ? [["Due Date", formatDate(invoice.due_date, business.date_format)]] : []),
+          ],
     });
     await sendDocumentEmail({
       business, to, subject, text: bodyText, html,

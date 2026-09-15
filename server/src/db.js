@@ -432,6 +432,10 @@ ensureColumn("businesses", "email_subject_credit_note", "email_subject_credit_no
 ensureColumn("businesses", "email_body_credit_note", "email_body_credit_note TEXT");
 ensureColumn("businesses", "email_subject_reminder", "email_subject_reminder TEXT");
 ensureColumn("businesses", "email_body_reminder", "email_body_reminder TEXT");
+// Payment-receipt email — sent from the "record a payment" flow, offered
+// automatically whenever the customer has an email on file (2026-09-15).
+ensureColumn("businesses", "email_subject_receipt", "email_subject_receipt TEXT");
+ensureColumn("businesses", "email_body_receipt", "email_body_receipt TEXT");
 ensureColumn("businesses", "logo_data_url", "logo_data_url TEXT");
 ensureColumn("businesses", "bank_account_name", "bank_account_name TEXT");
 ensureColumn("businesses", "bank_name", "bank_name TEXT");

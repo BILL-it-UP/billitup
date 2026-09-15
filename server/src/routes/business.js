@@ -33,6 +33,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     reset_invoice_numbering_yearly, date_format,
     email_subject_invoice, email_body_invoice, email_subject_quote, email_body_quote,
     email_subject_credit_note, email_body_credit_note, email_subject_reminder, email_body_reminder,
+    email_subject_receipt, email_body_receipt,
   } = req.body;
 
   db.prepare(
@@ -74,7 +75,9 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       email_subject_credit_note = COALESCE(?, email_subject_credit_note),
       email_body_credit_note = COALESCE(?, email_body_credit_note),
       email_subject_reminder = COALESCE(?, email_subject_reminder),
-      email_body_reminder = COALESCE(?, email_body_reminder)
+      email_body_reminder = COALESCE(?, email_body_reminder),
+      email_subject_receipt = COALESCE(?, email_subject_receipt),
+      email_body_receipt = COALESCE(?, email_body_receipt)
     WHERE id = ?`
   ).run(
     name, address, pincode, country, phone, email, website, gstin, state,
@@ -88,6 +91,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     date_format,
     email_subject_invoice, email_body_invoice, email_subject_quote, email_body_quote,
     email_subject_credit_note, email_body_credit_note, email_subject_reminder, email_body_reminder,
+    email_subject_receipt, email_body_receipt,
     req.auth.businessId
   );
 

@@ -23,10 +23,18 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [confirmingMarkSent, setConfirmingMarkSent] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [paymentNotice, setPaymentNotice] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const autoSendConsumed = useRef(false);
 
-  const load = () => api.getInvoice(invoiceId).then(setInvoice);
+  // Returns the freshly-loaded invoice too, not just via state — recordPayment
+  // needs the up-to-date customer email right after a payment, before the
+  // next render, to decide whether to offer a receipt.
+  const load = () => api.getInvoice(invoiceId).then((data) => {
+    setInvoice(data);
+    return data;
+  });
   useEffect(() => {
     setInvoice(null);
     setReminderResult(null);
@@ -68,8 +76,9 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   if (!invoice) return <p className="muted">Loading...</p>;
 
   const refresh = async () => {
-    await load();
+    const data = await load();
     onChanged?.();
+    return data;
   };
 
   // Pre-fills the send popup with the business's own saved template (or the
@@ -89,11 +98,39 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     body: mergeTemplate(sendTemplate.body, sendVars),
   };
 
+  // Same pre-fill approach as sendDefaults above, for the "payment received"
+  // receipt popup that opens right after a payment is recorded.
+  const receiptTemplate = getTemplate(invoice.business, "receipt");
+  const receiptVars = {
+    business_name: invoice.business?.name || "",
+    customer_name: invoice.customer?.name || "there",
+    document_number: invoice.invoice_number,
+    amount: Number(invoice.total).toFixed(2),
+    amount_paid: Number(invoice.total - invoice.balance_due).toFixed(2),
+    balance_due: Number(invoice.balance_due).toFixed(2),
+    status_line: invoice.balance_due > 0
+      ? ` A balance of Rs ${Number(invoice.balance_due).toFixed(2)} is still outstanding.`
+      : " Your invoice is now fully paid.",
+  };
+  const receiptDefaults = {
+    subject: mergeTemplate(receiptTemplate.subject, receiptVars),
+    body: mergeTemplate(receiptTemplate.body, receiptVars),
+  };
+
+  // After a payment is saved, offer to email a receipt right away — but only
+  // when there's actually somewhere to send it. No customer email on file is
+  // not an error, just a reason to skip the popup and say why in its place.
   const recordPayment = async (payload) => {
     setError("");
+    setPaymentNotice("");
     try {
       await api.recordPayment(invoiceId, payload);
-      await refresh();
+      const updated = await refresh();
+      if (updated?.customer?.email) {
+        setShowReceiptModal(true);
+      } else {
+        setPaymentNotice("Payment recorded. Add an email address to this customer to send a receipt for it.");
+      }
     } catch (err) {
       setError(err.message);
       throw err;
@@ -180,7 +217,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         <button onClick={() => window.print()}>Print / Save PDF</button>
         <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
         {shareUrl && <button type="button" onClick={copyLink}>{copied ? "Link copied!" : "Copy shareable link"}</button>}
-        {invoice.is_overdue && (
+        {invoice.balance_due > 0 && !["draft", "cancelled"].includes(invoice.status) && (
           <button type="button" onClick={sendReminder} disabled={sendingReminder}>
             {sendingReminder ? "Sending..." : "Send Payment Reminder"}
           </button>
@@ -209,6 +246,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
       </div>
       {reminderResult?.ok && <p className="muted no-print">Reminder sent to {reminderResult.to}.</p>}
       {reminderResult?.error && <p className="error no-print">{reminderResult.error}</p>}
+      {paymentNotice && <p className="muted no-print">{paymentNotice}</p>}
       {error && <p className="error no-print">{error}</p>}
 
       <div className="invoice-doc invoice-full" style={{ width: standalone ? "210mm" : "100%", maxWidth: "210mm" }}>
@@ -228,6 +266,19 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
             await refresh();
           }}
           onClose={() => setShowSendModal(false)}
+        />
+      )}
+
+      {showReceiptModal && (
+        <SendDocumentModal
+          title={`Send Payment Receipt for Invoice ${invoice.invoice_number}`}
+          defaultTo={invoice.customer?.email}
+          defaultSubject={receiptDefaults.subject}
+          defaultBody={receiptDefaults.body}
+          onSend={async ({ to, subject, message }) => {
+            await api.sendInvoiceEmail(invoiceId, { to, subject, message, receipt: true });
+          }}
+          onClose={() => setShowReceiptModal(false)}
         />
       )}
 

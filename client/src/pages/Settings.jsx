@@ -525,6 +525,7 @@ const EMAIL_TEMPLATE_TYPES = [
   { id: "quote", label: "Quote" },
   { id: "credit_note", label: "Credit Note" },
   { id: "reminder", label: "Payment Reminder" },
+  { id: "receipt", label: "Payment Receipt" },
 ];
 
 // Lets a business rewrite the wording of every outgoing document email
@@ -564,7 +565,7 @@ function EmailTemplatesCard({ business, setBusiness }) {
       <CardHeader
         icon={IconMail}
         title="Email Templates"
-        description="What a customer sees when you email them an invoice, quote, credit note, or payment reminder. Leave a field blank to keep the default wording shown below it."
+        description="What a customer sees when you email them an invoice, quote, credit note, payment reminder, or payment receipt. Leave a field blank to keep the default wording shown below it."
       />
       <div className="smtp-provider-row">
         {EMAIL_TEMPLATE_TYPES.map((t) => (
@@ -597,8 +598,9 @@ function EmailTemplatesCard({ business, setBusiness }) {
         <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
           Placeholders you can use: {"{{customer_name}}"}, {"{{business_name}}"}, {"{{document_number}}"},{" "}
           {"{{amount}}"}
-          {activeType === "reminder" && <>, {"{{balance_due}}"}, {"{{due_date}}"}</>}. Each is filled in automatically
-          when an email actually goes out.
+          {activeType === "reminder" && <>, {"{{balance_due}}"}, {"{{due_date}}"}</>}
+          {activeType === "receipt" && <>, {"{{amount_paid}}"}, {"{{balance_due}}"}</>}. Each is filled in
+          automatically when an email actually goes out.
         </p>
         {error && <p className="error">{error}</p>}
         {savedMsg && <p className="muted">{savedMsg}</p>}
