@@ -203,6 +203,8 @@ export const api = {
 
   listVendors: () => request("/api/vendors"),
   createVendor: (payload) => request("/api/vendors", { method: "POST", body: payload }),
+  updateVendor: (id, payload) => request(`/api/vendors/${id}`, { method: "PUT", body: payload }),
+  deleteVendor: (id) => request(`/api/vendors/${id}`, { method: "DELETE" }),
 
   listPurchases: () => request("/api/purchases"),
   createPurchase: (payload) => request("/api/purchases", { method: "POST", body: payload }),

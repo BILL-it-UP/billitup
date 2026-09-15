@@ -10,6 +10,7 @@ import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import TermsAndPrivacy from "./pages/TermsAndPrivacy";
 import AddFirm from "./pages/AddFirm";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
@@ -174,6 +175,7 @@ export default function App() {
       <Route path="/signup" element={<Signup />} />
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/terms" element={<TermsAndPrivacy />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/view/invoice/:token" element={<PublicInvoiceView />} />
       <Route path="/portal/login" element={<PortalLogin />} />

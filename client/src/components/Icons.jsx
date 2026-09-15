@@ -230,3 +230,24 @@ export function IconTrash({ size = 18 }) {
     </svg>
   );
 }
+
+// Used on the smaller "utility" auth screens (Reset Password, Admin Login) —
+// a badge above the heading rather than decoration, so the icon tells you
+// what kind of screen this is before you've read a word (2026-09-15).
+export function IconLock({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <rect x="5" y="10.5" width="14" height="10" rx="2" />
+      <path d="M7.5 10.5V7a4.5 4.5 0 0 1 9 0v3.5" />
+      <path d="M12 14.5v3" />
+    </svg>
+  );
+}
+
+export function IconCheck({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+    </svg>
+  );
+}

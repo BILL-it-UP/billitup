@@ -70,7 +70,8 @@ export default function Login() {
         </div>
 
         <div className="login-brand-footer">
-          <strong>Made with <span className="login-heart">&hearts;</span> in India</strong>&nbsp;· free &amp; open source
+          <strong>Made with <span className="login-heart">&hearts;</span> in India</strong>&nbsp;· free &amp; open source ·{" "}
+          <Link to="/terms" style={{ color: "inherit" }}>Terms &amp; Privacy</Link>
         </div>
       </div>
 

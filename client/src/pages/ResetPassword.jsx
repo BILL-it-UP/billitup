@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { IconLock, IconCheck } from "../components/Icons";
 
+// Redesigned 2026-09-15 onto the shared "simple auth" centered-card look
+// (see index.css), matching Forgot Password and Admin Login. Logic
+// (token from the URL, password/confirm validation, api.resetPassword call,
+// the 2-second redirect to login) is unchanged.
 export default function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -36,33 +41,44 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="auth-page">
-      <form className="auth-card" onSubmit={handleSubmit}>
-        <img src="/logo-header.png" alt="BillItUp" className="auth-logo" />
-        <h1>Set a new password</h1>
-        {!token && <p className="error">This link is missing its reset token — use the link from your email.</p>}
+    <div className="simple-auth-shell">
+      <div className="simple-auth-card">
+        <img src="/logo-header.png" alt="BillItUp" className="simple-auth-logo" />
+
         {done ? (
-          <p className="muted">Password updated. Taking you to log in...</p>
+          <div className="simple-auth-success">
+            <div className="simple-auth-success-check"><IconCheck size={22} /></div>
+            <h1>Password updated</h1>
+            <p className="simple-auth-subtitle">Taking you to log in...</p>
+          </div>
         ) : (
-          <>
-            <label>
-              New password
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-            </label>
-            <label>
-              Confirm new password
-              <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
-            </label>
-            {error && <p className="error">{error}</p>}
-            <button type="submit" disabled={loading || !token}>
+          <form onSubmit={handleSubmit}>
+            <div className="simple-auth-icon-badge"><IconLock size={20} /></div>
+            <h1>Set a new password</h1>
+            {!token ? (
+              <p className="login-error-banner">This link is missing its reset token — use the link from your email.</p>
+            ) : (
+              <p className="simple-auth-subtitle">Choose a new password for your account.</p>
+            )}
+            <div className="login-field">
+              <label htmlFor="reset-password">New password</label>
+              <input id="reset-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+            </div>
+            <div className="login-field">
+              <label htmlFor="reset-confirm">Confirm new password</label>
+              <input id="reset-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+            </div>
+            {error && <p className="login-error-banner">{error}</p>}
+            <button type="submit" className="login-submit" disabled={loading || !token}>
               {loading ? "Saving..." : "Set new password"}
             </button>
-          </>
+          </form>
         )}
-        <p className="muted">
+
+        <p className="simple-auth-links">
           <Link to="/login">Back to log in</Link>
         </p>
-      </form>
+      </div>
     </div>
   );
 }

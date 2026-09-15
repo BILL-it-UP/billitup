@@ -578,6 +578,75 @@ textarea { resize: vertical; }
   .login-form-panel { padding: 32px 20px; }
 }
 
+/* Signup reuses the same login-shell/login-brand-panel split as Login above
+   (same "first impression" weight) but its form panel is a 2-step wizard —
+   these two rules are the only wizard-specific additions. */
+.login-step-indicator {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin: 0 0 22px;
+}
+.login-wizard-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.login-wizard-nav .link-btn { font-size: 13px; font-weight: 600; }
+
+/* ---- Simple auth pages: Forgot Password / Reset Password / Admin Login
+   (2026-09-15) ---- A lighter centered-card treatment for the smaller,
+   one-off auth screens, rather than the full split brand panel Login/Signup
+   get above — those two are the "first impression" moments, these three are
+   quick utility stops nobody lingers on. Reuses the login-field/
+   login-submit/login-links/login-error-banner rules above so every input
+   and button across all six auth screens still looks and behaves
+   identically. */
+.simple-auth-shell {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 32px 20px; box-sizing: border-box;
+  background: radial-gradient(circle at 50% 0%, #eaf5ef 0%, var(--bg) 45%);
+}
+.simple-auth-card {
+  width: 100%; max-width: 400px; background: #fff; border-radius: 14px;
+  border: 1px solid var(--border); box-shadow: 0 20px 44px -28px rgba(10, 44, 80, 0.28);
+  padding: 36px 36px 32px; box-sizing: border-box;
+}
+.simple-auth-logo { display: block; height: 24px; margin: 0 auto 26px; }
+.simple-auth-icon-badge {
+  width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center;
+  justify-content: center; margin: 0 auto 18px; color: var(--accent); background: #e7f4ee;
+}
+.simple-auth-icon-badge.is-admin { color: var(--sidebar-bg-raised); background: #e7edf5; }
+.simple-auth-card h1 { font-size: 21px; text-align: center; margin: 0 0 6px; letter-spacing: -0.01em; }
+.simple-auth-subtitle { color: var(--muted); font-size: 13.5px; text-align: center; margin: 0 0 26px; line-height: 1.45; }
+.simple-auth-success { text-align: center; }
+.simple-auth-success-check {
+  width: 44px; height: 44px; border-radius: 50%; background: #e7f4ee; color: var(--accent);
+  display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;
+}
+.simple-auth-links { text-align: center; margin-top: 6px; }
+.simple-auth-links a { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 13px; }
+.simple-auth-links a:hover { text-decoration: underline; }
+
+/* ---- Terms of Service / Privacy Policy (2026-09-15) ---- A public, no-login
+   reading page — same navy/green brand as the auth screens, but a plain
+   readable article layout instead of a card, since the content here is
+   paragraphs and lists rather than a form. */
+.legal-page { min-height: 100vh; background: var(--bg); }
+.legal-header {
+  background: var(--sidebar-bg); padding: 20px 24px; display: flex;
+  align-items: center; justify-content: space-between;
+}
+.legal-header img { height: 24px; display: block; }
+.legal-header a { color: var(--sidebar-ink); font-size: 13px; font-weight: 600; text-decoration: none; }
+.legal-header a:hover { color: #fff; }
+.legal-body { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+.legal-body h1 { font-size: 28px; letter-spacing: -0.01em; margin: 0 0 6px; }
+.legal-body .legal-updated { color: var(--muted); font-size: 13px; margin: 0 0 40px; }
+.legal-body h2 { font-size: 18px; margin: 40px 0 12px; letter-spacing: -0.01em; }
+.legal-body h2:first-of-type { margin-top: 0; }
+.legal-body p, .legal-body li { font-size: 14.5px; line-height: 1.7; color: var(--ink); }
+.legal-body ul { padding-left: 22px; margin: 0 0 14px; }
+.legal-body li { margin-bottom: 6px; }
+.legal-toc { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 36px; padding: 14px 18px; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+.legal-toc a { font-size: 13px; color: var(--accent); font-weight: 600; text-decoration: none; }
+.legal-toc a:hover { text-decoration: underline; }
+
 /* ---- Master Admin (2026-09-15) ---- */
 /* A distinct navy top bar rather than the plain page-header every other
    screen uses, so it's visually obvious this is the one super-admin
