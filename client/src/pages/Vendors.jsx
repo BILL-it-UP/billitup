@@ -18,7 +18,7 @@ export default function Vendors() {
   const [form, setForm] = useState(BLANK_VENDOR_FORM);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [editingId, setEditingId] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -63,8 +63,11 @@ export default function Vendors() {
     }
   };
 
+  // A popup instead of an in-row edit (2026-09-15), same as Customers —
+  // the old inline row squeezed the address, PIN code and country into one
+  // cramped cell. Mirrors the Add Vendor modal above.
   const startEdit = (v) => {
-    setEditingId(v.id);
+    setEditTarget(v);
     setEditError("");
     setEditForm({
       name: v.name || "",
@@ -79,17 +82,18 @@ export default function Vendors() {
   };
 
   const cancelEdit = () => {
-    setEditingId(null);
+    setEditTarget(null);
     setEditForm(null);
     setEditError("");
   };
 
-  const saveEdit = async (id) => {
+  const saveEdit = async (e) => {
+    e.preventDefault();
     setEditSaving(true);
     setEditError("");
     try {
-      const updated = await api.updateVendor(id, editForm);
-      setVendors((prev) => prev.map((v) => (v.id === id ? { ...v, ...updated } : v)));
+      const updated = await api.updateVendor(editTarget.id, editForm);
+      setVendors((prev) => prev.map((v) => (v.id === editTarget.id ? { ...v, ...updated } : v)));
       cancelEdit();
     } catch (err) {
       setEditError(err.message);
@@ -194,6 +198,72 @@ export default function Vendors() {
         </div>
       )}
 
+      {editTarget && (
+        <div className="modal-backdrop" onMouseDown={cancelEdit}>
+          <div className="modal-panel" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Vendor</h3>
+              <button type="button" className="modal-close" onClick={cancelEdit} aria-label="Close">
+                &times;
+              </button>
+            </div>
+            <form onSubmit={saveEdit}>
+              <label className="block">
+                Name
+                <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required autoFocus />
+              </label>
+              <div className="form-row">
+                <label className="block">
+                  Phone
+                  <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                </label>
+                <label className="block">
+                  Email
+                  <input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                </label>
+              </div>
+              <label className="block">
+                Address
+                <textarea
+                  rows={2}
+                  placeholder="Building, street, area..."
+                  value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                />
+              </label>
+              <div className="form-row">
+                <label className="block">
+                  PIN code
+                  <input value={editForm.pincode} onChange={(e) => setEditForm({ ...editForm, pincode: e.target.value })} />
+                </label>
+                <label className="block">
+                  Country
+                  <input value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} />
+                </label>
+              </div>
+              <div className="form-row">
+                <label className="block">
+                  GSTIN (optional)
+                  <input value={editForm.gstin} onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value })} />
+                </label>
+                <label className="block">
+                  State
+                  <select value={editForm.state} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}>
+                    <option value="">State (optional)</option>
+                    {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+              </div>
+              {editError && <p className="error">{editError}</p>}
+              <div className="modal-actions">
+                <button type="button" className="link-btn" onClick={cancelEdit}>Cancel</button>
+                <button type="submit" disabled={editSaving}>{editSaving ? "Saving..." : "Save Changes"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {vendors.length > 0 && (
         <div className="list-toolbar">
           <input
@@ -215,41 +285,6 @@ export default function Vendors() {
           <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th></th></tr></thead>
           <tbody>
             {filteredVendors.map((v) => {
-              const isEditing = editingId === v.id;
-
-              if (isEditing) {
-                return (
-                  <tr key={v.id}>
-                    <td><input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></td>
-                    <td><input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></td>
-                    <td><input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></td>
-                    <td>
-                      <textarea
-                        className="address-textarea"
-                        rows={2}
-                        value={editForm.address}
-                        onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                      />
-                      <input className="pincode-input" placeholder="PIN code" value={editForm.pincode} onChange={(e) => setEditForm({ ...editForm, pincode: e.target.value })} />
-                      <input className="country-input" placeholder="Country" value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} />
-                    </td>
-                    <td><input value={editForm.gstin} onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value })} /></td>
-                    <td>
-                      <select value={editForm.state} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}>
-                        <option value="">State</option>
-                        {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <button type="button" className="link-btn" disabled={editSaving} onClick={() => saveEdit(v.id)}>{editSaving ? "Saving..." : "Save"}</button>
-                      {" · "}
-                      <button type="button" className="link-btn" disabled={editSaving} onClick={cancelEdit}>Cancel</button>
-                      {editError && <div className="error" style={{ fontSize: 12, marginTop: 4 }}>{editError}</div>}
-                    </td>
-                  </tr>
-                );
-              }
-
               return (
                 <tr key={v.id}>
                   <td>{v.name}</td><td>{v.phone}</td><td>{v.email}</td>

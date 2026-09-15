@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { db } from "../db.js";
 import { signToken, requireAuth, requireRole } from "../middleware/auth.js";
 import { buildTransport, SmtpNotConfiguredError } from "../lib/mailer.js";
+import { normalizeEmail } from "../lib/normalizeEmail.js";
 
 const router = express.Router();
 
@@ -32,11 +33,12 @@ const hashToken = (token) => crypto.createHash("sha256").update(token).digest("h
 // Signup creates the business AND its first user, who is always the Owner.
 // Staff logins are created later by the Owner/Admin via POST /api/users, not here.
 router.post("/signup", authLimiter, (req, res) => {
-  const { businessName, ownerName, email, password, gstin } = req.body;
+  const { businessName, ownerName, password, gstin } = req.body;
+  const email = normalizeEmail(req.body.email);
   if (!businessName || !ownerName || !email || !password) {
     return res.status(400).json({ error: "businessName, ownerName, email and password are required" });
   }
-  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  const existing = db.prepare("SELECT id FROM users WHERE LOWER(email) = ?").get(email);
   if (existing) return res.status(409).json({ error: "An account with that email already exists" });
 
   // Signup only collects the essentials (business name + GSTIN); everything
@@ -61,8 +63,9 @@ router.post("/signup", authLimiter, (req, res) => {
 });
 
 router.post("/login", authLimiter, (req, res) => {
-  const { email, password } = req.body;
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  const { password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const user = db.prepare("SELECT * FROM users WHERE LOWER(email) = ?").get(email);
   if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
@@ -87,11 +90,11 @@ router.post("/login", authLimiter, (req, res) => {
 // email actually sent — this endpoint must never reveal which emails have
 // accounts, or whether a given business has SMTP configured.
 router.post("/forgot-password", forgotPasswordLimiter, async (req, res) => {
-  const { email } = req.body;
+  const email = normalizeEmail(req.body.email);
   if (!email) return res.status(400).json({ error: "email is required" });
   const genericResponse = { message: "If an account exists for that email, we've sent password reset instructions." };
 
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  const user = db.prepare("SELECT * FROM users WHERE LOWER(email) = ?").get(email);
   if (!user) return res.json(genericResponse);
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(user.business_id);

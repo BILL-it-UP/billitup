@@ -162,6 +162,14 @@ textarea { resize: vertical; }
 .auth-card { background: white; padding: 32px; border-radius: 10px; width: 360px; border: 1px solid var(--border); }
 .auth-card h1 { margin-top: 0; }
 .auth-logo { display: block; height: 40px; margin: 0 auto 20px; }
+/* Answers "how do I know what to log in with" on the portal set-password
+   page — a client kept reporting they had no idea, since neither the old
+   invite email nor this page ever said (2026-09-15). */
+.portal-login-email-note {
+  background: #eef6f2; border: 1px solid #cfe6da; border-radius: 6px;
+  padding: 10px 12px; font-size: 13px; color: var(--ink); margin: -4px 0 16px;
+}
+.portal-login-email-note strong { color: var(--accent); }
 .wizard-card { width: 400px; }
 .step-indicator { margin-top: -8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 .wizard-nav { display: flex; justify-content: space-between; align-items: center; }

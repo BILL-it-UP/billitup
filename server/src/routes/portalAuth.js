@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import rateLimit from "express-rate-limit";
 import { db } from "../db.js";
 import { signCustomerToken } from "../middleware/auth.js";
-import { buildTransport } from "../lib/mailer.js";
+import { buildTransport, renderEmailHtml } from "../lib/mailer.js";
+import { normalizeEmail } from "../lib/normalizeEmail.js";
 
 // Unauthenticated routes a CLIENT uses to get into their own portal login —
 // setting/resetting their password with the one-time link an Owner/Admin's
@@ -30,15 +31,33 @@ export async function sendPortalInviteEmail({ business, customer, token, isReset
   const fromEmail = business.smtp_from_email || business.smtp_user;
   const fromName = business.smtp_from_name || business.name || "BillItUp";
   const action = isReset ? "reset your portal password" : "set up your portal login";
+  // Naveen's customers kept not knowing what email address to actually log
+  // in with once they'd set a password — the old email never said, it only
+  // linked to the set-password page. Both the plain text and the summary
+  // row in the HTML version now state it explicitly, in addition to the
+  // set-password page itself doing the same (2026-09-15).
+  const bodyText =
+    `Hi ${customer.name},\n\n` +
+    `${business.name} has given you online access to view your invoices and payment status.\n\n` +
+    `You'll log in with this email address: ${customer.email}\n\n` +
+    `Click the link below to ${action} (this link can only be used once):\n${link}\n\n` +
+    `If you weren't expecting this, you can ignore this email.`;
+  const html = renderEmailHtml({
+    business,
+    bodyText:
+      `Hi ${customer.name},\n\n` +
+      `${business.name} has given you online access to view your invoices and payment status. ` +
+      `Click below to ${action} — this link can only be used once.`,
+    ctaUrl: link,
+    ctaLabel: isReset ? "Reset your password" : "Set your password",
+    summaryRows: [["You'll log in with", customer.email]],
+  });
   await transport.sendMail({
     from: `"${fromName}" <${fromEmail}>`,
     to: customer.email,
     subject: isReset ? `Reset your ${business.name} client portal password` : `You now have online access to your invoices from ${business.name}`,
-    text:
-      `Hi ${customer.name},\n\n` +
-      `${business.name} has given you online access to view your invoices and payment status.\n\n` +
-      `Click the link below to ${action} (this link can only be used once):\n\n${link}\n\n` +
-      `If you weren't expecting this, you can ignore this email.`,
+    text: bodyText,
+    html,
   });
   return link;
 }
@@ -54,6 +73,7 @@ router.get("/invite/:token", (req, res) => {
   const business = db.prepare("SELECT name FROM businesses WHERE id = ?").get(customer.business_id);
   res.json({
     customerName: customer.name,
+    customerEmail: customer.email,
     businessName: business?.name || "",
     mode: customer.portal_password_hash ? "reset" : "set",
   });
@@ -76,20 +96,22 @@ router.post("/set-password", (req, res) => {
   db.prepare("UPDATE customers SET portal_password_hash = ?, portal_token = ? WHERE id = ?")
     .run(passwordHash, randomUUID().replace(/-/g, ""), customer.id);
 
-  res.json({ message: "Password set. You can now log in." });
+  res.json({ message: "Password set. You can now log in.", email: customer.email });
 });
 
 router.post("/login", portalLoginLimiter, (req, res) => {
-  const { email, password } = req.body;
+  const { password } = req.body;
+  const email = normalizeEmail(req.body.email);
   if (!email || !password) return res.status(400).json({ error: "email and password are required" });
 
-  // Matches on email + already-active portal access. If the same email were
-  // somehow used for more than one customer (e.g. two different businesses
-  // on the same self-hosted install), treat it the same as "not found"
-  // rather than guessing which one — same generic-response principle as
+  // Matches case-insensitively (see lib/normalizeEmail.js) on email +
+  // already-active portal access. If the same email were somehow used for
+  // more than one customer (e.g. two different businesses on the same
+  // self-hosted install), treat it the same as "not found" rather than
+  // guessing which one — same generic-response principle as
   // forgot-password, so this endpoint never reveals which emails exist.
   const matches = db
-    .prepare("SELECT * FROM customers WHERE email = ? AND portal_enabled = 1 AND portal_password_hash IS NOT NULL")
+    .prepare("SELECT * FROM customers WHERE LOWER(email) = ? AND portal_enabled = 1 AND portal_password_hash IS NOT NULL")
     .all(email);
   const customer = matches.length === 1 ? matches[0] : null;
   if (!customer || !bcrypt.compareSync(password, customer.portal_password_hash)) {

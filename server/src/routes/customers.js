@@ -4,6 +4,7 @@ import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { sendPortalInviteEmail } from "./portalAuth.js";
 import { SmtpNotConfiguredError } from "../lib/mailer.js";
+import { normalizeEmail } from "../lib/normalizeEmail.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -37,7 +38,12 @@ router.get("/", (req, res) => {
 // Cashiers can look up customers to bill against, but only Owner/Admin
 // maintain the customer master list (edits here affect every future invoice).
 router.post("/", requireRole("owner", "admin"), (req, res) => {
-  const { name, phone, email, billing_address, shipping_address, pincode, country, gstin, state } = req.body;
+  const { name, phone, billing_address, shipping_address, pincode, country, gstin, state } = req.body;
+  // Normalized (trimmed + lowercased) before it's ever stored — see
+  // lib/normalizeEmail.js. Without this, a stray trailing space or a
+  // capital letter here silently breaks the customer's portal login later,
+  // since login matches on this exact stored value.
+  const email = normalizeEmail(req.body.email);
   if (!name) return res.status(400).json({ error: "name is required" });
   const portalToken = randomUUID().replace(/-/g, "");
   const result = db
@@ -51,7 +57,8 @@ router.post("/", requireRole("owner", "admin"), (req, res) => {
 });
 
 router.put("/:id", requireRole("owner", "admin"), (req, res) => {
-  const { name, phone, email, billing_address, shipping_address, pincode, country, gstin, state } = req.body;
+  const { name, phone, billing_address, shipping_address, pincode, country, gstin, state } = req.body;
+  const email = normalizeEmail(req.body.email);
   db.prepare(
     `UPDATE customers SET
       name = COALESCE(?, name), phone = COALESCE(?, phone), email = COALESCE(?, email),

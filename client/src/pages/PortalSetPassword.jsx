@@ -15,6 +15,7 @@ export default function PortalSetPassword() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [doneEmail, setDoneEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -28,9 +29,10 @@ export default function PortalSetPassword() {
     if (password.length < 8) return setError("Password must be at least 8 characters.");
     setLoading(true);
     try {
-      await api.setPortalPassword(token, password);
+      const result = await api.setPortalPassword(token, password);
+      setDoneEmail(result?.email || invite?.customerEmail || "");
       setDone(true);
-      setTimeout(() => navigate("/portal/login"), 1500);
+      setTimeout(() => navigate("/portal/login"), 2200);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -50,15 +52,20 @@ export default function PortalSetPassword() {
         ) : !invite ? (
           <p className="muted">Loading...</p>
         ) : done ? (
-          <p className="muted">Password set. Taking you to log in...</p>
+          <p className="muted">
+            Password set. You'll log in with <strong>{doneEmail}</strong>. Taking you to log in...
+          </p>
         ) : (
           <>
             <p className="muted">
               {invite.customerName}, {invite.businessName} gave you online access to view your invoices. Choose a password below.
             </p>
+            <p className="portal-login-email-note">
+              You'll log in with: <strong>{invite.customerEmail}</strong>
+            </p>
             <label>
               New password
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoFocus />
             </label>
             <label>
               Confirm new password

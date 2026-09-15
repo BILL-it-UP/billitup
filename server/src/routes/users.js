@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { normalizeEmail } from "../lib/normalizeEmail.js";
 
 const router = express.Router();
 router.use(requireAuth, requireRole("owner", "admin"));
@@ -37,14 +38,15 @@ router.get("/login-events", (req, res) => {
 // Owner/Admin creates an Admin or Cashier login. Not self-serve signup —
 // staff never register themselves, matching how Zoho Books and similar tools gate this.
 router.post("/", (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, password, role } = req.body;
+  const email = normalizeEmail(req.body.email);
   if (!name || !email || !password) {
     return res.status(400).json({ error: "name, email and password are required" });
   }
   if (!["admin", "cashier"].includes(role)) {
     return res.status(400).json({ error: "role must be 'admin' or 'cashier'" });
   }
-  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  const existing = db.prepare("SELECT id FROM users WHERE LOWER(email) = ?").get(email);
   if (existing) return res.status(409).json({ error: "An account with that email already exists" });
 
   const passwordHash = bcrypt.hashSync(password, 10);
