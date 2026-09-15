@@ -49,6 +49,22 @@ export function requireRole(...roles) {
   };
 }
 
+// Dropbox/Google Drive/OneDrive redirect the browser straight back to our
+// own callback route with no Authorization header of its own — this short-
+// lived signed token is what proves that callback belongs to the same
+// business (and the right provider) that started the connect flow, without
+// needing a separate one-time-token table. 10 minutes is generous for
+// clicking through a provider's own consent screen.
+export function signCloudBackupState({ businessId, provider }) {
+  return jwt.sign({ type: "cloud_backup_state", businessId, provider }, JWT_SECRET, { expiresIn: "10m" });
+}
+
+export function verifyCloudBackupState(token) {
+  const payload = jwt.verify(token, JWT_SECRET);
+  if (payload.type !== "cloud_backup_state") throw new Error("Invalid state");
+  return payload;
+}
+
 // A client's own login to the customer portal — a completely separate
 // identity from a business user (see requireAuth above). type: "customer_portal"
 // on the token keeps the two from ever being interchangeable, even though

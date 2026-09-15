@@ -300,6 +300,13 @@ textarea { resize: vertical; }
 .settings-card .inline-form { max-width: none; }
 .settings-card > *:last-child { margin-bottom: 0; }
 
+.cloud-backup-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.cloud-backup-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; flex-wrap: wrap;
+}
+.cloud-backup-row strong { font-size: 14px; }
+
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .field-row > label { min-width: 0; }
 @media (max-width: 640px) {

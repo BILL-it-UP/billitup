@@ -20,6 +20,7 @@ import paymentsRouter from "./routes/payments.js";
 import vendorsRouter from "./routes/vendors.js";
 import purchasesRouter from "./routes/purchases.js";
 import suggestionsRouter from "./routes/suggestions.js";
+import cloudBackupRouter from "./routes/cloudBackup.js";
 import { startBackupSchedule } from "./lib/backup.js";
 
 const app = express();
@@ -49,6 +50,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/vendors", vendorsRouter);
 app.use("/api/purchases", purchasesRouter);
 app.use("/api/suggestions", suggestionsRouter);
+app.use("/api/cloud-backup", cloudBackupRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {

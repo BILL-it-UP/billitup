@@ -382,6 +382,27 @@ CREATE TABLE IF NOT EXISTS suggestions (
   status TEXT NOT NULL DEFAULT 'open',   -- open | done
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- A business's own connection to their personal Dropbox/Google Drive/OneDrive
+-- (2026-09-15) — separate from the whole-install daily backup in lib/backup.js,
+-- which is one raw SQLite file shared by every business on this install and
+-- is deliberately never uploaded anywhere. This table just holds the OAuth
+-- tokens for whichever cloud accounts a business has connected; what
+-- actually gets uploaded is a fresh export of that one business's own data
+-- only — see lib/cloudBackupExport.js.
+CREATE TABLE IF NOT EXISTS cloud_backup_connections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  provider TEXT NOT NULL,               -- 'dropbox' | 'google_drive' | 'onedrive'
+  access_token TEXT,
+  refresh_token TEXT,
+  account_label TEXT,                   -- the connected account's email/name, shown in Settings
+  last_upload_at TEXT,
+  last_upload_status TEXT,              -- 'ok' | 'error'
+  last_error TEXT,
+  connected_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(business_id, provider)
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------

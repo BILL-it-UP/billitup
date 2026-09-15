@@ -201,6 +201,14 @@ export const api = {
 
   listPayments: () => request("/api/payments"),
 
+  // A business's own connection to Dropbox/Google Drive/OneDrive for
+  // backups — see server/src/routes/cloudBackup.js and
+  // lib/cloudBackupExport.js for what actually gets uploaded and why it's
+  // scoped to just that one business's own data.
+  getCloudBackupStatus: () => request("/api/cloud-backup/status"),
+  connectCloudBackup: (provider) => request(`/api/cloud-backup/${provider}/connect`),
+  disconnectCloudBackup: (provider) => request(`/api/cloud-backup/${provider}/disconnect`, { method: "POST" }),
+
   listVendors: () => request("/api/vendors"),
   createVendor: (payload) => request("/api/vendors", { method: "POST", body: payload }),
   updateVendor: (id, payload) => request(`/api/vendors/${id}`, { method: "PUT", body: payload }),

@@ -7,6 +7,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import { db, dbPath } from "../db.js";
+import { runCloudBackupsForAllBusinesses } from "./cloudBackupRun.js";
 
 // Reuses the same dbPath the database itself resolved (see db.js) rather
 // than recomputing it here, so this can never point at a different file
@@ -55,6 +56,12 @@ export async function runBackup() {
   await db.backup(dest);
   pruneOldBackups();
   console.log(`Backup complete -> ${dest}`);
+  // Separate from the local file above — pushes a per-business export (never
+  // this whole-install file) to whichever businesses have connected a
+  // Dropbox/Drive/OneDrive account. See lib/cloudBackupRun.js for why this
+  // can't just be "upload dest". Its own failures are caught inside and
+  // never allowed to make the local backup itself look like it failed.
+  runCloudBackupsForAllBusinesses().catch((err) => console.error("Cloud backup run failed:", err));
   return getBackupStatus();
 }
 

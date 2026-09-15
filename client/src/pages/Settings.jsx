@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, getUser, setSession, clearSession } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import {
@@ -157,6 +157,8 @@ export default function Settings() {
         {user?.role === "owner" && <StaffManagement />}
 
         {user?.role === "owner" && <BackupSettings />}
+
+        {user?.role === "owner" && <CloudBackupSettings />}
 
         {user?.role === "owner" && <DangerZone business={business} />}
       </div>
@@ -751,6 +753,119 @@ function BackupSettings() {
       <button type="button" onClick={backupNow} disabled={runningBackup}>
         {runningBackup ? "Backing up..." : "Back up now"}
       </button>
+    </div>
+  );
+}
+
+// A business's own connection to their personal Dropbox/Google Drive/
+// OneDrive (2026-09-15) — separate from the whole-install backup above,
+// which stays local/server-side only. This uploads a fresh export of just
+// this one business's own data (see server/src/lib/cloudBackupExport.js),
+// once a day alongside the server backup, or right away via "Back up now"
+// above since that route now triggers both. Only providers the server
+// actually has credentials for show a working Connect button — the rest
+// show as not set up yet rather than being hidden outright, so it's clear
+// more are coming rather than looking like a dead end.
+function CloudBackupSettings() {
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [busyProvider, setBusyProvider] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const load = () => api.getCloudBackupStatus().then(setStatus).catch((err) => setError(err.message));
+  useEffect(() => { load(); }, []);
+
+  // Dropbox/Drive/OneDrive land the browser back here with ?cloud_backup=...
+  // after the consent screen — read it once, refresh the real status from
+  // the server (never trust the query string as the source of truth), then
+  // strip it from the URL so refreshing the page doesn't keep re-showing it.
+  const notice = searchParams.get("cloud_backup");
+  useEffect(() => {
+    if (!notice) return;
+    load();
+    const next = new URLSearchParams(searchParams);
+    next.delete("cloud_backup");
+    next.delete("provider");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notice]);
+
+  const connect = async (provider) => {
+    setError("");
+    setBusyProvider(provider);
+    try {
+      const { url } = await api.connectCloudBackup(provider);
+      window.location.assign(url);
+    } catch (err) {
+      setError(err.message);
+      setBusyProvider(null);
+    }
+  };
+
+  const disconnect = async (provider) => {
+    setBusyProvider(provider);
+    try {
+      await api.disconnectCloudBackup(provider);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyProvider(null);
+    }
+  };
+
+  return (
+    <div className="settings-card">
+      <CardHeader
+        icon={IconCloud}
+        title="Cloud Backup"
+        description="Connect your own Dropbox, Google Drive, or OneDrive so a copy of just your business's own data lands there automatically."
+      />
+      {notice === "connected" && (
+        <p className="muted" style={{ color: "var(--accent)" }}>
+          Connected. Your data will be uploaded there on the next daily backup, or click Back up now above.
+        </p>
+      )}
+      {notice === "denied" && <p className="muted">Connection cancelled — nothing was changed.</p>}
+      {(notice === "failed" || notice === "invalid_state") && (
+        <p className="error">Something went wrong connecting that account. Please try again.</p>
+      )}
+      {error && <p className="error">{error}</p>}
+      {!status ? (
+        <p className="muted">Loading...</p>
+      ) : (
+        <div className="cloud-backup-list">
+          {status.map((p) => (
+            <div key={p.provider} className="cloud-backup-row">
+              <div>
+                <strong>{p.label}</strong>
+                {p.connected ? (
+                  <p className="muted" style={{ margin: "2px 0 0" }}>
+                    Connected{p.account_label ? ` as ${p.account_label}` : ""}.
+                    {p.last_upload_at && ` Last upload: ${formatDateTime(p.last_upload_at)}.`}
+                    {p.last_upload_status === "error" && (
+                      <span className="error"> Last upload failed — {p.last_error}</span>
+                    )}
+                  </p>
+                ) : p.configured ? (
+                  <p className="muted" style={{ margin: "2px 0 0" }}>Not connected yet.</p>
+                ) : (
+                  <p className="muted" style={{ margin: "2px 0 0" }}>Not set up on this install yet.</p>
+                )}
+              </div>
+              {p.connected ? (
+                <button type="button" className="link-btn" disabled={busyProvider === p.provider} onClick={() => disconnect(p.provider)}>
+                  {busyProvider === p.provider ? "Disconnecting..." : "Disconnect"}
+                </button>
+              ) : (
+                <button type="button" disabled={!p.configured || busyProvider === p.provider} onClick={() => connect(p.provider)}>
+                  {busyProvider === p.provider ? "Connecting..." : `Connect ${p.label}`}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
