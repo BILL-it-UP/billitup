@@ -14,6 +14,8 @@ export default function NewInvoice() {
   const canManageItems = ["owner", "admin"].includes(getUser()?.role);
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
+  const [business, setBusiness] = useState(null);
+  const isPremium = business?.plan === "premium";
   const [customerId, setCustomerId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
@@ -23,6 +25,11 @@ export default function NewInvoice() {
   const [gstTreatment, setGstTreatment] = useState("gst");
   const [terms, setTerms] = useState("");
   const [notes, setNotes] = useState("");
+  const [ewayBillNumber, setEwayBillNumber] = useState("");
+  const [ewayTransporterName, setEwayTransporterName] = useState("");
+  const [ewayTransporterId, setEwayTransporterId] = useState("");
+  const [ewayVehicleNumber, setEwayVehicleNumber] = useState("");
+  const [ewayDistanceKm, setEwayDistanceKm] = useState("");
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -31,6 +38,7 @@ export default function NewInvoice() {
   useEffect(() => {
     api.listCustomers().then(setCustomers);
     api.listItems().then(setItems);
+    api.getBusiness().then(setBusiness);
   }, []);
 
   // Edit mode: load the existing invoice and prefill every field. Runs once
@@ -49,6 +57,11 @@ export default function NewInvoice() {
       setGstTreatment(inv.gst_treatment || "gst");
       setTerms(inv.terms || "");
       setNotes(inv.notes || "");
+      setEwayBillNumber(inv.eway_bill_number || "");
+      setEwayTransporterName(inv.eway_transporter_name || "");
+      setEwayTransporterId(inv.eway_transporter_id || "");
+      setEwayVehicleNumber(inv.eway_vehicle_number || "");
+      setEwayDistanceKm(inv.eway_distance_km || "");
       setLines(
         (inv.lineItems || []).map((li) => ({
           item_id: li.item_id || "",
@@ -140,6 +153,13 @@ export default function NewInvoice() {
         gst_treatment: gstTreatment,
         terms: terms || null,
         notes: notes || null,
+        ...(isPremium && {
+          eway_bill_number: ewayBillNumber || null,
+          eway_transporter_name: ewayTransporterName || null,
+          eway_transporter_id: ewayTransporterId || null,
+          eway_vehicle_number: ewayVehicleNumber || null,
+          eway_distance_km: ewayDistanceKm || null,
+        }),
         lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
       };
       if (isEdit) {
@@ -253,6 +273,42 @@ export default function NewInvoice() {
         <label className="block">Notes (optional, shown on the invoice)
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
+
+        {isPremium ? (
+          <fieldset className="eway-fieldset">
+            <legend>E-Way Bill Details (optional)</legend>
+            <p className="muted" style={{ marginTop: 0 }}>
+              BillItUp doesn't generate the e-way bill itself — record the details of one you've already generated
+              on the government portal, and it will show on this invoice.
+            </p>
+            <div className="form-row">
+              <label className="block">E-Way Bill Number
+                <input value={ewayBillNumber} onChange={(e) => setEwayBillNumber(e.target.value)} />
+              </label>
+              <label className="block">Vehicle Number
+                <input value={ewayVehicleNumber} onChange={(e) => setEwayVehicleNumber(e.target.value)} placeholder="e.g. TN09AB1234" />
+              </label>
+            </div>
+            <div className="form-row">
+              <label className="block">Transporter Name
+                <input value={ewayTransporterName} onChange={(e) => setEwayTransporterName(e.target.value)} />
+              </label>
+              <label className="block">Transporter ID (GSTIN, optional)
+                <input value={ewayTransporterId} onChange={(e) => setEwayTransporterId(e.target.value)} />
+              </label>
+              <label className="block">Distance (km, optional)
+                <input type="number" step="0.1" value={ewayDistanceKm} onChange={(e) => setEwayDistanceKm(e.target.value)} />
+              </label>
+            </div>
+          </fieldset>
+        ) : (
+          business && (
+            <p className="muted">
+              E-Way Bill tracking for invoices involving goods movement is a premium feature. Get in touch to
+              upgrade — everything else stays free.
+            </p>
+          )
+        )}
 
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={saving}>

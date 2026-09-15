@@ -519,6 +519,20 @@ ensureColumn("credit_notes", "sgst", "sgst REAL DEFAULT 0");
 ensureColumn("credit_notes", "igst", "igst REAL DEFAULT 0");
 ensureColumn("recurring_invoices", "gst_treatment", "gst_treatment TEXT DEFAULT 'gst'");
 
+// E-Way Bill details — premium-only manual tracker (2026-09-14). BillItUp
+// doesn't talk to the government e-way bill portal itself; a business on a
+// premium plan can just record the details of an e-way bill already
+// generated elsewhere (transporter, vehicle, distance, the e-way bill
+// number) against an invoice, and it shows up on the invoice view/PDF. Free
+// plan businesses never see these fields client-side, and the server drops
+// any of them sent by a free-plan business rather than trusting the client
+// — see routes/invoices.js.
+ensureColumn("invoices", "eway_bill_number", "eway_bill_number TEXT");
+ensureColumn("invoices", "eway_transporter_name", "eway_transporter_name TEXT");
+ensureColumn("invoices", "eway_transporter_id", "eway_transporter_id TEXT");
+ensureColumn("invoices", "eway_vehicle_number", "eway_vehicle_number TEXT");
+ensureColumn("invoices", "eway_distance_km", "eway_distance_km REAL");
+
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the
 // "Copy shareable link" button always has something to share, not just

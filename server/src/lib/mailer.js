@@ -147,6 +147,19 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       doc.fillColor("#000");
     }
 
+    if (totals.eway_bill_number || totals.eway_transporter_name || totals.eway_vehicle_number) {
+      doc.moveDown(1);
+      doc.fontSize(9).fillColor("#000").text("E-Way Bill", { underline: true });
+      doc.fontSize(9).fillColor("#555");
+      if (totals.eway_bill_number) doc.text(`E-Way Bill No: ${totals.eway_bill_number}`);
+      if (totals.eway_transporter_name) {
+        doc.text(`Transporter: ${totals.eway_transporter_name}${totals.eway_transporter_id ? ` (${totals.eway_transporter_id})` : ""}`);
+      }
+      if (totals.eway_vehicle_number) doc.text(`Vehicle Number: ${totals.eway_vehicle_number}`);
+      if (totals.eway_distance_km) doc.text(`Distance: ${totals.eway_distance_km} km`);
+      doc.fillColor("#000");
+    }
+
     const hasBankDetails = business.bank_account_name || business.bank_account_number || business.bank_ifsc || business.bank_upi_id;
     if (hasBankDetails) {
       doc.moveDown(1.5);

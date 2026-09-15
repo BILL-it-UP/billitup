@@ -396,6 +396,12 @@ textarea { resize: vertical; }
 .invoice-dates span:first-child { color: var(--muted); }
 .invoice-notes { margin-top: 24px; font-size: 13px; color: var(--muted); }
 .invoice-subject { margin: -8px 0 20px; font-size: 13px; }
+.invoice-eway { margin-top: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg, #f6f7f9); }
+.invoice-eway strong { display: block; margin-bottom: 4px; }
+.invoice-eway p { margin: 0; color: var(--ink); }
+
+.eway-fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 4px 16px 8px; margin: 0 0 16px; }
+.eway-fieldset legend { padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
 
 .doc-line-items thead tr { background: #2b2f38; }
 .doc-line-items thead th { color: white; font-weight: 600; padding: 10px 8px; border-bottom: none; }

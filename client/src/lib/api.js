@@ -140,6 +140,7 @@ export const api = {
 
   listCustomers: () => request("/api/customers"),
   createCustomer: (payload) => request("/api/customers", { method: "POST", body: payload }),
+  updateCustomer: (id, payload) => request(`/api/customers/${id}`, { method: "PUT", body: payload }),
   setCustomerPortalEnabled: (id, enabled) => request(`/api/customers/${id}/portal`, { method: "PUT", body: { enabled } }),
   resendCustomerPortalInvite: (id) => request(`/api/customers/${id}/portal/resend-invite`, { method: "POST" }),
 

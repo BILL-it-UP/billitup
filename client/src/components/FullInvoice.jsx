@@ -33,6 +33,20 @@ export default function FullInvoice({ invoice }) {
 
       {invoice.subject && <p className="invoice-subject"><strong>Subject:</strong> {invoice.subject}</p>}
 
+      {(invoice.eway_bill_number || invoice.eway_transporter_name || invoice.eway_vehicle_number) && (
+        <div className="invoice-eway">
+          <strong>E-Way Bill</strong>
+          <p>
+            {invoice.eway_bill_number && <>E-Way Bill No: {invoice.eway_bill_number}<br /></>}
+            {invoice.eway_transporter_name && (
+              <>Transporter: {invoice.eway_transporter_name}{invoice.eway_transporter_id ? ` (${invoice.eway_transporter_id})` : ""}<br /></>
+            )}
+            {invoice.eway_vehicle_number && <>Vehicle Number: {invoice.eway_vehicle_number}<br /></>}
+            {invoice.eway_distance_km ? <>Distance: {invoice.eway_distance_km} km</> : null}
+          </p>
+        </div>
+      )}
+
       <table className="table doc-line-items">
         <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>
         <tbody>

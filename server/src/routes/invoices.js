@@ -69,7 +69,10 @@ router.get("/:id", (req, res) => {
 // Create an invoice with its line items in one call. Server computes all totals —
 // the client sends qty/rate/discount/tax_rate per line, never trusts client-side amounts.
 router.post("/", (req, res) => {
-  const { customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment } = req.body;
+  const {
+    customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment,
+    eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
+  } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
@@ -85,11 +88,23 @@ router.post("/", (req, res) => {
   });
   const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
+  // E-Way Bill details are a premium-only manual tracker (see db.js) — a
+  // free-plan business gets these dropped even if it somehow sends them
+  // (the UI never shows the fields to begin with), rather than trusting the
+  // client to have honoured the plan gate itself.
+  const isPremium = business.plan === "premium";
+  const ewayBillNumber = isPremium ? eway_bill_number || null : null;
+  const ewayTransporterName = isPremium ? eway_transporter_name || null : null;
+  const ewayTransporterId = isPremium ? eway_transporter_id || null : null;
+  const ewayVehicleNumber = isPremium ? eway_vehicle_number || null : null;
+  const ewayDistanceKm = isPremium && eway_distance_km ? Number(eway_distance_km) : null;
+
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, subject, gstin, status,
-       sub_total, discount, tax_total, total, balance_due, notes, public_token, gst_treatment, cgst, sgst, igst)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       sub_total, discount, tax_total, total, balance_due, notes, public_token, gst_treatment, cgst, sgst, igst,
+       eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -102,7 +117,8 @@ router.post("/", (req, res) => {
       invoice_date || new Date().toISOString().slice(0, 10), due_date || null,
       terms || null, reference || null, subject || null, gstin || null,
       subTotal, discountTotal, taxTotal, total, total, notes || null,
-      randomUUID().replace(/-/g, ""), treatment, cgst, sgst, igst
+      randomUUID().replace(/-/g, ""), treatment, cgst, sgst, igst,
+      ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
@@ -125,7 +141,10 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
-  const { customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment } = req.body;
+  const {
+    customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment,
+    eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
+  } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
@@ -139,6 +158,17 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
     businessState: business.state, customerState: customer?.state,
   });
   const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
+
+  // Same premium gate as create — a free-plan business keeps whatever it
+  // already had (which, since create also gates this, will always be null)
+  // rather than picking up e-way bill details from a client that skipped the
+  // UI gate.
+  const isPremium = business.plan === "premium";
+  const ewayBillNumber = isPremium ? eway_bill_number || null : null;
+  const ewayTransporterName = isPremium ? eway_transporter_name || null : null;
+  const ewayTransporterId = isPremium ? eway_transporter_id || null : null;
+  const ewayVehicleNumber = isPremium ? eway_vehicle_number || null : null;
+  const ewayDistanceKm = isPremium && eway_distance_km ? Number(eway_distance_km) : null;
 
   // Editing a line item never touches payments already recorded — it only
   // changes what's owed. Re-derive balance_due/status from the amount
@@ -180,13 +210,15 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
       `UPDATE invoices SET
         customer_id = ?, invoice_date = ?, due_date = ?, terms = ?, reference = ?, subject = ?, gstin = ?, notes = ?,
         sub_total = ?, discount = ?, tax_total = ?, total = ?, balance_due = ?, status = ?,
-        gst_treatment = ?, cgst = ?, sgst = ?, igst = ?
+        gst_treatment = ?, cgst = ?, sgst = ?, igst = ?,
+        eway_bill_number = ?, eway_transporter_name = ?, eway_transporter_id = ?, eway_vehicle_number = ?, eway_distance_km = ?
        WHERE id = ?`
     ).run(
       customer_id || null, invoice_date || invoice.invoice_date, due_date || null,
       terms || null, reference || null, subject || null, gstin || null, notes || null,
       subTotal, discountTotal, taxTotal, total, newBalanceDue, newStatus,
       treatment, cgst, sgst, igst,
+      ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm,
       invoice.id
     );
 

@@ -62,7 +62,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   ).run(name, phone, email, billing_address, shipping_address, pincode, country, gstin, state, req.params.id, req.auth.businessId);
   const updated = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!updated) return res.status(404).json({ error: "Not found" });
-  res.json(updated);
+  res.json(withPortalStatus(updated));
 });
 
 router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
