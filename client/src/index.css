@@ -696,3 +696,225 @@ textarea { resize: vertical; }
 
 .badge-premium { background: #dcfce7; color: #166534; }
 .badge-free { background: #eee; color: #555; }
+
+/* ---- Landing page (2026-09-15) ----
+   The public marketing page at "/" for a logged-out visitor (logged-in
+   users still land on their Dashboard — see App.jsx's Home component).
+   Ported from the standalone /landing/index.html that already existed in
+   the repo but was never actually wired up anywhere, adapted so its CTAs
+   point at /login and /signup instead of only at GitHub. Deliberately uses
+   its own distinct type system (Fraunces + IBM Plex, loaded in
+   client/index.html) and color tokens rather than the app shell's Plus
+   Jakarta Sans/navy-sidebar look — a marketing page and a working app are
+   different jobs and are allowed to look different, the way stripe.com and
+   dashboard.stripe.com do. Every rule below is scoped under .landing-page
+   so nothing here leaks onto, or gets overridden by, the rest of the app's
+   CSS (which uses bare `button`, `h1`, `.btn` selectors of its own). */
+.landing-page {
+  --l-bg: #f3f5f8;
+  --l-surface: #ffffff;
+  --l-paper: #fbfaf7;
+  --l-ink: #0c1a2b;
+  --l-muted: #55647a;
+  --l-border: #dde3ec;
+  --l-navy: #0a3d78;
+  --l-navy-ink: #ffffff;
+  --l-navy-dim: #e8eef7;
+  --l-amber: #d97a1f;
+  --l-green: #1f8f42;
+  --l-green-dim: #e5f4e9;
+  --l-mono-line: #c7cfdb;
+  --l-shadow: 0 24px 60px -32px rgba(10, 30, 60, 0.35);
+  color-scheme: light;
+  background: var(--l-bg);
+  color: var(--l-ink);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) {
+  .landing-page {
+    --l-bg: #0b1420;
+    --l-surface: #101c2c;
+    --l-paper: #14202f;
+    --l-ink: #eaeff6;
+    --l-muted: #93a3b8;
+    --l-border: #253449;
+    --l-navy: #4f86c6;
+    --l-navy-ink: #06111e;
+    --l-navy-dim: #16273c;
+    --l-amber: #e59a4a;
+    --l-green: #49c777;
+    --l-green-dim: #12281c;
+    --l-mono-line: #2a3a4f;
+    --l-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-page * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+.landing-page .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.landing-page a { color: inherit; }
+.landing-page h1, .landing-page h2, .landing-page h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+.landing-page .eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12.5px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--l-navy); font-weight: 500;
+}
+.landing-page .l-num { font-variant-numeric: tabular-nums; }
+
+.landing-page header.site {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--l-bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--l-border);
+}
+.landing-page .site-nav { display: flex; align-items: center; gap: 28px; padding: 14px 0; }
+.landing-page .site-nav .brand { display: flex; align-items: center; margin-right: auto; }
+.landing-page .site-nav .brand img { height: 26px; display: block; }
+.landing-page .site-nav .links { display: flex; gap: 26px; font-size: 14.5px; align-items: center; }
+.landing-page .site-nav .links a { text-decoration: none; color: var(--l-muted); }
+.landing-page .site-nav .links a:hover { color: var(--l-ink); }
+.landing-page .site-nav .cta { display: flex; gap: 10px; }
+@media (max-width: 760px) {
+  .landing-page .site-nav .links { display: none; }
+}
+
+.landing-page .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: inherit; font-size: 14.5px; font-weight: 600;
+  padding: 10px 18px; border-radius: 7px; text-decoration: none;
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.landing-page .btn:active { transform: translateY(1px); }
+.landing-page .btn-primary { background: var(--l-navy); color: var(--l-navy-ink); }
+.landing-page .btn-primary:hover { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--l-navy) 70%, transparent); }
+.landing-page .btn-ghost { background: transparent; color: var(--l-ink); border-color: var(--l-border); }
+.landing-page .btn-ghost:hover { border-color: var(--l-navy); color: var(--l-navy); }
+.landing-page .btn-sm { padding: 7px 13px; font-size: 13.5px; }
+
+.landing-page .hero {
+  padding: 76px 0 64px;
+  display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center;
+}
+.landing-page .hero h1 {
+  font-size: clamp(34px, 4.6vw, 52px); line-height: 1.06; font-weight: 600;
+  letter-spacing: -0.01em; margin: 14px 0 20px;
+}
+.landing-page .hero h1 em { font-style: normal; color: var(--l-navy); }
+.landing-page .hero p.lead { font-size: 17.5px; line-height: 1.6; color: var(--l-muted); max-width: 46ch; margin: 0 0 26px; }
+.landing-page .hero .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+.landing-page .hero .trust { font-size: 13px; color: var(--l-muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.landing-page .hero .trust .dot { opacity: 0.5; }
+@media (max-width: 860px) {
+  .landing-page .hero { grid-template-columns: 1fr; padding-top: 40px; }
+}
+
+.landing-page .mock-stage { position: relative; }
+.landing-page .mock-invoice {
+  background: var(--l-paper);
+  border: 1px solid var(--l-border);
+  border-radius: 10px;
+  box-shadow: var(--l-shadow);
+  padding: 26px 26px 22px;
+  font-size: 12px;
+  transform: rotate(0.6deg);
+  animation: landingMockIn 0.7s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes landingMockIn { from { opacity: 0; transform: translateY(14px) rotate(0.6deg); } to { opacity: 1; transform: translateY(0) rotate(0.6deg); } }
+.landing-page .mock-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--l-border); padding-bottom: 14px; margin-bottom: 14px; }
+.landing-page .mock-brand { display: flex; align-items: center; gap: 8px; }
+.landing-page .mock-brand .mark {
+  width: 26px; height: 26px; border-radius: 6px; background: var(--l-navy);
+  display: flex; align-items: center; justify-content: center; color: var(--l-navy-ink); font-weight: 700; font-size: 13px;
+  font-family: "Fraunces", serif;
+}
+.landing-page .mock-brand div b { display: block; font-size: 13.5px; }
+.landing-page .mock-brand div span { display: block; font-size: 10.5px; color: var(--l-muted); }
+.landing-page .mock-doc-id { text-align: right; }
+.landing-page .mock-doc-id .label { font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--l-muted); letter-spacing: 0.04em; }
+.landing-page .mock-doc-id .value { font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; }
+.landing-page .mock-parties { display: flex; justify-content: space-between; font-size: 11px; color: var(--l-muted); margin-bottom: 14px; gap: 16px; }
+.landing-page .mock-parties b { color: var(--l-ink); display: block; font-size: 12px; margin-bottom: 2px; }
+.landing-page .mock-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.landing-page .mock-table th { text-align: left; font-size: 10px; color: var(--l-muted); font-weight: 600; padding: 5px 4px; border-bottom: 1px solid var(--l-mono-line); }
+.landing-page .mock-table td { padding: 6px 4px; border-bottom: 1px solid var(--l-border); font-size: 11.5px; }
+.landing-page .mock-table td.r, .landing-page .mock-table th.r { text-align: right; font-family: "IBM Plex Mono", monospace; }
+.landing-page .mock-totals { margin-left: auto; width: 55%; font-size: 11.5px; }
+.landing-page .mock-totals div { display: flex; justify-content: space-between; padding: 3px 0; }
+.landing-page .mock-totals .grand { font-weight: 700; border-top: 1px solid var(--l-mono-line); margin-top: 4px; padding-top: 6px; font-size: 13px; }
+.landing-page .mock-totals .due { background: var(--l-green-dim); color: var(--l-green); font-weight: 700; padding: 6px 8px; border-radius: 5px; margin-top: 6px; }
+.landing-page .mock-words { font-size: 10.5px; color: var(--l-muted); margin-top: 12px; font-style: italic; }
+.landing-page .mock-badge {
+  position: absolute; top: -14px; right: 18px;
+  background: var(--l-amber); color: #241300; font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+  box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--l-amber) 70%, transparent);
+  transform: rotate(-3deg);
+}
+
+.landing-page .strip { border-top: 1px solid var(--l-border); border-bottom: 1px solid var(--l-border); background: var(--l-surface); }
+.landing-page .strip .wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+.landing-page .strip .cell { padding: 26px 22px; border-left: 1px solid var(--l-border); }
+.landing-page .strip .cell:first-child { border-left: none; }
+.landing-page .strip .cell .eyebrow { display: block; margin-bottom: 6px; }
+.landing-page .strip .cell p { margin: 0; font-size: 14.5px; color: var(--l-muted); line-height: 1.55; }
+.landing-page .strip .cell strong { color: var(--l-ink); }
+@media (max-width: 760px) {
+  .landing-page .strip .wrap { grid-template-columns: 1fr; }
+  .landing-page .strip .cell { border-left: none; border-top: 1px solid var(--l-border); }
+  .landing-page .strip .cell:first-child { border-top: none; }
+}
+
+.landing-page section { padding: 84px 0; }
+.landing-page .section-head { max-width: 640px; margin-bottom: 46px; }
+.landing-page .section-head .eyebrow { display: block; margin-bottom: 10px; }
+.landing-page .section-head h2 { font-size: clamp(26px, 3.2vw, 34px); font-weight: 600; line-height: 1.15; }
+.landing-page .section-head p { color: var(--l-muted); font-size: 15.5px; margin-top: 12px; line-height: 1.6; }
+
+.landing-page .ledger { border-top: 1px solid var(--l-border); }
+.landing-page .ledger-row {
+  display: grid; grid-template-columns: 64px 1fr 1.4fr; gap: 22px;
+  padding: 26px 0; border-bottom: 1px solid var(--l-border);
+  align-items: start;
+}
+.landing-page .ledger-row .li-num {
+  font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--l-muted);
+  padding-top: 4px;
+}
+.landing-page .ledger-row h3 { font-size: 18px; font-weight: 600; font-family: "IBM Plex Sans", sans-serif; margin-bottom: 6px; }
+.landing-page .ledger-row p { margin: 0; color: var(--l-muted); font-size: 14.5px; line-height: 1.6; }
+@media (max-width: 700px) {
+  .landing-page .ledger-row { grid-template-columns: 32px 1fr; }
+  .landing-page .ledger-row > p { grid-column: 2; }
+}
+
+.landing-page .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.landing-page .compare .col { border: 1px solid var(--l-border); border-radius: 10px; overflow: hidden; background: var(--l-surface); }
+.landing-page .compare .col-head { padding: 16px 20px; font-weight: 600; font-size: 15px; border-bottom: 1px solid var(--l-border); }
+.landing-page .compare .col.you .col-head { background: var(--l-navy-dim); color: var(--l-navy); }
+.landing-page .compare .col.them .col-head { color: var(--l-muted); }
+.landing-page .compare ul { list-style: none; margin: 0; padding: 6px 0; }
+.landing-page .compare li { padding: 12px 20px; font-size: 14px; border-bottom: 1px solid var(--l-border); display: flex; gap: 10px; }
+.landing-page .compare li:last-child { border-bottom: none; }
+.landing-page .compare .col.you li::before { content: "✓"; color: var(--l-green); font-weight: 700; }
+.landing-page .compare .col.them li::before { content: "–"; color: var(--l-muted); }
+@media (max-width: 700px) { .landing-page .compare { grid-template-columns: 1fr; } }
+
+.landing-page .cta-band { background: var(--l-navy); color: var(--l-navy-ink); border-radius: 16px; padding: 56px 48px; display: flex; justify-content: space-between; align-items: center; gap: 32px; flex-wrap: wrap; }
+.landing-page .cta-band h2 { color: var(--l-navy-ink); font-size: clamp(24px, 3vw, 30px); }
+.landing-page .cta-band p { margin: 10px 0 0; color: color-mix(in srgb, var(--l-navy-ink) 75%, transparent); font-size: 15px; max-width: 42ch; }
+.landing-page .cta-band .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.landing-page .cta-band .btn-primary { background: var(--l-navy-ink); color: var(--l-navy); }
+.landing-page .cta-band .btn-ghost { border-color: color-mix(in srgb, var(--l-navy-ink) 40%, transparent); color: var(--l-navy-ink); }
+.landing-page .cta-band .btn-ghost:hover { border-color: var(--l-navy-ink); color: var(--l-navy-ink); }
+
+.landing-page footer { border-top: 1px solid var(--l-border); padding: 40px 0 60px; }
+.landing-page footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.landing-page footer .brand { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--l-muted); }
+.landing-page footer .brand img { height: 20px; }
+.landing-page footer .links { display: flex; gap: 20px; font-size: 13.5px; }
+.landing-page footer .links a { text-decoration: none; color: var(--l-muted); }
+.landing-page footer .links a:hover { color: var(--l-ink); }

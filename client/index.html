@@ -10,7 +10,12 @@
     <title>BillItUp — Invoicing for Corporates &amp; Agencies</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Plus Jakarta Sans is the app shell's typeface (Login, Dashboard, every
+         page inside the product). Fraunces/IBM Plex Sans/IBM Plex Mono are
+         only used by the public landing page's own distinct marketing look
+         (client/src/pages/Landing.jsx) — combined into this one request so
+         there's still just one font stylesheet fetch either way. -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>

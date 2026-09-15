@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import TermsAndPrivacy from "./pages/TermsAndPrivacy";
+import Landing from "./pages/Landing";
 import AddFirm from "./pages/AddFirm";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
@@ -43,6 +44,21 @@ function RequireAuth({ children }) {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
   return children;
+}
+
+// "/" used to always require login and bounce a logged-out visitor straight
+// to /login — fine while BillItUp was only ever opened by someone who
+// already had an account, but billitup.in is a real public URL now. A
+// logged-out visitor gets the marketing page; a logged-in user still lands
+// on their Dashboard exactly as before (2026-09-15).
+function Home() {
+  const user = getUser();
+  if (!user) return <Landing />;
+  return (
+    <Shell>
+      <Dashboard />
+    </Shell>
+  );
 }
 
 const NAV_ITEMS = [
@@ -186,7 +202,7 @@ export default function App() {
           for flipping a business between free/premium by hand. */}
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<AdminPanel />} />
-      <Route path="/" element={<RequireAuth><Shell><Dashboard /></Shell></RequireAuth>} />
+      <Route path="/" element={<Home />} />
       <Route path="/customers" element={<RequireAuth><Shell><Customers /></Shell></RequireAuth>} />
       <Route path="/items" element={<RequireAuth><Shell><Items /></Shell></RequireAuth>} />
       <Route path="/invoices/new" element={<RequireAuth><Shell><NewInvoice /></Shell></RequireAuth>} />
