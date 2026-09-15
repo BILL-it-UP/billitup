@@ -251,3 +251,17 @@ export function IconCheck({ size = 18 }) {
     </svg>
   );
 }
+
+// Used on the "something went wrong" crash screen (see ErrorBoundary.jsx) —
+// a plain warning triangle rather than anything alarming, since that screen's
+// whole job is to look like a normal, designed part of the app rather than a
+// browser-level error page (2026-09-15).
+export function IconAlert({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M12 4.5 21 19.5H3Z" strokeLinejoin="round" />
+      <path d="M12 10v4" />
+      <path d="M12 17.2v.1" />
+    </svg>
+  );
+}

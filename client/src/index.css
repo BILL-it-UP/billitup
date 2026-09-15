@@ -718,6 +718,12 @@ textarea { resize: vertical; }
 .simple-auth-links a { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 13px; }
 .simple-auth-links a:hover { text-decoration: underline; }
 
+/* ---- Crash screen (ErrorBoundary.jsx, 2026-09-15) ---- Reuses the auth-page
+   card so a render error still looks like a normal, designed part of the
+   app rather than a browser error page or a blank screen. */
+.crash-icon-badge { color: var(--accent-amber); background: #fdf1e6; }
+.crash-reload-btn { display: block; width: 100%; text-align: center; margin-top: 4px; }
+
 /* ---- Terms of Service / Privacy Policy (2026-09-15) ---- A public, no-login
    reading page — same navy/green brand as the auth screens, but a plain
    readable article layout instead of a card, since the content here is
@@ -781,8 +787,23 @@ textarea { resize: vertical; }
 .admin-table-card {
   background: white; border: 1px solid var(--border); border-radius: 12px;
   padding: 20px 24px; box-shadow: 0 1px 2px rgba(28, 31, 38, 0.04);
+  overflow-x: auto;
 }
 .admin-table-card > *:last-child { margin-bottom: 0; }
+
+/* The businesses table grew from 7 to 11 columns (2026-09-15, contact info,
+   customer count and invoiced total, plus a details toggle) — the card
+   above scrolls sideways on narrow screens rather than squeezing every
+   column unreadably thin. */
+.admin-contact-cell { font-size: 12.5px; line-height: 1.5; white-space: nowrap; }
+.admin-detail-row td { background: var(--bg); padding: 0; }
+.admin-detail-panel { display: flex; gap: 32px; flex-wrap: wrap; padding: 16px 18px; }
+.admin-detail-facts { display: flex; flex-direction: column; gap: 8px; min-width: 160px; }
+.admin-detail-facts > div { display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+.admin-detail-users { flex: 1; min-width: 260px; }
+.admin-detail-users > .muted { display: block; margin-bottom: 8px; }
+.admin-detail-users-table { background: white; border-radius: 8px; overflow: hidden; }
+.admin-copy-btn { align-self: flex-start; margin-top: 4px; font-size: 12.5px; padding: 6px 12px; }
 
 .sortable-th { cursor: pointer; user-select: none; white-space: nowrap; }
 .sortable-th:hover { color: var(--ink); }
@@ -791,6 +812,19 @@ textarea { resize: vertical; }
 
 .badge-premium { background: #dcfce7; color: #166534; }
 .badge-free { background: #eee; color: #555; }
+
+/* Colour-coded issue flags on the Businesses table (2026-09-15) — Naveen
+   asked that a problem business be easy to spot rather than something he
+   has to read every row to notice. Amber for "worth a look" (no contact on
+   file, gone quiet), red for the one that's actively misleading (a cloud
+   backup that looks connected but is failing to upload). */
+.admin-row-warn { background: #fdf8ef; }
+.admin-row-warn:hover { background: #fbf1de; }
+.admin-row-danger { background: #fdf1f0; }
+.admin-row-danger:hover { background: #fbe4e2; }
+.badge-attention { background: #fdf1e6; color: var(--accent-amber); font-weight: 600; }
+.admin-attention-text { color: var(--accent-amber); font-weight: 600; }
+.admin-section-badge { margin-left: 10px; vertical-align: middle; font-size: 12px; }
 
 /* ---- Landing page (2026-09-15) ----
    The public marketing page at "/" for a logged-out visitor (logged-in

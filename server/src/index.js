@@ -23,6 +23,23 @@ import suggestionsRouter from "./routes/suggestions.js";
 import cloudBackupRouter from "./routes/cloudBackup.js";
 import { startBackupSchedule } from "./lib/backup.js";
 
+// Last-resort crash guards. Without these, an error thrown somewhere that
+// isn't a normal Express request (a timer callback like the two scheduled
+// jobs below, a rejected promise nobody awaited) crashes the whole process
+// silently — Docker's "restart: unless-stopped" brings it back, but there's
+// no record of why and no way to tell a clean crash from a hung process.
+// Logging here at least leaves a trace in `docker compose logs`, and exiting
+// deliberately (rather than leaving Node in a possibly-broken state) means
+// every restart is a clean one (2026-09-15).
+process.on("uncaughtException", (err) => {
+  console.error("FATAL uncaughtException — restarting:", err);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("FATAL unhandledRejection — restarting:", reason);
+  process.exit(1);
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -67,9 +84,27 @@ app.listen(PORT, () => {
 // server was off — normal for a self-hosted install that isn't always
 // running) and then every hour. Cheap to run often since a profile only
 // generates once its next_invoice_date actually arrives.
-runDueRecurringInvoices();
-setInterval(runDueRecurringInvoices, 60 * 60 * 1000);
+//
+// Wrapped in try/catch (2026-09-15): this runs on a timer, outside any
+// request, so an error here used to crash the whole server for every
+// business over one bad recurring profile. Now it's logged and skipped —
+// the next hourly run tries again.
+function runDueRecurringInvoicesSafely() {
+  try {
+    runDueRecurringInvoices();
+  } catch (err) {
+    console.error("Recurring invoices run failed:", err);
+  }
+}
+runDueRecurringInvoicesSafely();
+setInterval(runDueRecurringInvoicesSafely, 60 * 60 * 1000);
 
 // Automated backups — see lib/backup.js. Runs once shortly after startup,
-// then daily.
-startBackupSchedule();
+// then daily. startBackupSchedule sets up its own timer internally, so it's
+// wrapped here only to stop a startup-time failure from taking the server
+// down before it even starts listening.
+try {
+  startBackupSchedule();
+} catch (err) {
+  console.error("Backup schedule failed to start:", err);
+}

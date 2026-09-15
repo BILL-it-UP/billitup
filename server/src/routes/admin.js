@@ -26,22 +26,85 @@ function checkAdminSecret(req, res) {
   return true;
 }
 
-// Lists every business with its id and current plan, plus enough activity
-// context (how many users/invoices it has, and when someone last actually
-// logged in) that Naveen can tell a real, active install apart from a dead
-// signup without opening the database directly.
+// SQLite stores these as "datetime('now')" strings — space-separated, UTC,
+// no timezone marker. Same parsing rule the client's formatDateTime uses, so
+// "how long ago" comes out the same everywhere.
+function parseDbDate(value) {
+  if (!value) return null;
+  const iso = value.includes("T") ? value : value.replace(" ", "T") + "Z";
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+// Naveen asked for issues to be "easy to point out" rather than something he
+// has to read every row to notice (2026-09-15). Computed once here, server
+// side, so the businesses list and any future admin view agree on exactly
+// what counts as "needs attention" instead of each screen guessing its own
+// rule. Three reasons for now: no way to reach the business at all, gone
+// quiet (never logged in past their first few days, or not in 30+), and a
+// connected cloud backup that's actually failing (worse than not connecting
+// one at all, since it looks safe but isn't).
+function attentionReasons(b) {
+  const reasons = [];
+  if (!b.owner_email && !b.owner_phone) reasons.push("no_contact");
+  const lastLoginMs = parseDbDate(b.last_login_at);
+  const createdMs = parseDbDate(b.created_at);
+  const now = Date.now();
+  const wentQuiet = lastLoginMs == null
+    ? createdMs != null && now - createdMs > THREE_DAYS_MS
+    : now - lastLoginMs > THIRTY_DAYS_MS;
+  if (wentQuiet) reasons.push("inactive");
+  if (b.cloud_backup_status === "error") reasons.push("backup_error");
+  return reasons;
+}
+
+// Lists every business with its id and current plan, plus enough context —
+// contact details, activity, and how much real invoicing they've actually
+// done — that Naveen can tell a real, active business apart from a dead
+// signup, and reach out to one, without opening the database directly.
+// Expanded 2026-09-15 (previously just id/name/plan/created_at/user_count/
+// invoice_count/last_login_at — Naveen said he had "very few details" about
+// who's using the software): the contact fields already exist on every
+// business (set in Settings > Business Profile), they just weren't surfaced
+// here before. owner_email/owner_phone fall back to null for a business
+// whose owner never filled in Business Profile, same as before.
 router.get("/businesses", (req, res) => {
   if (!checkAdminSecret(req, res)) return;
   const rows = db
     .prepare(
       `SELECT b.id, b.name, b.plan, b.created_at,
+              b.email AS owner_email, b.phone AS owner_phone, b.gstin, b.state,
               (SELECT COUNT(*) FROM users u WHERE u.business_id = b.id) AS user_count,
+              (SELECT COUNT(*) FROM customers c WHERE c.business_id = b.id) AS customer_count,
               (SELECT COUNT(*) FROM invoices i WHERE i.business_id = b.id) AS invoice_count,
-              (SELECT MAX(le.logged_in_at) FROM login_events le WHERE le.business_id = b.id) AS last_login_at
+              (SELECT COALESCE(SUM(i.total), 0) FROM invoices i WHERE i.business_id = b.id) AS invoiced_total,
+              (SELECT MAX(le.logged_in_at) FROM login_events le WHERE le.business_id = b.id) AS last_login_at,
+              CASE
+                WHEN EXISTS(SELECT 1 FROM cloud_backup_connections cbc WHERE cbc.business_id = b.id AND cbc.last_upload_status = 'error') THEN 'error'
+                WHEN EXISTS(SELECT 1 FROM cloud_backup_connections cbc WHERE cbc.business_id = b.id) THEN 'connected'
+                ELSE 'none'
+              END AS cloud_backup_status
        FROM businesses b
        ORDER BY b.created_at DESC`
     )
     .all();
+  res.json(rows.map((b) => ({ ...b, attention: attentionReasons(b) })));
+});
+
+// One business's own users — who's actually logging in under that business,
+// not just how many. Naveen asked for more detail than the aggregate
+// user_count on the businesses list gives; this is the drill-down.
+router.get("/businesses/:id/users", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const rows = db
+    .prepare(
+      `SELECT id, name, email, role, last_login_at, created_at
+       FROM users WHERE business_id = ? ORDER BY created_at ASC`
+    )
+    .all(req.params.id);
   res.json(rows);
 });
 
