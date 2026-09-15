@@ -4,9 +4,10 @@
   --border: #e2e5ea;
   --accent: #1a7f5a;
   --accent-ink: #ffffff;
+  --accent-amber: #d97a1f;
   --bg: #f7f8fa;
   color-scheme: light;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -458,3 +459,90 @@ textarea { resize: vertical; }
 .public-invoice-page { background: var(--bg); min-height: 100vh; padding: 24px 0 60px; }
 .public-invoice-toolbar { max-width: 210mm; margin: 0 auto 16px; padding: 0 8px; display: flex; justify-content: space-between; align-items: center; }
 .public-invoice-toolbar img { height: 24px; }
+
+/* ---- Login page (split-screen redesign, 2026-09-15) ----
+   First page in a page-by-page visual pass over the app: keep the existing
+   navy/green/amber brand and layout conventions everywhere else, just raise
+   the polish here. Scoped to its own login-* classes rather than touching
+   the shared .auth-page/.auth-card rules above, so Signup/ForgotPassword/
+   ResetPassword/AdminLogin (which still use those) are unaffected until
+   their own turn in this pass. */
+.login-shell { min-height: 100vh; display: flex; }
+
+.login-brand-panel {
+  flex: 0 0 44%;
+  max-width: 560px;
+  background: radial-gradient(circle at 18% 12%, var(--sidebar-bg-raised) 0%, var(--sidebar-bg) 55%, #071f3c 100%);
+  color: #fff;
+  padding: 48px 48px 40px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.login-brand-mark { display: flex; align-items: center; gap: 12px; margin-bottom: 64px; }
+.login-brand-mark img { height: 34px; width: 34px; border-radius: 8px; background: white; padding: 4px; box-sizing: border-box; }
+.login-brand-mark span { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+
+.login-brand-tagline {
+  font-size: 27px; font-weight: 700; line-height: 1.4; max-width: 380px;
+  margin: 0 0 44px; letter-spacing: -0.01em;
+}
+.login-brand-tagline em { color: #7bd9a5; font-style: normal; }
+
+.login-feature-list { display: flex; flex-direction: column; gap: 22px; margin-top: auto; margin-bottom: 44px; }
+.login-feature-item { display: flex; align-items: flex-start; gap: 14px; }
+.login-feature-icon {
+  flex: none; width: 34px; height: 34px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.1); color: #7bd9a5;
+  display: flex; align-items: center; justify-content: center;
+}
+.login-feature-text strong { display: block; font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #fff; }
+.login-feature-text span { display: block; font-size: 13px; color: var(--sidebar-ink); line-height: 1.4; }
+
+.login-brand-footer {
+  font-size: 12px; color: var(--sidebar-ink); display: flex; align-items: center; gap: 4px;
+  padding-top: 20px; border-top: 1px solid var(--sidebar-border);
+}
+.login-brand-footer strong { color: #fff; font-weight: 600; }
+
+.login-form-panel {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 40px 24px; background: white;
+}
+
+.login-form-card { width: 100%; max-width: 380px; }
+.login-form-card h1 { font-size: 25px; margin: 0 0 6px; letter-spacing: -0.01em; }
+.login-subtitle { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+
+.login-field { margin-bottom: 18px; }
+.login-field label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.login-field input {
+  width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid var(--border);
+  border-radius: 8px; font: inherit; font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.login-field input:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26, 127, 90, 0.14);
+}
+
+.login-submit {
+  width: 100%; padding: 12px; font-size: 14px; font-weight: 600; border-radius: 8px;
+  margin-top: 4px; margin-bottom: 22px;
+}
+
+.login-links { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.login-links a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.login-links a:hover { text-decoration: underline; }
+.login-signup-note { color: var(--muted); }
+.login-signup-note a { color: var(--accent-amber); }
+
+.login-error-banner {
+  background: #fdecea; border: 1px solid #f3c6c1; color: #8a2b23;
+  padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;
+}
+
+@media (max-width: 860px) {
+  .login-brand-panel { display: none; }
+  .login-form-panel { padding: 32px 20px; }
+}
