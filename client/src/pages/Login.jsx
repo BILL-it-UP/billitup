@@ -38,8 +38,7 @@ export default function Login() {
     <div className="login-shell">
       <div className="login-brand-panel">
         <div className="login-brand-mark">
-          <img src="/logo-icon-192.png" alt="" />
-          <span>BillItUp</span>
+          <img src="/logo-header.png" alt="BillItUp" />
         </div>
 
         <h2 className="login-brand-tagline">
@@ -71,7 +70,7 @@ export default function Login() {
         </div>
 
         <div className="login-brand-footer">
-          <strong>Made with love in India</strong>&nbsp;· free &amp; open source
+          <strong>Made with <span className="login-heart">&hearts;</span> in India</strong>&nbsp;· free &amp; open source
         </div>
       </div>
 

@@ -480,9 +480,14 @@ textarea { resize: vertical; }
   box-sizing: border-box;
 }
 
-.login-brand-mark { display: flex; align-items: center; gap: 12px; margin-bottom: 64px; }
-.login-brand-mark img { height: 34px; width: 34px; border-radius: 8px; background: white; padding: 4px; box-sizing: border-box; }
-.login-brand-mark span { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+/* The full-color logo doesn't read on a dark background (same reason the
+   sidebar uses an icon-only mark + white text instead), so it sits on its
+   own small white plate here rather than directly on the navy panel. */
+.login-brand-mark {
+  display: inline-flex; align-self: flex-start; align-items: center;
+  background: #fff; border-radius: 10px; padding: 10px 18px; margin-bottom: 64px;
+}
+.login-brand-mark img { height: 28px; display: block; }
 
 .login-brand-tagline {
   font-size: 27px; font-weight: 700; line-height: 1.4; max-width: 380px;
@@ -505,6 +510,7 @@ textarea { resize: vertical; }
   padding-top: 20px; border-top: 1px solid var(--sidebar-border);
 }
 .login-brand-footer strong { color: #fff; font-weight: 600; }
+.login-heart { color: var(--accent-amber); font-style: normal; }
 
 .login-form-panel {
   flex: 1; display: flex; align-items: center; justify-content: center;

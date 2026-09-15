@@ -76,6 +76,13 @@ router.post("/", (req, res) => {
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
+  // A "walk-in / no customer" invoice made no sense for BillItUp's actual
+  // users (services businesses billing under GST) — every invoice needs a
+  // real customer on it, enforced here too, not just by removing the option
+  // from the New Invoice form (2026-09-15).
+  if (!customer_id) {
+    return res.status(400).json({ error: "A customer is required" });
+  }
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   const { invoiceNumber, commit: commitInvoiceNumber } = nextInvoiceNumber(business);
@@ -147,6 +154,9 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
+  }
+  if (!customer_id) {
+    return res.status(400).json({ error: "A customer is required" });
   }
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);

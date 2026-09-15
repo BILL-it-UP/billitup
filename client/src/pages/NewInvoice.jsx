@@ -4,6 +4,7 @@ import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
 import ItemPicker from "../components/ItemPicker";
+import CustomerPicker from "../components/CustomerPicker";
 import TaxRateInput from "../components/TaxRateInput";
 import { GST_TREATMENTS } from "../lib/gst";
 
@@ -17,6 +18,7 @@ export default function NewInvoice() {
   const [business, setBusiness] = useState(null);
   const isPremium = business?.plan === "premium";
   const [customerId, setCustomerId] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [reference, setReference] = useState("");
@@ -49,6 +51,7 @@ export default function NewInvoice() {
     setLoadingInvoice(true);
     api.getInvoice(id).then((inv) => {
       setCustomerId(inv.customer_id || "");
+      setCustomerName(inv.customer?.name || "");
       setInvoiceDate(inv.invoice_date || "");
       setDueDate(inv.due_date || "");
       setReference(inv.reference || "");
@@ -92,10 +95,17 @@ export default function NewInvoice() {
     );
   }, [items]);
 
-  const pickCustomer = (id) => {
-    setCustomerId(id);
-    const customer = customers.find((c) => String(c.id) === String(id));
+  // CustomerPicker hands back the full customer object (or null when
+  // cleared) rather than just an id, same as ItemPicker does for items.
+  const pickCustomer = (customer) => {
+    setCustomerId(customer?.id || "");
+    setCustomerName(customer?.name || "");
     setGstin(customer?.gstin || "");
+  };
+
+  const handleCustomerCreated = (customer) => {
+    setCustomers((prev) => [...prev, customer].sort((a, b) => a.name.localeCompare(b.name)));
+    pickCustomer(customer);
   };
 
   const updateLine = (index, patch) => {
@@ -141,6 +151,13 @@ export default function NewInvoice() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    // No more "walk-in / no customer" invoices — every BillItUp invoice is a
+    // real GST document billed to someone, so a customer is required before
+    // this ever reaches the server (which enforces the same rule).
+    if (!customerId) {
+      setError("Please select or add a customer before creating this invoice.");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -190,10 +207,13 @@ export default function NewInvoice() {
       <form onSubmit={handleSubmit}>
         <div className="form-row">
           <label className="block">Customer
-            <select value={customerId} onChange={(e) => pickCustomer(e.target.value)}>
-              <option value="">Walk-in / no customer</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <CustomerPicker
+              customers={customers}
+              customerId={customerId}
+              customerName={customerName}
+              onSelect={pickCustomer}
+              onCreated={handleCustomerCreated}
+            />
           </label>
           <label className="block">Invoice date
             <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
