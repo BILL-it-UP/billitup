@@ -15,36 +15,35 @@ import { Link } from "react-router-dom";
 // it self-hosted, with one hosted instance (billitup.in) that Naveen
 // personally operates.
 //
-// THIS IS STILL A DRAFT, NOT A FINISHED LEGAL DOCUMENT. Three things need
-// Naveen's own input before this should be treated as final:
+// THIS WAS A DRAFT AS OF 2026-09-15/16. The three open items from the first
+// draft were resolved by Naveen on 2026-09-16:
 //
-// 1. WHO IS "WE". Right now this describes "the operator of billitup.in"
-//    without naming a person or company, since that's a real decision
-//    (operating this as an individual versus through a registered firm or
-//    LLP changes both what goes in this document and where personal
-//    liability sits) that shouldn't be guessed at. Naveen should decide
-//    this and the OPERATOR_NAME / OPERATOR_ADDRESS constants below should
-//    be filled in to match. Worth a five minute conversation with a CA or
-//    another lawyer if he hasn't already settled this for the business
-//    side of billitup.in specifically.
-// 2. GRIEVANCE OFFICER DETAILS. Indian law (both the older IT Rules and the
-//    DPDP Rules 2025) expects a named contact for privacy complaints, not
-//    just a generic support inbox. GRIEVANCE_OFFICER_NAME below is a
-//    placeholder, fill in a real name and, ideally, a postal address.
-// 3. SERVER LOCATION. The Privacy Policy states data is hosted in India;
-//    confirm that's actually true for whichever Oracle Cloud region the
-//    billitup.in VM runs in, and correct it if not (this changes whether a
-//    cross-border transfer disclosure is needed).
+// 1. WHO IS "WE". There's no company or LLP behind billitup.in, Naveen built
+//    and runs it himself with no outside funding. He's chosen to describe
+//    the operator as an individual trading under the BillItUp name, so
+//    OPERATOR_NAME below reads "Naveen T, trading as BillItUp." This is an
+//    honest description of the current setup, and can be swapped for a
+//    registered entity's name later if Naveen sets one up (an OPC or LLP,
+//    for instance), at which point this constant and the governing law/
+//    liability sections should be reviewed again with that entity in mind.
+// 2. GRIEVANCE OFFICER. Naveen is the named Grievance Officer, reachable at
+//    the support email below. No separate postal address was given, an
+//    email contact satisfies the DPDP Rules requirement on its own.
+// 3. SERVER LOCATION. Confirmed hosted in India (Oracle Cloud's Mumbai or
+//    Hyderabad region), so the Privacy Policy states data is stored in
+//    India without needing a cross-border transfer disclosure. If the
+//    hosting ever moves outside India, this section needs updating.
 //
 // A quick read-through by a lawyer familiar with Indian data protection and
-// contract law before this goes live for real is still worth doing, DPDP
-// Rules enforcement is still being phased in and a couple of provisions
-// (Significant Data Fiduciary rules, cross-border transfer restrictions)
-// don't have final detail yet as of when this was written.
+// contract law is still worth doing before relying on this as a finished
+// legal document, DPDP Rules enforcement is still being phased in and a
+// couple of provisions (Significant Data Fiduciary rules, cross-border
+// transfer restrictions) don't have final detail yet as of when this was
+// written.
 const UPDATED = "16 September 2026";
 const CONTACT_EMAIL = "support@billitup.in";
-const GRIEVANCE_OFFICER_NAME = "[Grievance Officer name to be filled in]";
-const OPERATOR_NAME = "the operator of billitup.in";
+const GRIEVANCE_OFFICER_NAME = "Naveen T";
+const OPERATOR_NAME = "Naveen T, trading as BillItUp";
 const GOVERNING_LAW_CITY = "Chennai, Tamil Nadu";
 
 export default function TermsAndPrivacy() {
@@ -313,10 +312,9 @@ export default function TermsAndPrivacy() {
 
         <h2 id="storage">Where It's Stored</h2>
         <p>
-          billitup.in runs on a cloud server. [Confirm and state the actual region here, for example: data
-          is stored on servers located in India.] If that ever changes to a server outside India, we'll
-          update this section and, if the law requires it at that point, seek any consent or meet any
-          conditions that apply to that transfer.
+          billitup.in runs on a cloud server located in India. If that ever changes to a server outside
+          India, we'll update this section and, if the law requires it at that point, seek any consent or
+          meet any conditions that apply to that transfer.
         </p>
 
         <h2 id="retention">How Long We Keep It</h2>
