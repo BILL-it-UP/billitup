@@ -346,7 +346,15 @@ export default function AdminPanel() {
                       : "Click the name for the full picture";
                     return (
                       <tr key={b.id} className={rowClass} title={rowTitle}>
-                        <td><Link to={`/admin/businesses/${b.id}`}>{b.name}</Link></td>
+                        <td>
+                          <Link to={`/admin/businesses/${b.id}`}>{b.name}</Link>
+                          {b.owner_login_email && <div className="admin-owner-login">{b.owner_login_email}</div>}
+                          {b.sibling_firms?.length > 0 && (
+                            <div className="admin-sibling-firms">
+                              + {b.sibling_firms.length} more firm{b.sibling_firms.length > 1 ? "s" : ""} under this login: {b.sibling_firms.map((f) => f.name).join(", ")}
+                            </div>
+                          )}
+                        </td>
                         <td><span className={`badge ${b.plan === "premium" ? "badge-premium" : "badge-free"}`}>{b.plan === "premium" ? "Premium" : "Free"}</span></td>
                         <td className="admin-contact-cell">
                           {b.owner_email ? <div><a href={`mailto:${b.owner_email}`}>{b.owner_email}</a></div> : null}

@@ -210,6 +210,22 @@ export default function BusinessHealth() {
             <p className="muted">
               {[business.owner_email, business.owner_phone, business.state, business.gstin].filter(Boolean).join(" · ") || "No contact details on file"}
             </p>
+            {business.owner_login_email && (
+              <p className="muted">
+                Owner login: <a href={`mailto:${business.owner_login_email}`}>{business.owner_login_email}</a>
+                {business.sibling_firms?.length > 0 && (
+                  <>
+                    {" "}· also runs{" "}
+                    {business.sibling_firms.map((f, i) => (
+                      <span key={f.id}>
+                        {i > 0 && ", "}
+                        <Link to={`/admin/businesses/${f.id}`}>{f.name}</Link>
+                      </span>
+                    ))}
+                  </>
+                )}
+              </p>
+            )}
           </div>
           <span className={`badge ${business.plan === "premium" ? "badge-premium" : "badge-free"}`}>{business.plan === "premium" ? "Premium" : "Free"}</span>
         </div>

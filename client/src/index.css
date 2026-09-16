@@ -815,6 +815,14 @@ textarea { resize: vertical; }
    above scrolls sideways on narrow screens rather than squeezing every
    column unreadably thin. */
 .admin-contact-cell { font-size: 12.5px; line-height: 1.5; white-space: nowrap; }
+
+/* Which login actually owns a business, and — when the same login runs more
+   than one firm — which other firm(s), shown right under the name so a
+   second firm added via "Add Another Firm" never reads as an unrelated,
+   no-contact free signup (2026-09-16). */
+.admin-owner-login { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.admin-sibling-firms { font-size: 11.5px; color: var(--accent-amber); font-weight: 600; margin-top: 1px; }
+
 .admin-detail-row td { background: var(--bg); padding: 0; }
 .admin-detail-panel { display: flex; gap: 32px; flex-wrap: wrap; padding: 16px 18px; }
 .admin-detail-facts { display: flex; flex-direction: column; gap: 8px; min-width: 160px; }

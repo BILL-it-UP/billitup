@@ -209,7 +209,15 @@ router.post("/firms", requireAuth, requireRole("owner"), (req, res) => {
     });
   }
 
-  const businessResult = db.prepare("INSERT INTO businesses (name, gstin) VALUES (?, ?)").run(businessName, gstin || null);
+  // This login already has to own a premium firm to get past the check
+  // above, so the new firm is part of that same paid account, not a fresh
+  // free signup. Leaving it at the "plan" column's own default ('free')
+  // used to mean a business's second firm showed up in Master Admin looking
+  // exactly like an unrelated, no-contact free business — the opposite of
+  // the truth, since it only exists because this login is already paying
+  // (Naveen flagged this as confusing 2026-09-16; see routes/admin.js for
+  // the other half of that fix — showing which login a firm belongs to).
+  const businessResult = db.prepare("INSERT INTO businesses (name, gstin, plan) VALUES (?, ?, 'premium')").run(businessName, gstin || null);
   const businessId = businessResult.lastInsertRowid;
   db.prepare("INSERT INTO memberships (user_id, business_id, role) VALUES (?, ?, 'owner')").run(req.auth.userId, businessId);
 

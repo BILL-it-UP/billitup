@@ -90,12 +90,36 @@ router.get("/businesses", (req, res) => {
                 ELSE 'none'
               END AS cloud_backup_status,
               (SELECT COUNT(*) FROM error_log e WHERE e.business_id = b.id AND e.status = 'open') AS open_error_count,
-              (SELECT COUNT(*) FROM support_tickets t WHERE t.business_id = b.id AND t.status != 'resolved') AS open_ticket_count
+              (SELECT COUNT(*) FROM support_tickets t WHERE t.business_id = b.id AND t.status != 'resolved') AS open_ticket_count,
+              (SELECT m.user_id FROM memberships m WHERE m.business_id = b.id AND m.role = 'owner' ORDER BY m.created_at LIMIT 1) AS owner_user_id,
+              (SELECT u.email FROM memberships m JOIN users u ON u.id = m.user_id
+                 WHERE m.business_id = b.id AND m.role = 'owner' ORDER BY m.created_at LIMIT 1) AS owner_login_email
        FROM businesses b
        ORDER BY b.created_at DESC`
     )
     .all();
-  res.json(rows.map((b) => ({ ...b, attention: attentionReasons(b) })));
+
+  // A business created via "Add Another Firm" (POST /api/firms in
+  // routes/auth.js) is a genuinely separate row in this table, with its own
+  // — usually blank — contact details, so on its own it looks exactly like a
+  // brand new, unrelated free signup. Naveen flagged this 2026-09-16: he had
+  // no way to tell that a "free", no-contact business was actually someone's
+  // second firm. Group firms that share the same owner login here, once,
+  // rather than each screen guessing it separately.
+  const firmsByOwner = new Map();
+  for (const b of rows) {
+    if (!b.owner_user_id) continue;
+    if (!firmsByOwner.has(b.owner_user_id)) firmsByOwner.set(b.owner_user_id, []);
+    firmsByOwner.get(b.owner_user_id).push({ id: b.id, name: b.name });
+  }
+
+  res.json(
+    rows.map((b) => ({
+      ...b,
+      attention: attentionReasons(b),
+      sibling_firms: b.owner_user_id ? firmsByOwner.get(b.owner_user_id).filter((f) => f.id !== b.id) : [],
+    }))
+  );
 });
 
 // One business's full profile for the Business Health page — includes the
@@ -127,7 +151,32 @@ router.get("/businesses/:id", (req, res) => {
     )
     .get(req.params.id);
   if (!business) return res.status(404).json({ error: "Not found" });
-  res.json({ ...business, attention: attentionReasons(business) });
+
+  // Same "whose firm is this" context as the businesses list above (see that
+  // route for why) — surfaced here too since this page is meant to be the
+  // whole picture for one business, not just half of it.
+  const ownerMembership = db
+    .prepare(
+      `SELECT m.user_id, u.email AS owner_login_email
+       FROM memberships m JOIN users u ON u.id = m.user_id
+       WHERE m.business_id = ? AND m.role = 'owner' ORDER BY m.created_at LIMIT 1`
+    )
+    .get(business.id);
+  const siblingFirms = ownerMembership
+    ? db
+        .prepare(
+          `SELECT b2.id, b2.name FROM memberships m2 JOIN businesses b2 ON b2.id = m2.business_id
+           WHERE m2.user_id = ? AND m2.role = 'owner' AND b2.id != ?`
+        )
+        .all(ownerMembership.user_id, business.id)
+    : [];
+
+  res.json({
+    ...business,
+    attention: attentionReasons(business),
+    owner_login_email: ownerMembership ? ownerMembership.owner_login_email : null,
+    sibling_firms: siblingFirms,
+  });
 });
 
 // One business's own users — who's actually logging in under that business,
