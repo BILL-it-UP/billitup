@@ -7,17 +7,41 @@ import { useDateFormat } from "../lib/useDateFormat";
 import TaxRateInput from "../components/TaxRateInput";
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Section 43B(h): an MSME vendor with no written agreement must be paid
+// within 15 days, or 45 days if there is one — miss that and interest runs
+// at three times the RBI bank rate until it's paid. This is a plain
+// reminder calculation from what's on file, not a filing itself, so it
+// deliberately doesn't compound and just wants a rough number to flag
+// (2026-09-16).
+function msmeInterestInfo(purchase, rbiBankRate) {
+  if (!purchase.vendor_is_msme) return null;
+  const deadlineDays = purchase.vendor_has_written_agreement ? 45 : 15;
+  const start = new Date(purchase.purchase_date);
+  const deadline = new Date(start.getTime() + deadlineDays * DAY_MS);
+  const end = purchase.paid_date ? new Date(purchase.paid_date) : new Date();
+  if (end <= deadline) return { deadline, overdue: false };
+  const daysOverdue = Math.ceil((end - deadline) / DAY_MS);
+  const rate = Number(rbiBankRate) || 0;
+  const interest = Number(purchase.total) * (3 * rate / 100 / 365) * daysOverdue;
+  return { deadline, overdue: true, daysOverdue, interest };
+}
 
 // A basic purchases/expenses log — bills a business receives from its
 // vendors, logged for its own records and to see how much input tax it has
 // paid (useful when working out GST input tax credit with a tax advisor).
-// Deliberately simple: no approval flow, no linking a purchase to a specific
-// invoice's cost — just a running record. Owner/Admin only.
+// Deliberately simple: no approval flow — just a running record, plus the
+// MSME interest flag above and an optional link to a customer for expenses
+// that are billable back to them. Owner/Admin only.
 export default function Purchases() {
   const [purchases, setPurchases] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [business, setBusiness] = useState(null);
   const [form, setForm] = useState({
     vendor_id: "", purchase_date: todayStr(), bill_number: "", description: "", amount: "", tax_rate: "0", notes: "",
+    paid_date: "", billable_customer_id: "",
   });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -27,6 +51,8 @@ export default function Purchases() {
   useEffect(() => {
     load();
     api.listVendors().then(setVendors);
+    api.listCustomers().then(setCustomers);
+    api.getBusiness().then(setBusiness);
   }, []);
 
   const filteredPurchases = useMemo(() => {
@@ -55,8 +81,11 @@ export default function Purchases() {
     setError("");
     if (!form.amount) { setError("Amount is required"); return; }
     try {
-      await api.createPurchase({ ...form, vendor_id: form.vendor_id || null, amount: Number(form.amount), tax_rate: Number(form.tax_rate) });
-      setForm({ vendor_id: "", purchase_date: todayStr(), bill_number: "", description: "", amount: "", tax_rate: "0", notes: "" });
+      await api.createPurchase({
+        ...form, vendor_id: form.vendor_id || null, amount: Number(form.amount), tax_rate: Number(form.tax_rate),
+        paid_date: form.paid_date || null, billable_customer_id: form.billable_customer_id || null,
+      });
+      setForm({ vendor_id: "", purchase_date: todayStr(), bill_number: "", description: "", amount: "", tax_rate: "0", notes: "", paid_date: "", billable_customer_id: "" });
       load();
     } catch (err) {
       setError(err.message);
@@ -69,12 +98,17 @@ export default function Purchases() {
     load();
   };
 
+  const markPaidToday = async (purchase) => {
+    await api.updatePurchase(purchase.id, { paid_date: todayStr() });
+    load();
+  };
+
   return (
     <div>
       <div className="page-header">
         <h1>Purchases</h1>
         {purchases.length > 0 && (
-          <button type="button" className="link-btn" onClick={() => exportPurchasesToExcel(purchases)}>
+          <button type="button" className="link-btn" onClick={() => exportPurchasesToExcel(purchases, business?.rbi_bank_rate)}>
             Export to Excel
           </button>
         )}
@@ -98,6 +132,19 @@ export default function Purchases() {
         <TaxRateInput value={form.tax_rate} onChange={(v) => setForm({ ...form, tax_rate: v })} />
         <button type="submit">Add purchase</button>
       </form>
+      <div className="inline-form" style={{ marginTop: -8 }}>
+        <label className="block" style={{ maxWidth: 220 }}>
+          Paid on (optional)
+          <input type="date" value={form.paid_date} onChange={(e) => setForm({ ...form, paid_date: e.target.value })} />
+        </label>
+        <label className="block" style={{ maxWidth: 260 }}>
+          Billable to a customer (optional)
+          <select value={form.billable_customer_id} onChange={(e) => setForm({ ...form, billable_customer_id: e.target.value })}>
+            <option value="">Not billable</option>
+            {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+      </div>
       {error && <p className="error">{error}</p>}
 
       {purchases.length > 0 && (
@@ -138,22 +185,36 @@ export default function Purchases() {
           <thead>
             <tr>
               <th>Date</th><th>Vendor</th><th>Bill #</th><th>Description</th>
-              <th>Amount</th><th>Tax</th><th>Total</th><th></th>
+              <th>Amount</th><th>Tax</th><th>Total</th><th>Paid</th><th>Billable To</th><th>MSME Interest</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {filteredPurchases.map((p) => (
-              <tr key={p.id}>
-                <td>{formatDate(p.purchase_date, dateFormat)}</td>
-                <td>{p.vendor_name || "—"}</td>
-                <td>{p.bill_number}</td>
-                <td>{p.description}</td>
-                <td>₹{formatMoney(p.amount)}</td>
-                <td>₹{formatMoney(p.tax_amount)} {p.tax_rate ? `(${p.tax_rate}%)` : ""}</td>
-                <td>₹{formatMoney(p.total)}</td>
-                <td><button type="button" className="link-btn" onClick={() => handleDelete(p.id)}>Delete</button></td>
-              </tr>
-            ))}
+            {filteredPurchases.map((p) => {
+              const msme = msmeInterestInfo(p, business?.rbi_bank_rate);
+              return (
+                <tr key={p.id}>
+                  <td>{formatDate(p.purchase_date, dateFormat)}</td>
+                  <td>{p.vendor_name || "—"}</td>
+                  <td>{p.bill_number}</td>
+                  <td>{p.description}</td>
+                  <td>₹{formatMoney(p.amount)}</td>
+                  <td>₹{formatMoney(p.tax_amount)} {p.tax_rate ? `(${p.tax_rate}%)` : ""}</td>
+                  <td>₹{formatMoney(p.total)}</td>
+                  <td>
+                    {p.paid_date
+                      ? formatDate(p.paid_date, dateFormat)
+                      : <button type="button" className="link-btn" onClick={() => markPaidToday(p)}>Mark Paid Today</button>}
+                  </td>
+                  <td>{p.billable_customer_name ? `${p.billable_customer_name}${p.billed_invoice_id ? " (billed)" : ""}` : "—"}</td>
+                  <td>
+                    {!msme ? "—" : msme.overdue
+                      ? <span className="error">₹{formatMoney(msme.interest)} ({msme.daysOverdue}d past {p.vendor_has_written_agreement ? "45" : "15"}-day deadline)</span>
+                      : <span className="muted">Due by {formatDate(msme.deadline.toISOString().slice(0, 10), dateFormat)}</span>}
+                  </td>
+                  <td><button type="button" className="link-btn" onClick={() => handleDelete(p.id)}>Delete</button></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -161,11 +222,17 @@ export default function Purchases() {
   );
 }
 
-function exportPurchasesToExcel(purchases) {
-  const rows = purchases.map((p) => ({
-    Date: p.purchase_date, Vendor: p.vendor_name || "", "Bill #": p.bill_number || "",
-    Description: p.description || "", Amount: Number(p.amount), "Tax Rate %": Number(p.tax_rate) || 0,
-    "Tax Amount": Number(p.tax_amount), Total: Number(p.total),
-  }));
+function exportPurchasesToExcel(purchases, rbiBankRate) {
+  const rows = purchases.map((p) => {
+    const msme = msmeInterestInfo(p, rbiBankRate);
+    return {
+      Date: p.purchase_date, Vendor: p.vendor_name || "", "Bill #": p.bill_number || "",
+      Description: p.description || "", Amount: Number(p.amount), "Tax Rate %": Number(p.tax_rate) || 0,
+      "Tax Amount": Number(p.tax_amount), Total: Number(p.total),
+      "Paid On": p.paid_date || "", "Billable To": p.billable_customer_name || "",
+      "MSME Vendor": p.vendor_is_msme ? "Yes" : "No",
+      "MSME Interest Due": msme?.overdue ? Number(msme.interest.toFixed(2)) : 0,
+    };
+  });
   exportSheet("purchases.xlsx", "Purchases", rows);
 }

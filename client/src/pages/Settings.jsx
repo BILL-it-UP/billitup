@@ -180,6 +180,38 @@ export default function Settings() {
                 Applies from your next new invoice onward, invoices you've already created keep their existing numbers.
               </p>
             )}
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={!!business.require_invoice_approval}
+                onChange={(e) => setBusiness({ ...business, require_invoice_approval: e.target.checked })}
+              />
+              {" "}Require Owner/Admin approval before a Cashier's invoice can be sent
+            </label>
+            <div className="field-row">
+              <label>RBI bank rate (%, for the MSME 45 day interest calculation)
+                <input
+                  type="number" step="0.01" min="0"
+                  value={business.rbi_bank_rate ?? ""}
+                  onChange={(e) => setBusiness({ ...business, rbi_bank_rate: e.target.value })}
+                  placeholder="6.5"
+                />
+              </label>
+              <label>Annual turnover (₹, for the e-Invoicing threshold reminder)
+                <input
+                  type="number" step="1" min="0"
+                  value={business.annual_turnover ?? ""}
+                  onChange={(e) => setBusiness({ ...business, annual_turnover: e.target.value })}
+                  placeholder="e.g. 60000000"
+                />
+              </label>
+            </div>
+            <p className="muted" style={{ marginTop: -8 }}>
+              The RBI bank rate feeds the Section 43B(h) MSME late payment interest shown on Purchases (three times
+              this rate, once a vendor's payment passes its 15/45 day deadline). Annual turnover only drives the
+              e-Invoicing awareness banner on the Dashboard once it's ₹5 crore or more, and BillItUp doesn't check the
+              real GST portal for you.
+            </p>
             {error && <p className="error">{error}</p>}
             {savedMsg && <p className="muted">{savedMsg}</p>}
             <button type="submit">Save</button>

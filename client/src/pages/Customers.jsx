@@ -19,6 +19,35 @@ export default function Customers() {
   const [editSaving, setEditSaving] = useState(false);
   const canManage = ["owner", "admin"].includes(getUser()?.role);
 
+  // Inline "Add Credit"/"Add Debit" against a customer's prepaid retainer
+  // balance — same collapsed-until-clicked pattern as the portal column
+  // above, rather than a separate page for something this small (2026-09-16).
+  const [retainerOpenId, setRetainerOpenId] = useState(null);
+  const [retainerForm, setRetainerForm] = useState({ amount: "", type: "credit", note: "" });
+  const [retainerBusy, setRetainerBusy] = useState(false);
+  const [retainerError, setRetainerError] = useState("");
+
+  const openRetainerForm = (customerId) => {
+    setRetainerOpenId(customerId);
+    setRetainerForm({ amount: "", type: "credit", note: "" });
+    setRetainerError("");
+  };
+
+  const submitRetainer = async (e, customer) => {
+    e.preventDefault();
+    setRetainerBusy(true);
+    setRetainerError("");
+    try {
+      const updated = await api.addRetainerTransaction(customer.id, retainerForm);
+      setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, ...updated } : c)));
+      setRetainerOpenId(null);
+    } catch (err) {
+      setRetainerError(err.message);
+    } finally {
+      setRetainerBusy(false);
+    }
+  };
+
   // A popup instead of an in-row edit (2026-09-15) — the old inline row
   // squeezed the address, PIN code and country into one cramped cell, which
   // Naveen flagged as looking awkward. Mirrors the Add Customer modal below.
@@ -303,7 +332,7 @@ export default function Customers() {
       )}
 
       <table className="table">
-        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th>Portal</th>{canManage && <th></th>}</tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th>Portal</th><th>Retainer</th>{canManage && <th></th>}</tr></thead>
         <tbody>
           {filteredCustomers.map((c) => {
             const busy = portalBusyId === c.id;
@@ -353,6 +382,37 @@ export default function Customers() {
                     </div>
                   )}
                 </td>
+                <td>
+                  ₹{Number(c.retainer_balance || 0).toFixed(2)}
+                  {canManage && (
+                    <>
+                      {" · "}
+                      <button type="button" className="link-btn" onClick={() => openRetainerForm(c.id)}>Adjust</button>
+                    </>
+                  )}
+                  {retainerOpenId === c.id && (
+                    <form className="inline-form" style={{ marginTop: 6 }} onSubmit={(e) => submitRetainer(e, c)}>
+                      <select value={retainerForm.type} onChange={(e) => setRetainerForm({ ...retainerForm, type: e.target.value })}>
+                        <option value="credit">Add Credit</option>
+                        <option value="debit">Add Debit</option>
+                      </select>
+                      <input
+                        type="number" step="0.01" min="0.01" placeholder="Amount"
+                        value={retainerForm.amount}
+                        onChange={(e) => setRetainerForm({ ...retainerForm, amount: e.target.value })}
+                        required autoFocus
+                      />
+                      <input
+                        placeholder="Note (optional)"
+                        value={retainerForm.note}
+                        onChange={(e) => setRetainerForm({ ...retainerForm, note: e.target.value })}
+                      />
+                      <button type="submit" disabled={retainerBusy}>{retainerBusy ? "Saving..." : "Save"}</button>
+                      <button type="button" className="link-btn" onClick={() => setRetainerOpenId(null)}>Cancel</button>
+                      {retainerError && <p className="error">{retainerError}</p>}
+                    </form>
+                  )}
+                </td>
                 {canManage && (
                   <td>
                     <button type="button" className="link-btn" onClick={() => startEdit(c)}>Edit</button>
@@ -377,6 +437,7 @@ function exportCustomersToExcel(customers) {
     Country: c.country || "",
     GSTIN: c.gstin || "",
     State: c.state || "",
+    "Retainer Balance": Number(c.retainer_balance || 0),
   }));
   exportSheet("customers.xlsx", "Customers", rows);
 }

@@ -9,6 +9,14 @@ import ConfirmDialog from "./ConfirmDialog";
 import RecordPaymentForm from "./RecordPaymentForm";
 import FullInvoice from "./FullInvoice";
 import EditHistory from "./EditHistory";
+import InvoiceComments from "./InvoiceComments";
+
+const GST_IMS_STATUSES = [
+  { value: "", label: "Not set" },
+  { value: "pending", label: "Pending" },
+  { value: "accepted", label: "Accepted" },
+  { value: "rejected", label: "Rejected" },
+];
 
 // The invoice detail pane: toolbar (Edit / Send / Share / Reminder /
 // Print-PDF / Record Payment) plus the actual A4 document. Used both by the
@@ -27,6 +35,8 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   const [showSendModal, setShowSendModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState("");
+  const [approving, setApproving] = useState(false);
+  const [gstImsBusy, setGstImsBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const autoSendConsumed = useRef(false);
 
@@ -213,6 +223,36 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     }
   };
 
+  // Owner/Admin clearing the approval gate set in Settings > require an
+  // internal approval before an invoice can be sent (2026-09-16) — see
+  // routes/invoices.js's PUT /:id/approve, which also re-checks the role
+  // server-side rather than trusting this button alone.
+  const approveInvoice = async () => {
+    setError("");
+    setApproving(true);
+    try {
+      await api.approveInvoice(invoiceId);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const setGstImsStatus = async (status) => {
+    setError("");
+    setGstImsBusy(true);
+    try {
+      await api.setInvoiceGstImsStatus(invoiceId, status);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGstImsBusy(false);
+    }
+  };
+
   const sendReminder = async () => {
     setSendingReminder(true);
     setReminderResult(null);
@@ -234,7 +274,9 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         )}
         {canEdit && <Link className="link-btn" to={`/invoices/${invoiceId}/edit`}>Edit</Link>}
         <button onClick={() => window.print()}>Print / Save PDF</button>
-        <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
+        {invoice.approval_status !== "pending" && (
+          <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
+        )}
         {shareUrl && <button type="button" onClick={copyLink}>{copied ? "Link copied!" : "Copy shareable link"}</button>}
         {whatsappShareUrl && (
           <a className="btn-secondary" href={whatsappShareUrl} target="_blank" rel="noreferrer">Share via WhatsApp</a>
@@ -250,7 +292,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         {invoice.balance_due > 0 && invoice.status !== "cancelled" && (
           <RecordPaymentForm balanceDue={invoice.balance_due} onRecord={recordPayment} />
         )}
-        {canEdit && invoice.status === "draft" && (
+        {canEdit && invoice.status === "draft" && invoice.approval_status !== "pending" && (
           <button type="button" className="btn-secondary" onClick={() => setConfirmingMarkSent(true)}>
             Mark as Sent
           </button>
@@ -269,14 +311,49 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
           <button type="button" onClick={reopenInvoice} disabled={statusBusy}>{statusBusy ? "Reopening..." : "Reopen (mark as Draft)"}</button>
         )}
       </div>
+      {invoice.approval_status === "pending" && (
+        <div className="no-print banner banner-warning">
+          This invoice needs Owner/Admin approval before it can be sent.
+          {canEdit && (
+            <button type="button" onClick={approveInvoice} disabled={approving}>
+              {approving ? "Approving..." : "Approve Invoice"}
+            </button>
+          )}
+        </div>
+      )}
+      {invoice.last_viewed_at && (
+        <p className="muted no-print">
+          Viewed by client on {new Date(invoice.first_viewed_at).toLocaleString()}
+          {invoice.last_viewed_at !== invoice.first_viewed_at && ` (last viewed ${new Date(invoice.last_viewed_at).toLocaleString()})`}
+        </p>
+      )}
       {reminderResult?.ok && <p className="muted no-print">Reminder sent to {reminderResult.to}.</p>}
       {reminderResult?.error && <p className="error no-print">{reminderResult.error}</p>}
       {paymentNotice && <p className="muted no-print">{paymentNotice}</p>}
       {error && <p className="error no-print">{error}</p>}
 
+      {canEdit && (
+        <label className="block no-print invoice-gst-ims">
+          GST IMS Status
+          <select
+            value={invoice.gst_ims_status || ""}
+            onChange={(e) => setGstImsStatus(e.target.value)}
+            disabled={gstImsBusy}
+          >
+            {GST_IMS_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </label>
+      )}
+
       <div className="invoice-doc invoice-full" style={{ width: standalone ? "210mm" : "100%", maxWidth: "210mm" }}>
         <FullInvoice invoice={invoice} />
       </div>
+
+      <InvoiceComments
+        loadComments={() => api.getInvoiceComments(invoiceId)}
+        postComment={(message) => api.createInvoiceComment(invoiceId, message)}
+        viewerType="business"
+      />
 
       {canEdit && <EditHistory invoiceId={invoiceId} />}
 

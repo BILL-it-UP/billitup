@@ -287,3 +287,14 @@ export function IconAnnouncement({ size = 18 }) {
     </svg>
   );
 }
+
+// Time Tracking sidebar nav (2026-09-16) — a plain clock, same shared stroke
+// weight as the rest of this set.
+export function IconClock({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v5.3l3.5 2" />
+    </svg>
+  );
+}

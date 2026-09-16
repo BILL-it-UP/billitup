@@ -379,13 +379,17 @@ textarea { resize: vertical; }
   overflow-y: auto; flex: 1; min-height: 0;
 }
 .invoice-list-item {
-  all: unset; display: block; box-sizing: border-box; width: 100%;
-  padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+  display: flex; align-items: center; gap: 8px; box-sizing: border-box; width: 100%;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
 }
 .invoice-list-item:hover { background: var(--bg); }
 .invoice-list-item.active { background: #eaf5ef; border-left: 3px solid var(--accent); padding-left: 11px; }
+.invoice-list-item-checkbox { flex-shrink: 0; margin: 0; width: auto; }
+.invoice-list-item-body { all: unset; display: block; box-sizing: border-box; width: 100%; min-width: 0; cursor: pointer; }
 .invoice-list-item-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
 .invoice-list-item-bottom { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.bulk-action-toolbar { padding: 8px 2px; font-size: 13px; }
+.bulk-action-toolbar span { font-weight: 600; margin-right: 4px; }
 .due-label { font-weight: 600; white-space: nowrap; }
 .due-label-overdue { color: #b3261e; }
 .due-label-due, .due-label-sent { color: var(--accent); }
@@ -1139,4 +1143,28 @@ textarea { resize: vertical; }
 .business-health-logo { width: 52px; height: 52px; border-radius: 10px; object-fit: contain; background: white; border: 1px solid var(--border); padding: 4px; }
 .badge-resolved { background: #dcfce7; color: #166534; }
 .error-route-cell { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; white-space: nowrap; }
+
+/* ---- Invoice approval banner, GST IMS select, checkbox rows (2026-09-16) ---- */
+.banner {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px;
+  font-size: 13px; margin: 10px 0;
+}
+.banner-warning { background: #fff4e5; border: 1px solid #f0c987; color: #7a4a00; }
+.banner-warning button { flex-shrink: 0; }
+.invoice-gst-ims { max-width: 220px; margin: 10px 0; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 4px 0; }
+.checkbox-row input { width: auto; margin-top: 0; }
+
+/* ---- Two-sided invoice comment thread (2026-09-16) ---- */
+.invoice-comments { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); max-width: 560px; }
+.invoice-comments h4 { margin: 0 0 10px; }
+.invoice-comment-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.invoice-comment { padding: 8px 12px; border-radius: 8px; background: var(--bg); max-width: 90%; }
+.invoice-comment-business { align-self: flex-start; }
+.invoice-comment-customer { align-self: flex-end; background: #eaf5ef; }
+.invoice-comment-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 4px; }
+.invoice-comment-meta strong { font-size: 12px; }
+.invoice-comment p { margin: 0; font-size: 14px; white-space: pre-wrap; }
+.invoice-comment-form { display: flex; gap: 8px; align-items: flex-end; }
+.invoice-comment-form textarea { flex: 1; resize: vertical; margin-top: 0; }
 .landing-page footer .links a:hover { color: var(--l-ink); }

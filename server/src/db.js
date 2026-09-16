@@ -469,6 +469,61 @@ CREATE TABLE IF NOT EXISTS announcement_reads (
   read_at TEXT DEFAULT (datetime('now')),
   UNIQUE(announcement_id, user_id)
 );
+
+-- A flat comment thread on one invoice, visible to both the business and
+-- that one customer (2026-09-16) — for "this line item looks wrong"-type
+-- back-and-forth that otherwise happens over email/WhatsApp, disconnected
+-- from the invoice itself. author_type tells the UI which side to show a
+-- message as coming from; author_name is denormalized (copied at post time)
+-- so a comment still reads sensibly even if the poster's own name changes
+-- later or (for a business-side comment) their login is later removed.
+CREATE TABLE IF NOT EXISTS invoice_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  author_type TEXT NOT NULL,   -- 'business' | 'customer'
+  author_name TEXT,
+  message TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Simple manual time logging (2026-09-16) — a consultant logs hours against
+-- a customer (optionally tagged with a project name, reusing the same free-
+-- text convention as invoices.project_name rather than a real Projects
+-- table), then pulls any not-yet-billed entries onto an invoice as line
+-- items from the New Invoice page. billed/invoice_id are set together once
+-- an entry is actually added to an invoice, so it can't be billed twice.
+CREATE TABLE IF NOT EXISTS time_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  customer_id INTEGER REFERENCES customers(id),
+  project_name TEXT,
+  description TEXT,
+  entry_date TEXT NOT NULL,
+  hours REAL NOT NULL DEFAULT 0,
+  rate REAL NOT NULL DEFAULT 0,
+  billed INTEGER NOT NULL DEFAULT 0,
+  invoice_id INTEGER REFERENCES invoices(id),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- A prepaid credit balance per customer (2026-09-16) — distinct from
+-- milestone/progress billing (which tracks percent-of-project-completed
+-- against a project total): this is a simple wallet a customer has funded
+-- ahead of time, that future invoices can draw down against.
+-- retainer_transactions is the ledger (every credit/debit, so the running
+-- balance on customers.retainer_balance can always be explained); an
+-- invoice that draws from it stores how much on invoices.retainer_applied.
+CREATE TABLE IF NOT EXISTS retainer_transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  amount REAL NOT NULL,
+  type TEXT NOT NULL,   -- 'credit' | 'debit'
+  note TEXT,
+  invoice_id INTEGER REFERENCES invoices(id),
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------
@@ -571,6 +626,28 @@ ensureColumn("businesses", "reminders_enabled", "reminders_enabled INTEGER DEFAU
 ensureColumn("businesses", "reminder_days_before_due", "reminder_days_before_due INTEGER DEFAULT 3");
 ensureColumn("businesses", "reminder_overdue_repeat_days", "reminder_overdue_repeat_days INTEGER DEFAULT 7");
 
+// Off by default. When on, an invoice created by a Cashier login needs an
+// explicit Owner/Admin approval before it can be emailed or marked Sent —
+// a control gate so a junior staffer can't send wrong pricing straight to a
+// client. An Owner/Admin's own invoices never need approving from
+// themselves, whichever way this is set (2026-09-16).
+ensureColumn("businesses", "require_invoice_approval", "require_invoice_approval INTEGER DEFAULT 0");
+
+// The current RBI bank rate, as a plain percentage a business can update by
+// hand from time to time — used only to compute the Section 43B(h) MSME
+// late-payment interest estimate (3x this rate) shown on the Purchases page
+// for an overdue bill from a vendor flagged as MSME-registered. Not fetched
+// from anywhere automatically, since that would need an ongoing paid data
+// feed for a number that changes only a few times a year (2026-09-16).
+ensureColumn("businesses", "rbi_bank_rate", "rbi_bank_rate REAL DEFAULT 6.5");
+
+// Self-reported annual turnover, used only to show an informational banner
+// once it crosses the GST e-invoice (IRN) mandate's ₹5 crore threshold.
+// BillItUp doesn't generate e-invoices itself either way — see
+// eway_bill_number above for the same "manual tracker, not a government API
+// integration" philosophy (2026-09-16).
+ensureColumn("businesses", "annual_turnover", "annual_turnover REAL");
+
 // items
 ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");
 
@@ -583,6 +660,23 @@ ensureColumn("customers", "country", "country TEXT DEFAULT 'India'");
 // already existed on vendors from when the table was first created.
 ensureColumn("vendors", "pincode", "pincode TEXT");
 ensureColumn("vendors", "country", "country TEXT DEFAULT 'India'");
+// Section 43B(h) MSME 45-day payment rule (2026-09-16) — is_msme flags a
+// vendor as Udyam-registered, and has_written_agreement decides which
+// deadline applies from the invoice date (15 days with no agreement, 45
+// days with one). Both off by default so an existing vendor's Purchases
+// rows behave exactly as before until someone actually flags them.
+ensureColumn("vendors", "is_msme", "is_msme INTEGER DEFAULT 0");
+ensureColumn("vendors", "has_written_agreement", "has_written_agreement INTEGER DEFAULT 0");
+
+// purchases — when a bill was actually paid (2026-09-16). NULL means still
+// unpaid; this is the one field needed to tell whether an MSME vendor's
+// 15/45-day deadline has actually been missed, without turning Purchases
+// into a full accounts-payable module. billable_customer_id/billed_invoice_id
+// let an expense be flagged as billable to a customer and then pulled onto
+// an invoice as a line item, the same way unbilled time entries are.
+ensureColumn("purchases", "paid_date", "paid_date TEXT");
+ensureColumn("purchases", "billable_customer_id", "billable_customer_id INTEGER REFERENCES customers(id)");
+ensureColumn("purchases", "billed_invoice_id", "billed_invoice_id INTEGER REFERENCES invoices(id)");
 
 // customers — a per-customer portal login so each client can see the
 // status of every invoice addressed to them. portal_token doubles as the
@@ -598,6 +692,19 @@ ensureColumn("vendors", "country", "country TEXT DEFAULT 'India'");
 ensureColumn("customers", "portal_token", "portal_token TEXT");
 ensureColumn("customers", "portal_enabled", "portal_enabled INTEGER DEFAULT 0");
 ensureColumn("customers", "portal_password_hash", "portal_password_hash TEXT");
+
+// A prepaid retainer balance this customer has funded ahead of time — see
+// retainer_transactions above for the ledger this running number is kept in
+// sync with (2026-09-16).
+ensureColumn("customers", "retainer_balance", "retainer_balance REAL DEFAULT 0");
+
+// payments — how much of this payment was actually TDS the client deducted
+// at source rather than cash/transfer received, so an Indian consultant can
+// reconcile against Form 26AS/AIS at tax time. Counts toward the invoice's
+// balance_due exactly like the rest of the payment (the money still went
+// somewhere real, just to the government on the business's behalf), it's
+// just broken out separately rather than lumped into "amount" (2026-09-16).
+ensureColumn("payments", "tds_amount", "tds_amount REAL DEFAULT 0");
 
 // suggestions — which part of the software a suggestion is about (Invoices,
 // Reports, etc.), added right after the table itself so someone reviewing
@@ -672,6 +779,36 @@ ensureColumn("invoices", "last_overdue_reminder_sent_at", "last_overdue_reminder
 ensureColumn("invoices", "project_name", "project_name TEXT");
 ensureColumn("invoices", "milestone_label", "milestone_label TEXT");
 ensureColumn("invoices", "project_total_amount", "project_total_amount REAL");
+
+// When a client actually opened this invoice — the public share link and
+// the logged-in customer portal both stamp this the first (and, for
+// last_viewed_at, every) time they load it, so a business doesn't have to
+// wonder "did they even see it" before following up (2026-09-16).
+ensureColumn("invoices", "first_viewed_at", "first_viewed_at TEXT");
+ensureColumn("invoices", "last_viewed_at", "last_viewed_at TEXT");
+
+// Internal approval gate (see businesses.require_invoice_approval above).
+// 'not_required' is the default for every existing invoice and for any new
+// one created while the business setting is off, or by an Owner/Admin —
+// nothing changes for a business that never turns this on. created_by_role
+// is a snapshot of the creator's role at the time, so a later role change
+// doesn't retroactively change whether an old invoice needed approval.
+ensureColumn("invoices", "approval_status", "approval_status TEXT DEFAULT 'not_required'");
+ensureColumn("invoices", "created_by_user_id", "created_by_user_id INTEGER REFERENCES users(id)");
+ensureColumn("invoices", "created_by_role", "created_by_role TEXT");
+
+// How much of this invoice was paid down from the customer's own prepaid
+// retainer balance rather than a real payment — see
+// customers.retainer_balance / retainer_transactions above (2026-09-16).
+ensureColumn("invoices", "retainer_applied", "retainer_applied REAL DEFAULT 0");
+
+// Manual GST Invoice Management System status (2026-09-16) — the seller
+// updates this by hand after checking the GST portal, where a B2B buyer can
+// accept, reject, or leave an invoice pending; a rejected/pending invoice
+// usually needs a credit note or a resend. NULL means "not checked / not
+// applicable" (e.g. a B2C invoice with no GSTIN). BillItUp never talks to
+// the GST portal itself to read or set this.
+ensureColumn("invoices", "gst_ims_status", "gst_ims_status TEXT");
 
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the

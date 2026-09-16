@@ -4,7 +4,10 @@ import { exportSheet } from "../lib/exportExcel";
 import { INDIAN_STATES } from "../lib/gst";
 import ConfirmDialog from "../components/ConfirmDialog";
 
-const BLANK_VENDOR_FORM = { name: "", phone: "", email: "", address: "", pincode: "", country: "India", gstin: "", state: "" };
+const BLANK_VENDOR_FORM = {
+  name: "", phone: "", email: "", address: "", pincode: "", country: "India", gstin: "", state: "",
+  is_msme: false, has_written_agreement: false,
+};
 
 // Vendors/suppliers a business buys from — the other side of Customers,
 // kept as its own simple list so Purchases has someone to attach a bill to.
@@ -78,6 +81,8 @@ export default function Vendors() {
       country: v.country || "India",
       gstin: v.gstin || "",
       state: v.state || "",
+      is_msme: !!v.is_msme,
+      has_written_agreement: !!v.has_written_agreement,
     });
   };
 
@@ -188,6 +193,16 @@ export default function Vendors() {
                   </select>
                 </label>
               </div>
+              <label className="checkbox-label">
+                <input type="checkbox" checked={form.is_msme} onChange={(e) => setForm({ ...form, is_msme: e.target.checked })} />
+                {" "}This vendor is a registered MSME (Udyam)
+              </label>
+              {form.is_msme && (
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={form.has_written_agreement} onChange={(e) => setForm({ ...form, has_written_agreement: e.target.checked })} />
+                  {" "}There's a written agreement on the payment terms
+                </label>
+              )}
               {error && <p className="error">{error}</p>}
               <div className="modal-actions">
                 <button type="button" className="link-btn" onClick={closeAddModal}>Cancel</button>
@@ -254,6 +269,16 @@ export default function Vendors() {
                   </select>
                 </label>
               </div>
+              <label className="checkbox-label">
+                <input type="checkbox" checked={editForm.is_msme} onChange={(e) => setEditForm({ ...editForm, is_msme: e.target.checked })} />
+                {" "}This vendor is a registered MSME (Udyam)
+              </label>
+              {editForm.is_msme && (
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={editForm.has_written_agreement} onChange={(e) => setEditForm({ ...editForm, has_written_agreement: e.target.checked })} />
+                  {" "}There's a written agreement on the payment terms
+                </label>
+              )}
               {editError && <p className="error">{editError}</p>}
               <div className="modal-actions">
                 <button type="button" className="link-btn" onClick={cancelEdit}>Cancel</button>
@@ -282,7 +307,7 @@ export default function Vendors() {
 
       {filteredVendors.length > 0 && (
         <table className="table">
-          <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Address</th><th>GSTIN</th><th>State</th><th>MSME</th><th></th></tr></thead>
           <tbody>
             {filteredVendors.map((v) => {
               return (
@@ -290,6 +315,7 @@ export default function Vendors() {
                   <td>{v.name}</td><td>{v.phone}</td><td>{v.email}</td>
                   <td>{[v.address, v.pincode, v.country].filter(Boolean).join(", ")}</td>
                   <td>{v.gstin}</td><td>{v.state}</td>
+                  <td>{v.is_msme ? "Yes" : ""}</td>
                   <td>
                     <button type="button" className="link-btn" onClick={() => startEdit(v)}>Edit</button>
                     {" · "}
@@ -322,6 +348,7 @@ function exportVendorsToExcel(vendors) {
     Name: v.name, Phone: v.phone || "", Email: v.email || "",
     Address: v.address || "", "PIN Code": v.pincode || "", Country: v.country || "",
     GSTIN: v.gstin || "", State: v.state || "",
+    MSME: v.is_msme ? "Yes" : "No", "Written Agreement": v.has_written_agreement ? "Yes" : "No",
   }));
   exportSheet("vendors.xlsx", "Vendors", rows);
 }

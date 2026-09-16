@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, Link, NavLink, useNavigate } from "react-route
 import {
   IconDashboard, IconQuote, IconCreditNote, IconRecurring,
   IconCustomers, IconItems, IconReports, IconSettings, IconLogout, IconChevron,
-  IconVendors, IconPurchases, IconPayments, IconSuggestion, IconChat,
+  IconVendors, IconPurchases, IconPayments, IconSuggestion, IconChat, IconClock,
 } from "./components/Icons";
 import SuggestionBox from "./components/SuggestionBox";
 import AnnouncementPopup from "./components/AnnouncementPopup";
@@ -34,6 +34,7 @@ import PortalDashboard from "./pages/PortalDashboard";
 import PaymentsTimeline from "./pages/PaymentsTimeline";
 import Vendors from "./pages/Vendors";
 import Purchases from "./pages/Purchases";
+import TimeTracking from "./pages/TimeTracking";
 import Reports from "./pages/Reports";
 import Suggestions from "./pages/Suggestions";
 import Support from "./pages/Support";
@@ -72,6 +73,7 @@ const NAV_ITEMS = [
   { to: "/payments", label: "Payments", icon: IconPayments, ownerOnly: true },
   { to: "/vendors", label: "Vendors", icon: IconVendors, ownerOnly: true },
   { to: "/purchases", label: "Purchases", icon: IconPurchases, ownerOnly: true },
+  { to: "/time-tracking", label: "Time Tracking", icon: IconClock },
   { to: "/customers", label: "Customers", icon: IconCustomers },
   { to: "/items", label: "Items", icon: IconItems },
   { to: "/reports", label: "Reports", icon: IconReports, ownerOnly: true },
@@ -226,6 +228,7 @@ export default function App() {
       <Route path="/payments" element={<RequireAuth><Shell><PaymentsTimeline /></Shell></RequireAuth>} />
       <Route path="/vendors" element={<RequireAuth><Shell><Vendors /></Shell></RequireAuth>} />
       <Route path="/purchases" element={<RequireAuth><Shell><Purchases /></Shell></RequireAuth>} />
+      <Route path="/time-tracking" element={<RequireAuth><Shell><TimeTracking /></Shell></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Shell><Reports /></Shell></RequireAuth>} />
       <Route path="/suggestions" element={<RequireAuth><Shell><Suggestions /></Shell></RequireAuth>} />
       <Route path="/support" element={<RequireAuth><Shell><Support /></Shell></RequireAuth>} />

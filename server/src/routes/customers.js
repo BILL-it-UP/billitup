@@ -155,4 +155,39 @@ router.post("/:id/portal/resend-invite", requireRole("owner", "admin"), async (r
   }
 });
 
+// Manually add or deduct from a customer's prepaid retainer balance — e.g.
+// when they pay a retainer invoice, or as a correction. A future invoice
+// can then draw down against this via invoices.retainer_applied (see
+// routes/invoices.js). Deliberately manual rather than trying to auto-link
+// this to a specific invoice's payment, since a retainer top-up doesn't
+// have to come from an invoice at all (2026-09-16).
+router.post("/:id/retainer", requireRole("owner", "admin"), (req, res) => {
+  const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!customer) return res.status(404).json({ error: "Not found" });
+  const { amount, type, note } = req.body;
+  const amt = Math.abs(Number(amount) || 0);
+  if (!amt) return res.status(400).json({ error: "amount must be a positive number" });
+  if (!["credit", "debit"].includes(type)) return res.status(400).json({ error: "type must be 'credit' or 'debit'" });
+
+  const delta = type === "credit" ? amt : -amt;
+  db.transaction(() => {
+    db.prepare("UPDATE customers SET retainer_balance = retainer_balance + ? WHERE id = ?").run(delta, customer.id);
+    db.prepare(
+      "INSERT INTO retainer_transactions (business_id, customer_id, amount, type, note) VALUES (?, ?, ?, ?, ?)"
+    ).run(req.auth.businessId, customer.id, amt, type, note || null);
+  })();
+
+  const updated = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  res.json(withPortalStatus(updated));
+});
+
+router.get("/:id/retainer-transactions", requireRole("owner", "admin"), (req, res) => {
+  const customer = db.prepare("SELECT id FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!customer) return res.status(404).json({ error: "Not found" });
+  const rows = db
+    .prepare("SELECT * FROM retainer_transactions WHERE customer_id = ? ORDER BY created_at DESC")
+    .all(customer.id);
+  res.json(rows);
+});
+
 export default router;

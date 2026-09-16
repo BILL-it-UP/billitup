@@ -35,6 +35,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     email_subject_credit_note, email_body_credit_note, email_subject_reminder, email_body_reminder,
     email_subject_receipt, email_body_receipt,
     reminders_enabled, reminder_days_before_due, reminder_overdue_repeat_days,
+    require_invoice_approval, rbi_bank_rate, annual_turnover,
   } = req.body;
 
   db.prepare(
@@ -82,7 +83,10 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       email_body_receipt = COALESCE(?, email_body_receipt),
       reminders_enabled = COALESCE(?, reminders_enabled),
       reminder_days_before_due = COALESCE(?, reminder_days_before_due),
-      reminder_overdue_repeat_days = COALESCE(?, reminder_overdue_repeat_days)
+      reminder_overdue_repeat_days = COALESCE(?, reminder_overdue_repeat_days),
+      require_invoice_approval = COALESCE(?, require_invoice_approval),
+      rbi_bank_rate = COALESCE(?, rbi_bank_rate),
+      annual_turnover = COALESCE(?, annual_turnover)
     WHERE id = ?`
   ).run(
     name, address, pincode, country, phone, email, website, gstin, state,
@@ -104,6 +108,13 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     // "leave it alone"; an explicit 0 or "" from the form is not.
     reminder_days_before_due === undefined ? undefined : Number(reminder_days_before_due) || 0,
     reminder_overdue_repeat_days === undefined ? undefined : Number(reminder_overdue_repeat_days) || 0,
+    require_invoice_approval === undefined ? undefined : (require_invoice_approval ? 1 : 0),
+    // Same COALESCE-based "leave alone unless a real value was sent"
+    // convention as every other field on this route — an empty string from
+    // a cleared input is left alone rather than stored, matching how e.g.
+    // clearing "website" back to blank already isn't supported here either.
+    rbi_bank_rate === undefined || rbi_bank_rate === "" ? undefined : Number(rbi_bank_rate),
+    annual_turnover === undefined || annual_turnover === "" ? undefined : Number(annual_turnover),
     req.auth.businessId
   );
 

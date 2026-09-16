@@ -15,26 +15,35 @@ router.get("/", (req, res) => {
 });
 
 router.post("/", (req, res) => {
-  const { name, phone, email, address, pincode, country, gstin, state, notes } = req.body;
+  const { name, phone, email, address, pincode, country, gstin, state, notes, is_msme, has_written_agreement } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
   const result = db
     .prepare(
-      `INSERT INTO vendors (business_id, name, phone, email, address, pincode, country, gstin, state, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO vendors (business_id, name, phone, email, address, pincode, country, gstin, state, notes, is_msme, has_written_agreement)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(req.auth.businessId, name, phone || null, email || null, address || null, pincode || null, country || "India", gstin || null, state || null, notes || null);
+    .run(
+      req.auth.businessId, name, phone || null, email || null, address || null, pincode || null, country || "India",
+      gstin || null, state || null, notes || null, is_msme ? 1 : 0, has_written_agreement ? 1 : 0
+    );
   res.status(201).json(db.prepare("SELECT * FROM vendors WHERE id = ?").get(result.lastInsertRowid));
 });
 
 router.put("/:id", (req, res) => {
-  const { name, phone, email, address, pincode, country, gstin, state, notes } = req.body;
+  const { name, phone, email, address, pincode, country, gstin, state, notes, is_msme, has_written_agreement } = req.body;
   db.prepare(
     `UPDATE vendors SET
       name = COALESCE(?, name), phone = COALESCE(?, phone), email = COALESCE(?, email),
       address = COALESCE(?, address), pincode = COALESCE(?, pincode), country = COALESCE(?, country),
-      gstin = COALESCE(?, gstin), state = COALESCE(?, state), notes = COALESCE(?, notes)
+      gstin = COALESCE(?, gstin), state = COALESCE(?, state), notes = COALESCE(?, notes),
+      is_msme = COALESCE(?, is_msme), has_written_agreement = COALESCE(?, has_written_agreement)
      WHERE id = ? AND business_id = ?`
-  ).run(name, phone, email, address, pincode, country, gstin, state, notes, req.params.id, req.auth.businessId);
+  ).run(
+    name, phone, email, address, pincode, country, gstin, state, notes,
+    is_msme === undefined ? undefined : (is_msme ? 1 : 0),
+    has_written_agreement === undefined ? undefined : (has_written_agreement ? 1 : 0),
+    req.params.id, req.auth.businessId
+  );
   const updated = db.prepare("SELECT * FROM vendors WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!updated) return res.status(404).json({ error: "Not found" });
   res.json(updated);

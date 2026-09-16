@@ -79,6 +79,7 @@ router.post("/", (req, res) => {
     customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment,
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
     currency, project_name, milestone_label, project_total_amount,
+    retainer_applied, time_entry_ids, billable_purchase_ids,
   } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
@@ -114,13 +115,32 @@ router.post("/", (req, res) => {
   const ewayDistanceKm = isPremium && eway_distance_km ? Number(eway_distance_km) : null;
   const invoiceCurrency = currency || business.default_currency || "INR";
 
+  // Internal approval gate (see businesses.require_invoice_approval). Off by
+  // default, so every existing installation behaves exactly as before. When
+  // on, an Owner/Admin's own invoice never needs approving from themselves —
+  // only an invoice raised by anyone else on the login starts pending.
+  let approvalStatus = "not_required";
+  if (business.require_invoice_approval) {
+    approvalStatus = (req.auth.role === "owner" || req.auth.role === "admin") ? "approved" : "pending";
+  }
+
+  // Draw down the customer's prepaid retainer balance, if any was requested
+  // and the customer actually has one — capped so this can never push the
+  // balance negative or exceed the invoice's own total (see
+  // customers.retainer_balance / retainer_transactions in db.js).
+  const retainerRequested = Number(retainer_applied) || 0;
+  const retainerAvailable = Number(customer?.retainer_balance) || 0;
+  const retainerApplied = Math.max(0, Math.min(retainerRequested, retainerAvailable, total));
+  const balanceDue = Math.max(0, total - retainerApplied);
+
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, subject, gstin, status,
        sub_total, discount, tax_total, total, balance_due, notes, public_token, gst_treatment, cgst, sgst, igst,
        eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
-       currency, project_name, milestone_label, project_total_amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       currency, project_name, milestone_label, project_total_amount,
+       approval_status, created_by_user_id, created_by_role, retainer_applied)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -132,17 +152,44 @@ router.post("/", (req, res) => {
       req.auth.businessId, customer_id || null, invoiceNumber,
       invoice_date || new Date().toISOString().slice(0, 10), due_date || null,
       terms || null, reference || null, subject || null, gstin || null,
-      subTotal, discountTotal, taxTotal, total, total, notes || null,
+      subTotal, discountTotal, taxTotal, total, balanceDue, notes || null,
       randomUUID().replace(/-/g, ""), treatment, cgst, sgst, igst,
       ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm,
       invoiceCurrency, project_name || null, milestone_label || null,
-      project_total_amount ? Number(project_total_amount) : null
+      project_total_amount ? Number(project_total_amount) : null,
+      approvalStatus, req.auth.userId, req.auth.role, retainerApplied
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
       insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
     }
     commitInvoiceNumber();
+
+    if (retainerApplied > 0) {
+      db.prepare("UPDATE customers SET retainer_balance = retainer_balance - ? WHERE id = ?").run(retainerApplied, customer_id);
+      db.prepare(
+        "INSERT INTO retainer_transactions (business_id, customer_id, amount, type, note, invoice_id) VALUES (?, ?, ?, 'debit', ?, ?)"
+      ).run(req.auth.businessId, customer_id, retainerApplied, `Applied to invoice ${invoiceNumber}`, id);
+    }
+
+    // Pull in any unbilled time entries / billable expenses the client
+    // selected — mark them billed against THIS invoice so they can never be
+    // added to a second one by mistake. Silently ignores any id that isn't
+    // actually this business's own or is already billed, rather than
+    // failing the whole invoice over a stale selection.
+    if (Array.isArray(time_entry_ids) && time_entry_ids.length > 0) {
+      const markTimeEntry = db.prepare(
+        "UPDATE time_entries SET billed = 1, invoice_id = ? WHERE id = ? AND business_id = ? AND billed = 0"
+      );
+      for (const teId of time_entry_ids) markTimeEntry.run(id, teId, req.auth.businessId);
+    }
+    if (Array.isArray(billable_purchase_ids) && billable_purchase_ids.length > 0) {
+      const markPurchase = db.prepare(
+        "UPDATE purchases SET billed_invoice_id = ? WHERE id = ? AND business_id = ? AND billed_invoice_id IS NULL"
+      );
+      for (const pId of billable_purchase_ids) markPurchase.run(id, pId, req.auth.businessId);
+    }
+
     return id;
   })();
 
@@ -275,19 +322,24 @@ router.post("/:id/payments", (req, res) => {
   const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
-  const { amount, mode, notes, paid_at } = req.body;
+  const { amount, mode, notes, paid_at, tds_amount } = req.body;
   const amt = Number(amount);
   if (!amt || amt <= 0) return res.status(400).json({ error: "amount must be a positive number" });
+  // TDS the client deducted at source counts toward the balance the same as
+  // the cash/transfer part — it's real money paid, just to the government
+  // rather than to this business directly (see db.js). Optional, defaults
+  // to 0 so a payment recorded without it behaves exactly as before.
+  const tdsAmt = Math.max(0, Number(tds_amount) || 0);
 
   db.transaction(() => {
     if (paid_at) {
-      db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes, paid_at) VALUES (?, ?, ?, ?, ?)")
-        .run(invoice.id, amt, mode || "cash", notes || null, paid_at);
+      db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes, paid_at, tds_amount) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(invoice.id, amt, mode || "cash", notes || null, paid_at, tdsAmt);
     } else {
-      db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes) VALUES (?, ?, ?, ?)")
-        .run(invoice.id, amt, mode || "cash", notes || null);
+      db.prepare("INSERT INTO payments (invoice_id, amount, mode, notes, tds_amount) VALUES (?, ?, ?, ?, ?)")
+        .run(invoice.id, amt, mode || "cash", notes || null, tdsAmt);
     }
-    const newBalance = Math.max(0, invoice.balance_due - amt);
+    const newBalance = Math.max(0, invoice.balance_due - amt - tdsAmt);
     const newStatus = newBalance === 0 ? "paid" : "partially_paid";
     db.prepare("UPDATE invoices SET balance_due = ?, status = ? WHERE id = ?")
       .run(newBalance, newStatus, invoice.id);
@@ -315,16 +367,157 @@ router.put("/:id/status", (req, res) => {
       return res.status(400).json({ error: "This invoice has a payment recorded against it — issue a credit note instead of cancelling it" });
     }
   }
+  if (status === "sent" && invoice.approval_status === "pending") {
+    return res.status(400).json({ error: "This invoice needs Owner/Admin approval before it can be marked Sent." });
+  }
 
   db.prepare("UPDATE invoices SET status = ? WHERE id = ? AND business_id = ?").run(status, req.params.id, req.auth.businessId);
   const updated = db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.id);
   res.json(updated);
 });
 
+// Owner/Admin approves an invoice a Cashier raised while
+// require_invoice_approval is on (see db.js) — the only way an invoice ever
+// leaves 'pending', since editing or re-saving it doesn't touch this field.
+router.put("/:id/approve", requireRole("owner", "admin"), (req, res) => {
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+  db.prepare("UPDATE invoices SET approval_status = 'approved' WHERE id = ?").run(invoice.id);
+  res.json(db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoice.id));
+});
+
+// Manual GST Invoice Management System status — the seller's own record of
+// what the buyer did with this invoice on the GST portal (see db.js). Any
+// logged-in role can set it, same as the plain status field above.
+router.put("/:id/gst-ims-status", (req, res) => {
+  const { status } = req.body;
+  if (status && !["pending", "accepted", "rejected"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+  db.prepare("UPDATE invoices SET gst_ims_status = ? WHERE id = ?").run(status || null, invoice.id);
+  res.json(db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoice.id));
+});
+
+// A flat, two-sided comment thread on one invoice — the business side of
+// it. See routes/portal.js for the matching customer-side read/post. Any
+// logged-in role can read/post (same tier as the plain status field), since
+// this is meant to capture whoever on the team is actually handling it.
+router.get("/:id/comments", (req, res) => {
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+  const rows = db.prepare("SELECT * FROM invoice_comments WHERE invoice_id = ? ORDER BY created_at ASC").all(invoice.id);
+  res.json(rows);
+});
+
+router.post("/:id/comments", (req, res) => {
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+  const message = (req.body?.message || "").trim();
+  if (!message) return res.status(400).json({ error: "message is required" });
+  const user = db.prepare("SELECT name FROM users WHERE id = ?").get(req.auth.userId);
+  const result = db.prepare(
+    "INSERT INTO invoice_comments (invoice_id, business_id, author_type, author_name, message) VALUES (?, ?, 'business', ?, ?)"
+  ).run(invoice.id, req.auth.businessId, user?.name || "Business", message);
+  res.status(201).json(db.prepare("SELECT * FROM invoice_comments WHERE id = ?").get(result.lastInsertRowid));
+});
+
+// Bulk actions from the Dashboard's multi-select invoice list — Owner/Admin
+// only, same tier as editing an invoice. Applies each invoice's own normal
+// single-item rule (cancel still refuses one with a payment recorded, sent
+// still refuses one pending approval) rather than a blanket all-or-nothing
+// action, and reports back which ids were actually changed vs skipped and
+// why, so a mixed selection doesn't just silently fail.
+router.post("/bulk-status", requireRole("owner", "admin"), (req, res) => {
+  const { ids, status } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids is required" });
+  if (!["sent", "cancelled"].includes(status)) return res.status(400).json({ error: "Invalid status for a bulk action" });
+
+  const updated = [];
+  const skipped = [];
+  for (const id of ids) {
+    const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(id, req.auth.businessId);
+    if (!invoice) { skipped.push({ id, reason: "Not found" }); continue; }
+    if (status === "cancelled") {
+      const amountPaid = invoice.total - invoice.balance_due;
+      if (amountPaid > 0) { skipped.push({ id, reason: "Has a payment recorded" }); continue; }
+    }
+    if (status === "sent" && invoice.approval_status === "pending") {
+      skipped.push({ id, reason: "Needs approval first" });
+      continue;
+    }
+    db.prepare("UPDATE invoices SET status = ? WHERE id = ?").run(status, id);
+    updated.push(id);
+  }
+  res.json({ updated, skipped });
+});
+
+// Bulk-email each selected invoice to its customer's on-file address, using
+// the business's own saved (or default) invoice template — same rendering
+// as the single "Email to Customer" button, just looped. Invoices with no
+// customer email on file are reported back as skipped rather than failing
+// the whole batch.
+router.post("/bulk-send", requireRole("owner", "admin"), async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids is required" });
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+
+  const sent = [];
+  const skipped = [];
+  for (const id of ids) {
+    const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(id, req.auth.businessId);
+    if (!invoice) { skipped.push({ id, reason: "Not found" }); continue; }
+    if (invoice.approval_status === "pending") { skipped.push({ id, reason: "Needs approval first" }); continue; }
+    const customer = invoice.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null;
+    if (!customer?.email) { skipped.push({ id, reason: "No customer email on file" }); continue; }
+
+    try {
+      const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
+      const prefix = printPrefix(invoice.currency);
+      const template = getTemplate(business, "invoice");
+      const templateVars = {
+        business_name: business.name || "", customer_name: customer.name || "there",
+        document_number: invoice.invoice_number, amount: Number(invoice.total).toFixed(2),
+        balance_due: Number(invoice.balance_due).toFixed(2),
+        due_date: invoice.due_date ? ` (due ${formatDate(invoice.due_date, business.date_format)})` : "",
+      };
+      const subject = mergeTemplate(template.subject, templateVars);
+      const bodyText = mergeTemplate(template.body, templateVars);
+      const upiQrPngBuffer = await upiQrPngBufferForInvoice(business, invoice);
+      const projectProgress = computeProjectProgress(invoice);
+      const pdfBuffer = await renderDocumentPdf({
+        docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: formatDate(invoice.invoice_date, business.date_format),
+        headlineLabel: "Balance Due", headlineValue: `${prefix} ${Number(invoice.balance_due).toFixed(2)}`,
+        business, party: customer, partyLabel: "Bill To", lineItems,
+        totals: { ...invoice, ...projectProgress }, notes: invoice.notes, upiQrPngBuffer,
+      });
+      const ctaUrl = invoice.public_token ? `${req.protocol}://${req.get("host")}/view/invoice/${invoice.public_token}` : null;
+      const html = renderEmailHtml({
+        business, bodyText, ctaUrl, ctaLabel: "View Invoice",
+        summaryRows: [
+          ["Invoice Number", invoice.invoice_number],
+          ["Amount", `${prefix} ${Number(invoice.total).toFixed(2)}`],
+          ...(invoice.balance_due > 0 ? [["Balance Due", `${prefix} ${Number(invoice.balance_due).toFixed(2)}`]] : []),
+        ],
+      });
+      await sendDocumentEmail({ business, to: customer.email, subject, text: bodyText, html, pdfBuffer, pdfFilename: `${invoice.invoice_number}.pdf` });
+      if (invoice.status === "draft") db.prepare("UPDATE invoices SET status = 'sent' WHERE id = ?").run(invoice.id);
+      sent.push(id);
+    } catch (err) {
+      skipped.push({ id, reason: err instanceof SmtpNotConfiguredError ? err.message : "Failed to send" });
+    }
+  }
+  res.json({ sent, skipped });
+});
+
 // Email the invoice to the customer (or an override address) as a PDF attachment.
 router.post("/:id/send", async (req, res) => {
   const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
+  if (invoice.approval_status === "pending") {
+    return res.status(400).json({ error: "This invoice needs Owner/Admin approval before it can be sent." });
+  }
 
   const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
   const customer = invoice.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null;

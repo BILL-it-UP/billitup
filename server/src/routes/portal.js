@@ -80,4 +80,30 @@ router.get("/payments", (req, res) => {
   res.json(rows);
 });
 
+// The customer side of an invoice's comment thread — see routes/invoices.js
+// for the matching business-side read/post. Scoped to invoices that
+// actually belong to this logged-in customer, same as every other portal
+// route (2026-09-16).
+router.get("/invoices/:invoiceId/comments", (req, res) => {
+  const customer = req.customer;
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND customer_id = ? AND business_id = ?")
+    .get(req.params.invoiceId, customer.id, customer.business_id);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+  const rows = db.prepare("SELECT * FROM invoice_comments WHERE invoice_id = ? ORDER BY created_at ASC").all(invoice.id);
+  res.json(rows);
+});
+
+router.post("/invoices/:invoiceId/comments", (req, res) => {
+  const customer = req.customer;
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND customer_id = ? AND business_id = ?")
+    .get(req.params.invoiceId, customer.id, customer.business_id);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+  const message = (req.body?.message || "").trim();
+  if (!message) return res.status(400).json({ error: "message is required" });
+  const result = db.prepare(
+    "INSERT INTO invoice_comments (invoice_id, business_id, author_type, author_name, message) VALUES (?, ?, 'customer', ?, ?)"
+  ).run(invoice.id, customer.business_id, customer.name || "Customer", message);
+  res.status(201).json(db.prepare("SELECT * FROM invoice_comments WHERE id = ?").get(result.lastInsertRowid));
+});
+
 export default router;

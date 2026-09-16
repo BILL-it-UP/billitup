@@ -18,6 +18,10 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showExportModal, setShowExportModal] = useState(false);
+  const [business, setBusiness] = useState(null);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
   const user = getUser();
   const isOwnerOrAdmin = user?.role === "owner" || user?.role === "admin";
   const dateFormat = useDateFormat();
@@ -41,8 +45,38 @@ export default function Dashboard() {
       .catch((err) => setLoadError(err.message || "Could not load invoices."))
       .finally(() => setLoading(false));
     if (isOwnerOrAdmin) api.getReportsSummary().then(setSummary).catch(() => {});
+    api.getBusiness().then(setBusiness).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwnerOrAdmin]);
+
+  // e-Invoicing under GST becomes mandatory once a business crosses ₹5 crore
+  // in aggregate turnover in any year since FY 2017-18 — this is just an
+  // awareness banner from the turnover Naveen enters in Settings, not a
+  // check against actual GST portal data, so it's deliberately worded as a
+  // reminder to verify rather than a determination (2026-09-16).
+  const showEInvoiceBanner = Number(business?.annual_turnover) >= 50000000;
+
+  const toggleBulkSelect = (id) => {
+    setBulkSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const runBulkAction = async (action) => {
+    if (bulkSelectedIds.length === 0) return;
+    setBulkBusy(true);
+    setBulkResult(null);
+    try {
+      const res = action === "send"
+        ? await api.bulkSendInvoices(bulkSelectedIds)
+        : await api.bulkInvoiceStatus(bulkSelectedIds, action);
+      setBulkResult(res);
+      setBulkSelectedIds([]);
+      await loadInvoices();
+    } catch (err) {
+      setBulkResult({ error: err.message });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const filteredInvoices = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -65,6 +99,13 @@ export default function Dashboard() {
       </div>
 
       {loadError && <p className="error">{loadError}</p>}
+      {isOwnerOrAdmin && showEInvoiceBanner && (
+        <p className="muted">
+          Your annual turnover is set at ₹{formatMoney(business.annual_turnover)} or more, and e-Invoicing under GST is
+          mandatory past ₹5 crore turnover. Double check with your GST practitioner whether e-Invoicing applies to you
+          (BillItUp doesn't generate e-Invoices itself).
+        </p>
+      )}
 
       {isOwnerOrAdmin && summary && (
         <>
@@ -156,6 +197,22 @@ export default function Dashboard() {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
+            {isOwnerOrAdmin && bulkSelectedIds.length > 0 && (
+              <div className="list-toolbar bulk-action-toolbar">
+                <span>{bulkSelectedIds.length} selected</span>
+                <button type="button" onClick={() => runBulkAction("sent")} disabled={bulkBusy}>Mark Sent</button>
+                <button type="button" onClick={() => runBulkAction("cancelled")} disabled={bulkBusy}>Cancel</button>
+                <button type="button" onClick={() => runBulkAction("send")} disabled={bulkBusy}>{bulkBusy ? "Working..." : "Email"}</button>
+                <button type="button" className="link-btn" onClick={() => setBulkSelectedIds([])} disabled={bulkBusy}>Clear</button>
+              </div>
+            )}
+            {bulkResult && (
+              <p className="muted">
+                {bulkResult.error
+                  ? bulkResult.error
+                  : `Done: ${(bulkResult.updated || bulkResult.sent || []).length} updated${(bulkResult.skipped || []).length ? `, ${bulkResult.skipped.length} skipped (${bulkResult.skipped.map((s) => s.reason).join("; ")})` : ""}.`}
+              </p>
+            )}
             <div className="invoice-list">
               {filteredInvoices.length === 0 && (
                 <p className="list-empty-filtered">No invoices match your search.</p>
@@ -163,21 +220,27 @@ export default function Dashboard() {
               {filteredInvoices.map((inv) => {
                 const label = relativeDueLabel(inv);
                 return (
-                  <button
-                    key={inv.id}
-                    type="button"
-                    className={`invoice-list-item${inv.id === selectedId ? " active" : ""}`}
-                    onClick={() => setSelectedId(inv.id)}
-                  >
-                    <div className="invoice-list-item-top">
-                      <span className="invoice-list-item-name">{inv.customer_name || "Walk-in customer"}</span>
-                      <span className="invoice-list-item-amount">{currencySymbol(inv.currency)}{formatMoney(inv.total)}</span>
-                    </div>
-                    <div className="invoice-list-item-bottom">
-                      <span className="muted">{inv.invoice_number} · {formatDate(inv.invoice_date, dateFormat)}</span>
-                      <span className={`due-label due-label-${label.tone}`}>{label.text}</span>
-                    </div>
-                  </button>
+                  <div key={inv.id} className={`invoice-list-item${inv.id === selectedId ? " active" : ""}`}>
+                    {isOwnerOrAdmin && (
+                      <input
+                        type="checkbox"
+                        className="invoice-list-item-checkbox"
+                        checked={bulkSelectedIds.includes(inv.id)}
+                        onChange={() => toggleBulkSelect(inv.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
+                    <button type="button" className="invoice-list-item-body" onClick={() => setSelectedId(inv.id)}>
+                      <div className="invoice-list-item-top">
+                        <span className="invoice-list-item-name">{inv.customer_name || "Walk-in customer"}</span>
+                        <span className="invoice-list-item-amount">{currencySymbol(inv.currency)}{formatMoney(inv.total)}</span>
+                      </div>
+                      <div className="invoice-list-item-bottom">
+                        <span className="muted">{inv.invoice_number} · {formatDate(inv.invoice_date, dateFormat)}</span>
+                        <span className={`due-label due-label-${label.tone}`}>{label.text}</span>
+                      </div>
+                    </button>
+                  </div>
                 );
               })}
             </div>

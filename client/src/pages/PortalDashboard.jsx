@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, getCustomerUser, clearCustomerSession } from "../lib/api";
 import { formatMoney, formatDate } from "../lib/format";
 import { IconInvoice, IconPayments, IconCustomers, IconLogout } from "../components/Icons";
+import InvoiceComments from "../components/InvoiceComments";
 
 // The logged-in client portal — a customer's own view of every invoice
 // raised against them and its status. Behind requireCustomerAuth on the
@@ -32,6 +33,7 @@ export default function PortalDashboard() {
   const [payments, setPayments] = useState(null);
   const [paymentsError, setPaymentsError] = useState("");
   const [payQrOpenId, setPayQrOpenId] = useState(null);
+  const [commentsOpenId, setCommentsOpenId] = useState(null);
 
   useEffect(() => {
     if (!getCustomerUser()) {
@@ -141,8 +143,27 @@ export default function PortalDashboard() {
                               </button>
                             </>
                           )}
+                          {" · "}
+                          <button
+                            type="button"
+                            className="link-btn"
+                            onClick={() => setCommentsOpenId(commentsOpenId === inv.id ? null : inv.id)}
+                          >
+                            {commentsOpenId === inv.id ? "Hide Comments" : "Comments"}
+                          </button>
                         </td>
                       </tr>
+                      {commentsOpenId === inv.id && (
+                        <tr>
+                          <td colSpan={7}>
+                            <InvoiceComments
+                              loadComments={() => api.getPortalInvoiceComments(inv.id)}
+                              postComment={(message) => api.createPortalInvoiceComment(inv.id, message)}
+                              viewerType="customer"
+                            />
+                          </td>
+                        </tr>
+                      )}
                       {payQrOpenId === inv.id && inv.upi_qr_data_url && (
                         <tr>
                           <td colSpan={7}>

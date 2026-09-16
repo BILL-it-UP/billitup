@@ -45,10 +45,22 @@ function loadInvoiceByToken(token) {
 // logged-in view), both behind requireCustomerAuth so access can actually
 // be revoked, which a plain link could never do.
 
+// A client actually loading this page is what "viewed by client" means (see
+// db.js) — stamped here rather than only on the /pdf route, since most
+// clients open the link and read it on-screen without ever downloading a
+// PDF. first_viewed_at is set once; last_viewed_at updates every time.
+function markViewed(invoiceId) {
+  const now = new Date().toISOString();
+  db.prepare(
+    "UPDATE invoices SET first_viewed_at = COALESCE(first_viewed_at, ?), last_viewed_at = ? WHERE id = ?"
+  ).run(now, now, invoiceId);
+}
+
 router.get("/invoices/:token", async (req, res) => {
   const found = loadInvoiceByToken(req.params.token);
   if (!found) return res.status(404).json({ error: "Not found" });
   const { invoice, lineItems, customer, business } = found;
+  markViewed(invoice.id);
   const upiQr = await upiQrForInvoice(business, invoice);
   const projectProgress = computeProjectProgress(invoice);
   res.json({ ...invoice, ...projectProgress, lineItems, customer, business: publicBusinessFields(business), upi_qr_data_url: upiQr?.dataUrl || null });
@@ -58,6 +70,7 @@ router.get("/invoices/:token/pdf", async (req, res) => {
   const found = loadInvoiceByToken(req.params.token);
   if (!found) return res.status(404).json({ error: "Not found" });
   const { invoice, lineItems, customer, business } = found;
+  markViewed(invoice.id);
   try {
     const upiQrPngBuffer = await upiQrPngBufferForInvoice(business, invoice);
     const projectProgress = computeProjectProgress(invoice);

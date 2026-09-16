@@ -149,6 +149,8 @@ export const api = {
   updateCustomer: (id, payload) => request(`/api/customers/${id}`, { method: "PUT", body: payload }),
   setCustomerPortalEnabled: (id, enabled) => request(`/api/customers/${id}/portal`, { method: "PUT", body: { enabled } }),
   resendCustomerPortalInvite: (id) => request(`/api/customers/${id}/portal/resend-invite`, { method: "POST" }),
+  addRetainerTransaction: (id, payload) => request(`/api/customers/${id}/retainer`, { method: "POST", body: payload }),
+  getRetainerTransactions: (id) => request(`/api/customers/${id}/retainer-transactions`),
 
   listItems: () => request("/api/items"),
   createItem: (payload) => request("/api/items", { method: "POST", body: payload }),
@@ -161,6 +163,12 @@ export const api = {
   setInvoiceStatus: (id, status) => request(`/api/invoices/${id}/status`, { method: "PUT", body: { status } }),
   recordPayment: (id, payload) => request(`/api/invoices/${id}/payments`, { method: "POST", body: payload }),
   sendInvoiceEmail: (id, payload) => request(`/api/invoices/${id}/send`, { method: "POST", body: payload }),
+  approveInvoice: (id) => request(`/api/invoices/${id}/approve`, { method: "PUT" }),
+  setInvoiceGstImsStatus: (id, status) => request(`/api/invoices/${id}/gst-ims-status`, { method: "PUT", body: { status } }),
+  getInvoiceComments: (id) => request(`/api/invoices/${id}/comments`),
+  createInvoiceComment: (id, message) => request(`/api/invoices/${id}/comments`, { method: "POST", body: { message } }),
+  bulkInvoiceStatus: (ids, status) => request("/api/invoices/bulk-status", { method: "POST", body: { ids, status } }),
+  bulkSendInvoices: (ids) => request("/api/invoices/bulk-send", { method: "POST", body: { ids } }),
 
   listUsers: () => request("/api/users"),
   createUser: (payload) => request("/api/users", { method: "POST", body: payload }),
@@ -222,7 +230,15 @@ export const api = {
 
   listPurchases: () => request("/api/purchases"),
   createPurchase: (payload) => request("/api/purchases", { method: "POST", body: payload }),
+  updatePurchase: (id, payload) => request(`/api/purchases/${id}`, { method: "PUT", body: payload }),
   deletePurchase: (id) => request(`/api/purchases/${id}`, { method: "DELETE" }),
+  getBillablePurchases: (customerId) => request(`/api/purchases/billable?customer_id=${encodeURIComponent(customerId)}`),
+
+  listTimeEntries: () => request("/api/time-entries"),
+  getUnbilledTimeEntries: (customerId) => request(`/api/time-entries/unbilled?customer_id=${encodeURIComponent(customerId)}`),
+  createTimeEntry: (payload) => request("/api/time-entries", { method: "POST", body: payload }),
+  updateTimeEntry: (id, payload) => request(`/api/time-entries/${id}`, { method: "PUT", body: payload }),
+  deleteTimeEntry: (id) => request(`/api/time-entries/${id}`, { method: "DELETE" }),
 
   createSuggestion: (message, category) => request("/api/suggestions", { method: "POST", body: { message, category } }),
   listSuggestions: () => request("/api/suggestions"),
@@ -289,4 +305,7 @@ export const api = {
     return data;
   }),
   getPortalMe: () => portalRequest("/api/portal/me"),
+  getPortalPayments: () => portalRequest("/api/portal/payments"),
+  getPortalInvoiceComments: (invoiceId) => portalRequest(`/api/portal/invoices/${invoiceId}/comments`),
+  createPortalInvoiceComment: (invoiceId, message) => portalRequest(`/api/portal/invoices/${invoiceId}/comments`, { method: "POST", body: { message } }),
 };

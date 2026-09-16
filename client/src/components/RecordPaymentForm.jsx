@@ -19,6 +19,7 @@ export default function RecordPaymentForm({ balanceDue, onRecord }) {
   const [paidAt, setPaidAt] = useState(todayISO());
   const [mode, setMode] = useState("cash");
   const [notes, setNotes] = useState("");
+  const [tdsAmount, setTdsAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,6 +28,7 @@ export default function RecordPaymentForm({ balanceDue, onRecord }) {
     setPaidAt(todayISO());
     setMode("cash");
     setNotes("");
+    setTdsAmount("");
     setError("");
     setOpen(true);
   };
@@ -36,7 +38,13 @@ export default function RecordPaymentForm({ balanceDue, onRecord }) {
     setError("");
     setSaving(true);
     try {
-      await onRecord({ amount: Number(amount), paid_at: paidAt, mode, notes: notes || undefined });
+      await onRecord({
+        amount: Number(amount),
+        paid_at: paidAt,
+        mode,
+        notes: notes || undefined,
+        tds_amount: tdsAmount ? Number(tdsAmount) : undefined,
+      });
       setOpen(false);
     } catch (err) {
       setError(err.message);
@@ -67,10 +75,16 @@ export default function RecordPaymentForm({ balanceDue, onRecord }) {
           </select>
         </label>
       </div>
-      <label className="block">
-        Reference / Notes (optional)
-        <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. UTR number, cheque number" />
-      </label>
+      <div className="form-row">
+        <label className="block">
+          Reference / Notes (optional)
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. UTR number, cheque number" />
+        </label>
+        <label className="block">
+          TDS Deducted (₹, optional)
+          <input type="number" step="0.01" min="0" value={tdsAmount} onChange={(e) => setTdsAmount(e.target.value)} placeholder="If the client deducted TDS" />
+        </label>
+      </div>
       <div className="payment-form-actions">
         <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Payment"}</button>
         <button type="button" className="link-btn" onClick={() => setOpen(false)}>Cancel</button>
