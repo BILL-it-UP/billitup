@@ -6,6 +6,7 @@ import { formatMoney } from "../lib/format";
 import ItemPicker from "../components/ItemPicker";
 import CustomerPicker from "../components/CustomerPicker";
 import TaxRateInput from "../components/TaxRateInput";
+import CollapsibleSection from "../components/CollapsibleSection";
 import { GST_TREATMENTS } from "../lib/gst";
 import { CURRENCIES, currencySymbol } from "../lib/currencies";
 
@@ -302,6 +303,9 @@ export default function NewInvoice() {
 
   if (loadingInvoice) return <p className="muted">Loading...</p>;
 
+  const hasMilestoneData = !!(projectName || milestoneLabel || projectTotalAmount);
+  const hasEwayData = !!(ewayBillNumber || ewayVehicleNumber || ewayTransporterName || ewayTransporterId || ewayDistanceKm);
+
   return (
     <div>
       <h1>{isEdit ? "Edit Invoice" : "New Invoice"}</h1>
@@ -315,194 +319,203 @@ export default function NewInvoice() {
         <p className="muted">This invoice will need Owner/Admin approval before it can be sent.</p>
       )}
       <form onSubmit={(e) => e.preventDefault()}>
-        <div className="form-row">
-          <label className="block">Customer
-            <CustomerPicker
-              customers={customers}
-              customerId={customerId}
-              customerName={customerName}
-              onSelect={pickCustomer}
-              onCreated={handleCustomerCreated}
-            />
-          </label>
-          <label className="block">Invoice date
-            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
-          </label>
-          <label className="block">Due date (optional)
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-          </label>
-          <label className="block">PO / Reference number (optional)
-            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PO-4021" />
-          </label>
-          <label className="block">Currency
-            <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="form-row">
-          <label className="block">GST Number (optional)
-            <input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="Defaults from the customer's GSTIN" />
-          </label>
-          <label className="block" style={{ flex: 2 }}>Subject (optional)
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Let your customer know what this invoice is for" />
-          </label>
-          <label className="block">GST Treatment
-            <select value={gstTreatment} onChange={(e) => setGstTreatment(e.target.value)}>
-              {GST_TREATMENTS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </label>
-        </div>
-        {gstTreatment === "rcm" && (
-          <p className="muted">
-            Reverse charge: the tax below is shown for your customer's own GST filing, but is not added to what
-            they owe you. They pay that GST directly to the government.
-          </p>
-        )}
-        {gstTreatment === "none" && (
-          <p className="muted">No GST will be added to this invoice, whatever tax % is set on a line below.</p>
-        )}
-
-        <table className="table line-item-table">
-          <thead>
-            <tr><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
-          </thead>
-          <tbody>
-            {lines.map((line, i) => (
-              <tr key={i}>
-                <td className="line-item-details">
-                  <ItemPicker
-                    items={items}
-                    itemId={line.item_id}
-                    itemName={line.item_name}
-                    description={line.description}
-                    canManage={canManageItems}
-                    onSelect={(item) => pickItem(i, item)}
-                    onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
-                    onDescriptionChange={(text) => updateLine(i, { description: text })}
-                    onItemCreated={(item) => handleItemCreated(i, item)}
+        <div className="invoice-form-grid">
+          <div className="invoice-form-main">
+            <section className="form-card">
+              <h2>Invoice Details</h2>
+              <div className="form-row">
+                <label className="block">Customer
+                  <CustomerPicker
+                    customers={customers}
+                    customerId={customerId}
+                    customerName={customerName}
+                    onSelect={pickCustomer}
+                    onCreated={handleCustomerCreated}
                   />
-                </td>
-                <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
-                <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
-                <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
-                <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
-                <td className="num">{symbol}{formatMoney(lineAmount(line))}</td>
-                <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button type="button" className="link-btn" onClick={addLine}>+ Add line</button>
+                </label>
+                <label className="block">Invoice date
+                  <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+                </label>
+                <label className="block">Due date (optional)
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                </label>
+                <label className="block">PO / Reference number (optional)
+                  <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PO-4021" />
+                </label>
+              </div>
+              <label className="block" style={{ maxWidth: "none" }}>Subject (optional)
+                <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Let your customer know what this invoice is for" />
+              </label>
+            </section>
 
-        <div className="totals-box">
-          <div><span>Sub Total</span><span>{symbol}{formatMoney(subTotal)}</span></div>
-          <div><span>Discount</span><span>-{symbol}{formatMoney(discountTotal)}</span></div>
-          <div><span>{gstTreatment === "rcm" ? "Tax (reverse charge)" : "Tax"}</span><span>{symbol}{formatMoney(gstTreatment === "none" ? 0 : taxTotal)}</span></div>
-          <div className="grand-total"><span>Total</span><span>{symbol}{formatMoney(total)}</span></div>
-        </div>
+            <section className="form-card">
+              <h2>Line Items</h2>
+              <table className="table line-item-table">
+                <thead>
+                  <tr><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
+                </thead>
+                <tbody>
+                  {lines.map((line, i) => (
+                    <tr key={i}>
+                      <td className="line-item-details">
+                        <ItemPicker
+                          items={items}
+                          itemId={line.item_id}
+                          itemName={line.item_name}
+                          description={line.description}
+                          canManage={canManageItems}
+                          onSelect={(item) => pickItem(i, item)}
+                          onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
+                          onDescriptionChange={(text) => updateLine(i, { description: text })}
+                          onItemCreated={(item) => handleItemCreated(i, item)}
+                        />
+                      </td>
+                      <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
+                      <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
+                      <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
+                      <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
+                      <td className="num">{symbol}{formatMoney(lineAmount(line))}</td>
+                      <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button type="button" className="link-btn" onClick={addLine}>+ Add line</button>
 
-        <label className="block">Terms (optional)
-          <input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="e.g. Net 15" />
-        </label>
-        <label className="block">Notes (optional, shown on the invoice)
-          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
+              {gstTreatment === "rcm" && (
+                <p className="muted">
+                  Reverse charge: the tax below is shown for your customer's own GST filing, but is not added to what
+                  they owe you. They pay that GST directly to the government.
+                </p>
+              )}
+              {gstTreatment === "none" && (
+                <p className="muted">No GST will be added to this invoice, whatever tax % is set on a line above.</p>
+              )}
 
-        <fieldset className="eway-fieldset">
-          <legend>Milestone / Project Billing (optional)</legend>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Billing a project in stages? Give it a name and, optionally, a total value — every invoice you raise
-            with the same project name (for this customer) is added up automatically and shown on each one, so
-            you and your client can both see how much of the project has been billed so far.
-          </p>
-          <div className="form-row">
-            <label className="block">Project name
-              <input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Website Redesign" />
-            </label>
-            <label className="block">Milestone label
-              <input value={milestoneLabel} onChange={(e) => setMilestoneLabel(e.target.value)} placeholder="e.g. Milestone 1 of 3, Advance" />
-            </label>
-            <label className="block">Project total (optional)
-              <input type="number" step="0.01" value={projectTotalAmount} onChange={(e) => setProjectTotalAmount(e.target.value)} placeholder={`Total ${currency} value of the whole project`} />
-            </label>
+              <div className="totals-box">
+                <div><span>Sub Total</span><span>{symbol}{formatMoney(subTotal)}</span></div>
+                <div><span>Discount</span><span>-{symbol}{formatMoney(discountTotal)}</span></div>
+                <div><span>{gstTreatment === "rcm" ? "Tax (reverse charge)" : "Tax"}</span><span>{symbol}{formatMoney(gstTreatment === "none" ? 0 : taxTotal)}</span></div>
+                <div className="grand-total"><span>Total</span><span>{symbol}{formatMoney(total)}</span></div>
+              </div>
+            </section>
+
+            <section className="form-card">
+              <h2>Terms &amp; Notes</h2>
+              <label className="block" style={{ maxWidth: "none" }}>Terms (optional)
+                <input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="e.g. Net 15" />
+              </label>
+              <label className="block" style={{ maxWidth: "none" }}>Notes (optional, shown on the invoice)
+                <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </label>
+            </section>
           </div>
-        </fieldset>
 
-        {!isEdit && customerId && (unbilledTimeEntries.length > 0 || billablePurchases.length > 0 || retainerBalance > 0) && (
-          <fieldset className="eway-fieldset">
-            <legend>Unbilled Hours, Expenses &amp; Retainer (optional)</legend>
-            {unbilledTimeEntries.length > 0 && (
-              <div className="block">
-                <p className="muted" style={{ marginTop: 0, marginBottom: 4 }}>Add unbilled hours logged for this customer:</p>
-                {unbilledTimeEntries.map((te) => (
-                  <label key={te.id} className="checkbox-row">
-                    <input type="checkbox" checked={selectedTimeEntryIds.includes(te.id)} onChange={() => toggleTimeEntry(te)} />
-                    {te.entry_date}: {te.hours}h{te.project_name ? ` (${te.project_name})` : ""}{te.description ? `, ${te.description}` : ""} @ {symbol}{formatMoney(te.rate)}/hr
-                  </label>
-                ))}
-              </div>
-            )}
-            {billablePurchases.length > 0 && (
-              <div className="block">
-                <p className="muted" style={{ marginTop: 0, marginBottom: 4 }}>Add billable expenses logged for this customer:</p>
-                {billablePurchases.map((p) => (
-                  <label key={p.id} className="checkbox-row">
-                    <input type="checkbox" checked={selectedPurchaseIds.includes(p.id)} onChange={() => toggleBillablePurchase(p)} />
-                    {p.purchase_date}: {p.description || "Expense"}, {symbol}{formatMoney(p.total)}
-                  </label>
-                ))}
-              </div>
-            )}
-            {retainerBalance > 0 && (
-              <label className="block">
-                Apply from retainer balance ({symbol}{formatMoney(retainerBalance)} available)
-                <input
-                  type="number" step="0.01" min="0" max={retainerBalance}
-                  value={retainerApplied}
-                  onChange={(e) => setRetainerApplied(e.target.value)}
-                  placeholder="0.00"
-                />
+          <div className="invoice-form-sidebar">
+            <section className="form-card">
+              <h2>Invoice Settings</h2>
+              <label className="block" style={{ maxWidth: "none" }}>Currency
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                  {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>)}
+                </select>
               </label>
-            )}
-          </fieldset>
-        )}
+              <label className="block" style={{ maxWidth: "none" }}>GST Number (optional)
+                <input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="Defaults from the customer's GSTIN" />
+              </label>
+              <label className="block" style={{ maxWidth: "none" }}>GST Treatment
+                <select value={gstTreatment} onChange={(e) => setGstTreatment(e.target.value)}>
+                  {GST_TREATMENTS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </label>
+            </section>
 
-        {isPremium ? (
-          <fieldset className="eway-fieldset">
-            <legend>E-Way Bill Details (optional)</legend>
-            <p className="muted" style={{ marginTop: 0 }}>
-              BillItUp doesn't generate the e-way bill itself — record the details of one you've already generated
-              on the government portal, and it will show on this invoice.
-            </p>
-            <div className="form-row">
-              <label className="block">E-Way Bill Number
-                <input value={ewayBillNumber} onChange={(e) => setEwayBillNumber(e.target.value)} />
+            <CollapsibleSection title="Project / Milestone Billing" defaultOpen={isEdit && hasMilestoneData}>
+              <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+                Billing a project in stages? Give it a name and, optionally, a total value — every invoice you raise
+                with the same project name (for this customer) is added up automatically and shown on each one.
+              </p>
+              <label className="block" style={{ maxWidth: "none" }}>Project name
+                <input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Website Redesign" />
               </label>
-              <label className="block">Vehicle Number
-                <input value={ewayVehicleNumber} onChange={(e) => setEwayVehicleNumber(e.target.value)} placeholder="e.g. TN09AB1234" />
+              <label className="block" style={{ maxWidth: "none" }}>Milestone label
+                <input value={milestoneLabel} onChange={(e) => setMilestoneLabel(e.target.value)} placeholder="e.g. Milestone 1 of 3, Advance" />
               </label>
-            </div>
-            <div className="form-row">
-              <label className="block">Transporter Name
-                <input value={ewayTransporterName} onChange={(e) => setEwayTransporterName(e.target.value)} />
+              <label className="block" style={{ maxWidth: "none" }}>Project total (optional)
+                <input type="number" step="0.01" value={projectTotalAmount} onChange={(e) => setProjectTotalAmount(e.target.value)} placeholder={`Total ${currency} value of the whole project`} />
               </label>
-              <label className="block">Transporter ID (GSTIN, optional)
-                <input value={ewayTransporterId} onChange={(e) => setEwayTransporterId(e.target.value)} />
-              </label>
-              <label className="block">Distance (km, optional)
-                <input type="number" step="0.1" value={ewayDistanceKm} onChange={(e) => setEwayDistanceKm(e.target.value)} />
-              </label>
-            </div>
-          </fieldset>
-        ) : (
-          business && (
-            <p className="muted">
-              E-Way Bill tracking for invoices involving goods movement is a premium feature. Get in touch to
-              upgrade — everything else stays free.
-            </p>
-          )
-        )}
+            </CollapsibleSection>
+
+            {!isEdit && customerId && (unbilledTimeEntries.length > 0 || billablePurchases.length > 0 || retainerBalance > 0) && (
+              <section className="form-card">
+                <h2>Unbilled Hours, Expenses &amp; Retainer</h2>
+                {unbilledTimeEntries.length > 0 && (
+                  <div className="block">
+                    <p className="muted" style={{ marginTop: 0, marginBottom: 4, fontSize: 13 }}>Add unbilled hours logged for this customer:</p>
+                    {unbilledTimeEntries.map((te) => (
+                      <label key={te.id} className="checkbox-row">
+                        <input type="checkbox" checked={selectedTimeEntryIds.includes(te.id)} onChange={() => toggleTimeEntry(te)} />
+                        {te.entry_date}: {te.hours}h{te.project_name ? ` (${te.project_name})` : ""}{te.description ? `, ${te.description}` : ""} @ {symbol}{formatMoney(te.rate)}/hr
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {billablePurchases.length > 0 && (
+                  <div className="block">
+                    <p className="muted" style={{ marginTop: 0, marginBottom: 4, fontSize: 13 }}>Add billable expenses logged for this customer:</p>
+                    {billablePurchases.map((p) => (
+                      <label key={p.id} className="checkbox-row">
+                        <input type="checkbox" checked={selectedPurchaseIds.includes(p.id)} onChange={() => toggleBillablePurchase(p)} />
+                        {p.purchase_date}: {p.description || "Expense"}, {symbol}{formatMoney(p.total)}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {retainerBalance > 0 && (
+                  <label className="block" style={{ maxWidth: "none" }}>
+                    Apply from retainer balance ({symbol}{formatMoney(retainerBalance)} available)
+                    <input
+                      type="number" step="0.01" min="0" max={retainerBalance}
+                      value={retainerApplied}
+                      onChange={(e) => setRetainerApplied(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </label>
+                )}
+              </section>
+            )}
+
+            {isPremium ? (
+              <CollapsibleSection title="E-Way Bill Details" defaultOpen={isEdit && hasEwayData}>
+                <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+                  BillItUp doesn't generate the e-way bill itself — record the details of one you've already generated
+                  on the government portal, and it will show on this invoice.
+                </p>
+                <label className="block" style={{ maxWidth: "none" }}>E-Way Bill Number
+                  <input value={ewayBillNumber} onChange={(e) => setEwayBillNumber(e.target.value)} />
+                </label>
+                <label className="block" style={{ maxWidth: "none" }}>Vehicle Number
+                  <input value={ewayVehicleNumber} onChange={(e) => setEwayVehicleNumber(e.target.value)} placeholder="e.g. TN09AB1234" />
+                </label>
+                <label className="block" style={{ maxWidth: "none" }}>Transporter Name
+                  <input value={ewayTransporterName} onChange={(e) => setEwayTransporterName(e.target.value)} />
+                </label>
+                <label className="block" style={{ maxWidth: "none" }}>Transporter ID (GSTIN, optional)
+                  <input value={ewayTransporterId} onChange={(e) => setEwayTransporterId(e.target.value)} />
+                </label>
+                <label className="block" style={{ maxWidth: "none" }}>Distance (km, optional)
+                  <input type="number" step="0.1" value={ewayDistanceKm} onChange={(e) => setEwayDistanceKm(e.target.value)} />
+                </label>
+              </CollapsibleSection>
+            ) : (
+              business && (
+                <p className="muted">
+                  E-Way Bill tracking for invoices involving goods movement is a premium feature. Get in touch to
+                  upgrade — everything else stays free.
+                </p>
+              )
+            )}
+          </div>
+        </div>
 
         {error && <p className="error">{error}</p>}
         {isEdit ? (

@@ -448,6 +448,47 @@ textarea { resize: vertical; }
 .eway-fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 4px 16px 8px; margin: 0 0 16px; }
 .eway-fieldset legend { padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
 
+/* ---- New Invoice / Edit Invoice: two column layout (2026-09-16) ----
+   Main column carries the fields every invoice needs (customer, line
+   items, terms); the sidebar holds settings and the sections most
+   invoices never touch, so the page reads as one clear flow instead of
+   a stack of same-weight boxes. Collapses to a single column on
+   narrower screens. */
+.invoice-form-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px;
+  align-items: start;
+}
+.invoice-form-main, .invoice-form-sidebar { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+@media (max-width: 900px) {
+  .invoice-form-grid { grid-template-columns: 1fr; }
+}
+
+.form-card {
+  background: white; border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; box-shadow: 0 1px 2px rgba(28, 31, 38, 0.04);
+}
+.form-card h2 { margin: 0 0 16px; font-size: 16px; }
+.form-card > *:last-child { margin-bottom: 0; }
+
+/* Optional field groups start collapsed behind a "+ Add X" link and
+   expand in place, so the sidebar shows only what a given invoice
+   actually needs instead of several always open boxes. */
+.collapsible-section-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: 14px; border: 1px dashed var(--border); border-radius: 12px;
+  background: white; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer;
+}
+.collapsible-section-toggle:hover { border-color: var(--accent); background: var(--bg); }
+.collapsible-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.collapsible-section-header h2 { margin: 0; }
+
+/* Lets someone insert a dynamic field like the invoice number or amount
+   without needing to know the {{...}} syntax exists (2026-09-16). */
+.insert-field-select {
+  width: auto; margin-top: 6px; margin-bottom: 14px; padding: 5px 10px;
+  font-size: 12px; color: var(--muted); border-radius: 999px; display: inline-block;
+}
+
 .doc-line-items thead tr { background: #2b2f38; }
 .doc-line-items thead th { color: white; font-weight: 600; padding: 10px 8px; border-bottom: none; }
 /* Item & Description column — preserve line breaks so a multi-line item

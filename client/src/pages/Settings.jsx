@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, getUser, setSession, clearSession } from "../lib/api";
 import { formatDateTime } from "../lib/format";
@@ -8,6 +8,50 @@ import {
 import { INDIAN_STATES } from "../lib/gst";
 import { CURRENCIES } from "../lib/currencies";
 import { DEFAULT_TEMPLATES as DEFAULT_EMAIL_TEMPLATES } from "../lib/emailTemplates";
+import InsertFieldSelect from "../components/InsertFieldSelect";
+
+// A ready-to-send starting point for Terms & Conditions, shown as the
+// field's real value (not grey hint text) whenever a business hasn't
+// written their own — so a non-technical person sees usable wording
+// straight away and can just edit or replace it, rather than stare at an
+// empty box (2026-09-16).
+const DEFAULT_TERMS_AND_CONDITIONS =
+  "1. Payment is due within 15 days of the invoice date, unless a different due date is shown above.\n" +
+  "2. Late payments may attract interest as permitted by law.\n" +
+  "3. Goods once sold are not returnable or exchangeable.\n" +
+  "4. All disputes are subject to the jurisdiction of the courts in our city only.";
+
+// Plain names for every {{token}} an email template can use, and which
+// ones apply to which document type — feeds InsertFieldSelect below so
+// nobody has to know the {{...}} syntax exists to use it (2026-09-16).
+const FIELD_LABELS = {
+  customer_name: "Customer Name",
+  business_name: "Business Name",
+  document_number: "Document Number",
+  amount: "Amount",
+  balance_due: "Balance Due",
+  due_date: "Due Date",
+  amount_paid: "Amount Paid",
+  status_line: "Payment Status Line",
+};
+const FIELDS_BY_TEMPLATE_TYPE = {
+  invoice: ["customer_name", "business_name", "document_number", "amount"],
+  quote: ["customer_name", "business_name", "document_number", "amount"],
+  credit_note: ["customer_name", "business_name", "document_number", "amount"],
+  reminder: ["customer_name", "business_name", "document_number", "amount", "balance_due", "due_date"],
+  receipt: ["customer_name", "business_name", "document_number", "amount_paid", "balance_due", "status_line"],
+};
+
+// Splices {{token}} into a field's current text at the cursor (or at the
+// end, if the field never had focus), and returns where the cursor should
+// land afterward so InsertFieldSelect can put it back exactly there.
+function insertPlaceholderToken(el, currentValue, token) {
+  const start = el?.selectionStart ?? currentValue.length;
+  const end = el?.selectionEnd ?? currentValue.length;
+  const insertText = `{{${token}}}`;
+  const newValue = currentValue.slice(0, start) + insertText + currentValue.slice(end);
+  return { newValue, newPos: start + insertText.length };
+}
 
 // A small header block shared by every card below — an icon in a colored
 // badge plus a title and one-line description, so each section of the
@@ -420,8 +464,16 @@ function InvoiceBrandingSettings({ business, setBusiness }) {
         </p>
 
         <label>Terms &amp; Conditions
-          <textarea rows={5} value={business.terms_and_conditions || ""} onChange={(e) => setBusiness({ ...business, terms_and_conditions: e.target.value })} placeholder="e.g. Payment due within 15 days. Late payments may attract interest." />
+          <textarea
+            rows={5}
+            value={business.terms_and_conditions ?? DEFAULT_TERMS_AND_CONDITIONS}
+            onChange={(e) => setBusiness({ ...business, terms_and_conditions: e.target.value })}
+          />
         </label>
+        <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
+          This starts filled in with generic wording you can edit or replace outright, and it's exactly what will
+          print on your invoices, so what you see here is what your customers see.
+        </p>
 
         <div className="field-row">
           <label>Authorized signatory name
@@ -731,6 +783,8 @@ function EmailTemplatesCard({ business, setBusiness }) {
   const [savedMsg, setSavedMsg] = useState("");
   const [error, setError] = useState("");
   const [activeType, setActiveType] = useState("invoice");
+  const subjectRef = useRef(null);
+  const bodyRef = useRef(null);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -751,13 +805,28 @@ function EmailTemplatesCard({ business, setBusiness }) {
   const fallback = DEFAULT_EMAIL_TEMPLATES[activeType];
   const subjectKey = `email_subject_${activeType}`;
   const bodyKey = `email_body_${activeType}`;
+  // Shown as the field's real, editable value whenever the business hasn't
+  // written their own — not grey hint text — so what's on screen is exactly
+  // what would be sent, and someone unfamiliar with {{tokens}} still has
+  // working, ready-to-send wording to start from (2026-09-16).
+  const subjectValue = business[subjectKey] ?? fallback.subject;
+  const bodyValue = business[bodyKey] ?? fallback.body;
+
+  const insertField = (ref, key, currentValue, token) => {
+    const { newValue, newPos } = insertPlaceholderToken(ref.current, currentValue, token);
+    setBusiness({ ...business, [key]: newValue });
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.setSelectionRange(newPos, newPos);
+    });
+  };
 
   return (
     <div className="settings-card">
       <CardHeader
         icon={IconMail}
         title="Email Templates"
-        description="What a customer sees when you email them an invoice, quote, credit note, payment reminder, or payment receipt. Leave a field blank to keep the default wording shown below it."
+        description="What a customer sees when you email them an invoice, quote, credit note, payment reminder, or payment receipt."
       />
       <div className="smtp-provider-row">
         {EMAIL_TEMPLATE_TYPES.map((t) => (
@@ -771,29 +840,35 @@ function EmailTemplatesCard({ business, setBusiness }) {
           </button>
         ))}
       </div>
+      <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+        This starts filled in with ready-to-send wording you can edit freely, and what's shown is exactly what goes
+        out. Use "Insert field" below each box to add something like the customer's name or the amount, without
+        needing to type anything special.
+      </p>
       <form onSubmit={handleSave} className="settings-form">
         <label>Subject
           <input
-            value={business[subjectKey] || ""}
+            ref={subjectRef}
+            value={subjectValue}
             onChange={(e) => setBusiness({ ...business, [subjectKey]: e.target.value })}
-            placeholder={fallback.subject}
           />
         </label>
+        <InsertFieldSelect
+          fields={FIELDS_BY_TEMPLATE_TYPE[activeType].map((token) => ({ token, label: FIELD_LABELS[token] }))}
+          onInsert={(token) => insertField(subjectRef, subjectKey, subjectValue, token)}
+        />
         <label>Message
           <textarea
+            ref={bodyRef}
             rows={6}
-            value={business[bodyKey] || ""}
+            value={bodyValue}
             onChange={(e) => setBusiness({ ...business, [bodyKey]: e.target.value })}
-            placeholder={fallback.body}
           />
         </label>
-        <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
-          Placeholders you can use: {"{{customer_name}}"}, {"{{business_name}}"}, {"{{document_number}}"},{" "}
-          {"{{amount}}"}
-          {activeType === "reminder" && <>, {"{{balance_due}}"}, {"{{due_date}}"}</>}
-          {activeType === "receipt" && <>, {"{{amount_paid}}"}, {"{{balance_due}}"}</>}. Each is filled in
-          automatically when an email actually goes out.
-        </p>
+        <InsertFieldSelect
+          fields={FIELDS_BY_TEMPLATE_TYPE[activeType].map((token) => ({ token, label: FIELD_LABELS[token] }))}
+          onInsert={(token) => insertField(bodyRef, bodyKey, bodyValue, token)}
+        />
         {error && <p className="error">{error}</p>}
         {savedMsg && <p className="muted">{savedMsg}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save email templates"}</button>

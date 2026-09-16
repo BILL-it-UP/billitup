@@ -113,8 +113,14 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     // convention as every other field on this route — an empty string from
     // a cleared input is left alone rather than stored, matching how e.g.
     // clearing "website" back to blank already isn't supported here either.
-    rbi_bank_rate === undefined || rbi_bank_rate === "" ? undefined : Number(rbi_bank_rate),
-    annual_turnover === undefined || annual_turnover === "" ? undefined : Number(annual_turnover),
+    // Also treats null as "leave alone": a fresh column with no DEFAULT
+    // (annual_turnover) reads back as null, not undefined, for every
+    // business until it's actually set, and the whole business object round
+    // trips through every Settings tab's Save button — without this check,
+    // saving any other tab before ever touching this field would silently
+    // zero it out (caught while building the e-invoice banner, 2026-09-16).
+    rbi_bank_rate === undefined || rbi_bank_rate === null || rbi_bank_rate === "" ? undefined : Number(rbi_bank_rate),
+    annual_turnover === undefined || annual_turnover === null || annual_turnover === "" ? undefined : Number(annual_turnover),
     req.auth.businessId
   );
 
