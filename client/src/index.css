@@ -274,6 +274,34 @@ textarea { resize: vertical; }
 .toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .inline-confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 
+/* Invoice detail toolbar — one consistent family of compact outline chips
+   instead of a mix of plain text links, solid green buttons, and outlined
+   buttons all next to each other, which read as cluttered and inconsistent
+   and took up far more room than the row of actions needed (2026-09-16). */
+.invoice-toolbar { gap: 8px; margin-bottom: 16px; }
+.invoice-toolbar .toolbar-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: white; color: var(--ink); border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
+  cursor: pointer; text-decoration: none; line-height: 1.4; white-space: nowrap;
+}
+.invoice-toolbar .toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+/* At most one button is ever "primary" at a time — whichever one matches
+   the What's Next banner above — so there's a single obvious next action
+   instead of six equally loud green buttons. */
+.invoice-toolbar .toolbar-btn-primary {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+}
+.invoice-toolbar .toolbar-btn-primary:hover { background: #156548; color: var(--accent-ink); }
+.invoice-toolbar .toolbar-btn-danger { color: #b3261e; }
+.invoice-toolbar .toolbar-btn-danger:hover { border-color: #b3261e; color: #b3261e; }
+/* The confirm-cancel button reuses the site-wide solid .btn-danger look —
+   needs to win over .toolbar-btn's own background/color at equal
+   specificity, so it's spelled out again here rather than relying on
+   source order (2026-09-16). */
+.invoice-toolbar .toolbar-btn.btn-danger { background: #b3261e; color: white; border-color: #b3261e; }
+.invoice-toolbar .toolbar-btn.btn-danger:hover { background: #96201a; color: white; }
+
 .settings-form { max-width: 560px; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; }
 .checkbox-label input { width: auto; margin-top: 0; }

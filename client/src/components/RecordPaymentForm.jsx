@@ -17,7 +17,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 // the page can bump it to pop this form open on demand, the same as clicking
 // the Record Payment button below, without this component needing to know
 // anything about who's asking (2026-09-16).
-export default function RecordPaymentForm({ balanceDue, onRecord, openSignal }) {
+export default function RecordPaymentForm({ balanceDue, onRecord, openSignal, triggerClassName }) {
   const [open, setOpen] = useState(false);
   const openSignalMounted = useRef(false);
   const [amount, setAmount] = useState("");
@@ -68,7 +68,7 @@ export default function RecordPaymentForm({ balanceDue, onRecord, openSignal }) 
   }, [openSignal]);
 
   if (!open) {
-    return <button type="button" onClick={startOpen}>Record Payment</button>;
+    return <button type="button" className={triggerClassName} onClick={startOpen}>Record Payment</button>;
   }
 
   return (

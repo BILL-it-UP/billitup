@@ -299,49 +299,71 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     }
   }
 
+  // Everything in the toolbar reads as one consistent family of compact
+  // outline chips (see .toolbar-btn in index.css) instead of the old mix of
+  // plain text links, solid green buttons, and outlined buttons all sitting
+  // next to each other. Only whichever single action matches the "What's
+  // next?" banner above gets the solid, filled treatment, so there's always
+  // at most one obviously-primary action rather than half a dozen equally
+  // loud green buttons (2026-09-16).
+  const primaryToolbarAction = nextStep?.actionLabel || null;
+  const toolbarBtnClass = (label) =>
+    `toolbar-btn${label && label === primaryToolbarAction ? " toolbar-btn-primary" : ""}`;
+
   return (
     <div>
       <div className="no-print toolbar invoice-toolbar">
         {!standalone && (
-          <Link className="link-btn" to={`/invoices/${invoiceId}`} title="Open in its own page">↗ Open</Link>
+          <Link className="toolbar-btn" to={`/invoices/${invoiceId}`} title="Open in its own page">↗ Open</Link>
         )}
-        {canEdit && <Link className="link-btn" to={`/invoices/${invoiceId}/edit`}>Edit</Link>}
-        <button onClick={() => window.print()}>Print / Save PDF</button>
+        {canEdit && <Link className="toolbar-btn" to={`/invoices/${invoiceId}/edit`}>Edit</Link>}
+        <button type="button" className="toolbar-btn" onClick={() => window.print()}>Print / Save PDF</button>
         {invoice.approval_status !== "pending" && (
-          <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
+          <button type="button" className={toolbarBtnClass("Email to Customer")} onClick={() => setShowSendModal(true)}>
+            Email to Customer
+          </button>
         )}
-        {shareUrl && <button type="button" onClick={copyLink}>{copied ? "Link copied!" : "Copy shareable link"}</button>}
+        {shareUrl && (
+          <button type="button" className="toolbar-btn" onClick={copyLink}>{copied ? "Link copied!" : "Copy shareable link"}</button>
+        )}
         {whatsappShareUrl && (
-          <a className="btn-secondary" href={whatsappShareUrl} target="_blank" rel="noreferrer">Share via WhatsApp</a>
+          <a className="toolbar-btn" href={whatsappShareUrl} target="_blank" rel="noreferrer">Share via WhatsApp</a>
         )}
         {invoice.balance_due > 0 && !["draft", "cancelled"].includes(invoice.status) && (
-          <button type="button" onClick={sendReminder} disabled={sendingReminder}>
+          <button type="button" className="toolbar-btn" onClick={sendReminder} disabled={sendingReminder}>
             {sendingReminder ? "Sending..." : "Send Payment Reminder"}
           </button>
         )}
         {whatsappReminderUrl && !["draft", "cancelled"].includes(invoice.status) && (
-          <a className="btn-secondary" href={whatsappReminderUrl} target="_blank" rel="noreferrer">Remind via WhatsApp</a>
+          <a className="toolbar-btn" href={whatsappReminderUrl} target="_blank" rel="noreferrer">Remind via WhatsApp</a>
         )}
         {invoice.balance_due > 0 && invoice.status !== "cancelled" && (
-          <RecordPaymentForm balanceDue={invoice.balance_due} onRecord={recordPayment} openSignal={recordPaymentSignal} />
+          <RecordPaymentForm
+            balanceDue={invoice.balance_due}
+            onRecord={recordPayment}
+            openSignal={recordPaymentSignal}
+            triggerClassName={toolbarBtnClass("Record Payment")}
+          />
         )}
         {canEdit && invoice.status === "draft" && invoice.approval_status !== "pending" && (
-          <button type="button" className="btn-secondary" onClick={() => setConfirmingMarkSent(true)}>
+          <button type="button" className="toolbar-btn" onClick={() => setConfirmingMarkSent(true)}>
             Mark as Sent
           </button>
         )}
         {canEdit && invoice.status !== "cancelled" && !confirmingCancel && (
-          <button type="button" onClick={() => setConfirmingCancel(true)}>Cancel Invoice</button>
+          <button type="button" className="toolbar-btn toolbar-btn-danger" onClick={() => setConfirmingCancel(true)}>
+            Cancel Invoice
+          </button>
         )}
         {canEdit && confirmingCancel && (
           <span className="inline-confirm">
             Cancel this invoice?
-            <button type="button" onClick={cancelInvoice} disabled={statusBusy}>{statusBusy ? "Cancelling..." : "Yes, cancel it"}</button>
-            <button type="button" onClick={() => setConfirmingCancel(false)} disabled={statusBusy}>No</button>
+            <button type="button" className="toolbar-btn btn-danger" onClick={cancelInvoice} disabled={statusBusy}>{statusBusy ? "Cancelling..." : "Yes, cancel it"}</button>
+            <button type="button" className="toolbar-btn" onClick={() => setConfirmingCancel(false)} disabled={statusBusy}>No</button>
           </span>
         )}
         {canEdit && invoice.status === "cancelled" && (
-          <button type="button" onClick={reopenInvoice} disabled={statusBusy}>{statusBusy ? "Reopening..." : "Reopen (mark as Draft)"}</button>
+          <button type="button" className="toolbar-btn" onClick={reopenInvoice} disabled={statusBusy}>{statusBusy ? "Reopening..." : "Reopen (mark as Draft)"}</button>
         )}
       </div>
       {invoice.approval_status === "pending" && (
