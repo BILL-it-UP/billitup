@@ -797,6 +797,16 @@ textarea { resize: vertical; }
 .admin-stat-tile.attention .admin-stat-icon { background: #fdf1e6; color: var(--accent-amber); }
 .admin-stat-tile.attention .stat-value { color: var(--accent-amber); }
 
+/* Tiles like "Open Errors" are real buttons that jump to their tab, so a
+   number is never a dead end (2026-09-16) — reset the button defaults back
+   to look exactly like the plain .stat-tile div next to it, plus a hover/
+   focus cue so it actually reads as clickable. */
+.admin-stat-tile-clickable {
+  cursor: pointer; font: inherit; text-align: left; width: 100%;
+}
+.admin-stat-tile-clickable:hover { border-color: var(--accent); box-shadow: 0 2px 6px rgba(28, 31, 38, 0.08); }
+.admin-stat-tile-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .admin-section { margin-top: 4px; }
 .admin-section-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
 .admin-section-header .settings-card-icon { background: #eaf5ef; color: var(--accent); }

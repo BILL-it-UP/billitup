@@ -205,6 +205,25 @@ router.get("/businesses/:id/errors", (req, res) => {
   res.json(rows);
 });
 
+// Every open-or-resolved error across every business, in one feed, newest
+// first, with the business name attached — the admin equivalent of the
+// cross-business Support inbox below, so Naveen can see what's actually
+// broken without opening each business's Health page one at a time. This is
+// what the Open Errors stat tile on the main Master Admin screen links to
+// (2026-09-16, Naveen pointed out the tile just showed a number with no way
+// to see or close what it counted).
+router.get("/errors", (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const rows = db
+    .prepare(
+      `SELECT e.*, b.name AS business_name
+       FROM error_log e LEFT JOIN businesses b ON b.id = e.business_id
+       ORDER BY e.created_at DESC`
+    )
+    .all();
+  res.json(rows);
+});
+
 // Marking an error resolved (with an optional note on how) is the "history
 // of problem, status, and how we solved it" Naveen asked for — the row
 // itself becomes that history entry rather than needing a separate log.

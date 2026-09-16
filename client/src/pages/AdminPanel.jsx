@@ -8,7 +8,7 @@ import {
   IconInvoice, IconDashboard, IconSuggestion, IconChat, IconAnnouncement, IconAlert,
 } from "../components/Icons";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { AdminTicketThread } from "./BusinessHealth";
+import { AdminTicketThread, ErrorRow } from "./BusinessHealth";
 
 // The one super-admin screen — everything Naveen, as the creator of the
 // software, needs to keep an eye on this install from a single place: how
@@ -26,17 +26,20 @@ import { AdminTicketThread } from "./BusinessHealth";
 // that its two irreversible actions (moving a business off premium,
 // deleting a piece of feedback) always ask first instead of firing on one
 // click.
+// A tile with a `tab` renders as a button that jumps straight there — added
+// 2026-09-16 after Naveen pointed out the Open Errors tile just showed a
+// number with no way to actually see or close what it was counting.
 const STAT_TILES = [
-  { key: "totalBusinesses", label: "Businesses", icon: IconBuilding },
-  { key: "newBusinesses7d", label: "New This Week", icon: IconReports },
-  { key: "activeBusinesses30d", label: "Active (30d)", icon: IconCloud },
-  { key: "totalUsers", label: "Total Users", icon: IconTeam },
+  { key: "totalBusinesses", label: "Businesses", icon: IconBuilding, tab: "businesses" },
+  { key: "newBusinesses7d", label: "New This Week", icon: IconReports, tab: "businesses" },
+  { key: "activeBusinesses30d", label: "Active (30d)", icon: IconCloud, tab: "businesses" },
+  { key: "totalUsers", label: "Total Users", icon: IconTeam, tab: "businesses" },
   { key: "totalInvoices", label: "Total Invoices", icon: IconInvoice },
   { key: "loginsToday", label: "Logins Today", icon: IconDashboard },
   { key: "loginsThisWeek", label: "Logins This Week", icon: IconCloud },
-  { key: "openSuggestions", label: "Open Feedback", icon: IconSuggestion, attentionIfPositive: true },
-  { key: "openErrors", label: "Open Errors", icon: IconAlert, attentionIfPositive: true },
-  { key: "openSupportTickets", label: "Support Waiting", icon: IconChat, attentionIfPositive: true },
+  { key: "openSuggestions", label: "Open Feedback", icon: IconSuggestion, attentionIfPositive: true, tab: "feedback" },
+  { key: "openErrors", label: "Open Errors", icon: IconAlert, attentionIfPositive: true, tab: "errors" },
+  { key: "openSupportTickets", label: "Support Waiting", icon: IconChat, attentionIfPositive: true, tab: "support" },
 ];
 
 function SectionHeader({ icon: Icon, title, description, badge }) {
@@ -59,6 +62,8 @@ export default function AdminPanel() {
   const [suggestionFilter, setSuggestionFilter] = useState("open");
   const [tickets, setTickets] = useState(null);
   const [expandedTicketId, setExpandedTicketId] = useState(null);
+  const [allErrors, setAllErrors] = useState(null);
+  const [errorStatusFilter, setErrorStatusFilter] = useState("open");
   const [announcements, setAnnouncements] = useState(null);
   const [announcementForm, setAnnouncementForm] = useState({ title: "", message: "" });
   const [announcementBusy, setAnnouncementBusy] = useState(false);
@@ -77,13 +82,15 @@ export default function AdminPanel() {
       adminApi.getStats(),
       adminApi.listSuggestions(),
       adminApi.listAllSupportTickets(),
+      adminApi.listAllErrors(),
       adminApi.listAnnouncements(),
     ])
-      .then(([businessRows, statsData, suggestionRows, ticketRows, announcementRows]) => {
+      .then(([businessRows, statsData, suggestionRows, ticketRows, errorRows, announcementRows]) => {
         setBusinesses(businessRows);
         setStats(statsData);
         setSuggestions(suggestionRows);
         setTickets(ticketRows);
+        setAllErrors(errorRows);
         setAnnouncements(announcementRows);
       })
       .catch((err) => {
@@ -204,6 +211,12 @@ export default function AdminPanel() {
     return suggestions.filter((s) => s.status === suggestionFilter);
   }, [suggestions, suggestionFilter]);
 
+  const filteredErrors = useMemo(() => {
+    if (!allErrors) return [];
+    if (errorStatusFilter === "all") return allErrors;
+    return allErrors.filter((e) => e.status === errorStatusFilter);
+  }, [allErrors, errorStatusFilter]);
+
   const logOut = () => {
     clearAdminSecret();
     navigate("/admin/login");
@@ -220,7 +233,7 @@ export default function AdminPanel() {
     </th>
   );
 
-  if (!businesses || !stats || !suggestions) {
+  if (!businesses || !stats || !suggestions || !allErrors) {
     return (
       <div className="admin-page">
         <div className="admin-content">
@@ -249,14 +262,25 @@ export default function AdminPanel() {
         {error && <p className="error">{error}</p>}
 
         <div className="stat-tiles">
-          {STAT_TILES.map(({ key, label, icon: Icon, attentionIfPositive }) => {
+          {STAT_TILES.map(({ key, label, icon: Icon, attentionIfPositive, tab }) => {
             const attention = attentionIfPositive && stats[key] > 0;
-            return (
-              <div key={key} className={`stat-tile admin-stat-tile${attention ? " attention" : ""}`}>
+            const className = `stat-tile admin-stat-tile${attention ? " attention" : ""}${tab ? " admin-stat-tile-clickable" : ""}`;
+            const content = (
+              <>
                 <span className="admin-stat-icon"><Icon size={15} /></span>
                 <span className="stat-label">{label}</span>
                 <span className="stat-value">{stats[key]}</span>
-              </div>
+              </>
+            );
+            // A tile with a matching tab is a button that jumps there, so
+            // "6 open errors" is never just a number with nowhere to go
+            // (2026-09-16).
+            return tab ? (
+              <button key={key} type="button" className={className} onClick={() => setActiveTab(tab)}>
+                {content}
+              </button>
+            ) : (
+              <div key={key} className={className}>{content}</div>
             );
           })}
         </div>
@@ -277,6 +301,14 @@ export default function AdminPanel() {
           >
             <IconChat size={16} /> Support
             {stats.openSupportTickets > 0 && <span className="tab-btn-badge">{stats.openSupportTickets}</span>}
+          </button>
+          <button
+            type="button"
+            className={`tab-btn${activeTab === "errors" ? " active" : ""}`}
+            onClick={() => setActiveTab("errors")}
+          >
+            <IconAlert size={16} /> Errors
+            {stats.openErrors > 0 && <span className="tab-btn-badge">{stats.openErrors}</span>}
           </button>
           <button
             type="button"
@@ -418,6 +450,45 @@ export default function AdminPanel() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </div>
+        )}
+
+        {activeTab === "errors" && (
+        <div className="admin-section">
+          <SectionHeader
+            icon={IconAlert}
+            title="Errors"
+            description="Technical errors across every business, newest first — never their invoices, customers, or anything else they've typed in. Click Resolve once you know what happened."
+          />
+          <div className="admin-table-card">
+            {allErrors.length === 0 ? (
+              <p className="muted">No errors recorded on this install. That's a good sign.</p>
+            ) : (
+              <>
+                <div className="list-toolbar">
+                  <select value={errorStatusFilter} onChange={(e) => setErrorStatusFilter(e.target.value)}>
+                    <option value="open">Open</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+                {filteredErrors.length === 0 ? (
+                  <p className="list-empty-filtered">Nothing here.</p>
+                ) : (
+                  <table className="table">
+                    <thead>
+                      <tr><th>Business</th><th>When</th><th>Where</th><th>Route</th><th>Message</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {filteredErrors.map((e) => (
+                        <ErrorRow key={e.id} error={e} onUpdated={load} showBusiness />
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
             )}
           </div>
         </div>

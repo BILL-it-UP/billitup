@@ -56,6 +56,7 @@ export const adminApi = {
   // requests, never their client data. See routes/admin.js for what's kept
   // out on purpose.
   getBusinessErrors: (businessId) => adminRequest(`/api/admin/businesses/${businessId}/errors`),
+  listAllErrors: () => adminRequest("/api/admin/errors"),
   setErrorStatus: (errorId, status, resolutionNotes) =>
     adminRequest(`/api/admin/errors/${errorId}`, { method: "PUT", body: { status, resolution_notes: resolutionNotes } }),
 

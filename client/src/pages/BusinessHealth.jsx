@@ -13,10 +13,15 @@ const STATUS_LABELS = { open: "Open", in_progress: "In progress", resolved: "Res
 // Deliberately three separate reads (business profile, errors, tickets)
 // rather than one giant endpoint, so each section can load and fail
 // independently.
-function ErrorRow({ error, onUpdated }) {
+// Exported (not just used below) so the cross-business "Errors" feed on the
+// main Master Admin screen can show the exact same row, with one addition —
+// a Business column, since that feed isn't already scoped to one business
+// the way this page's own Errors section is (2026-09-16).
+export function ErrorRow({ error, onUpdated, showBusiness }) {
   const [resolving, setResolving] = useState(false);
   const [notes, setNotes] = useState(error.resolution_notes || "");
   const [busy, setBusy] = useState(false);
+  const totalCols = showBusiness ? 7 : 6;
 
   const save = async (status) => {
     setBusy(true);
@@ -32,6 +37,15 @@ function ErrorRow({ error, onUpdated }) {
   return (
     <>
       <tr>
+        {showBusiness && (
+          <td>
+            {error.business_id ? (
+              <Link to={`/admin/businesses/${error.business_id}`}>{error.business_name || "Unknown business"}</Link>
+            ) : (
+              <span className="muted">No business (system)</span>
+            )}
+          </td>
+        )}
         <td>{formatDateTime(error.created_at)}</td>
         <td>{error.source === "client" ? "Browser" : "Server"}</td>
         <td className="error-route-cell">{error.route || "—"}</td>
@@ -49,7 +63,7 @@ function ErrorRow({ error, onUpdated }) {
       </tr>
       {resolving && (
         <tr className="admin-detail-row">
-          <td colSpan={6}>
+          <td colSpan={totalCols}>
             <div className="admin-detail-panel">
               <label style={{ flex: 1 }}>How was this fixed?
                 <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Restarted the mail queue, was a stuck SMTP connection" />
@@ -63,7 +77,7 @@ function ErrorRow({ error, onUpdated }) {
       )}
       {!resolving && error.status === "resolved" && error.resolution_notes && (
         <tr className="admin-detail-row">
-          <td colSpan={6}>
+          <td colSpan={totalCols}>
             <div className="admin-detail-panel">
               <span className="muted">Resolved {formatDateTime(error.resolved_at)}: {error.resolution_notes}</span>
             </div>
