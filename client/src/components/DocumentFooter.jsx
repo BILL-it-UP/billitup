@@ -4,12 +4,12 @@ import { amountToWords } from "../lib/numberToWords";
 // details, terms & conditions, and a signature block. Each section only
 // renders if the business has actually filled it in, so a business that
 // hasn't set up bank details or T&C yet just gets a plain document.
-export default function DocumentFooter({ business, total, upiQrDataUrl }) {
+export default function DocumentFooter({ business, total, upiQrDataUrl, currency }) {
   const hasBankDetails = business.bank_account_name || business.bank_account_number || business.bank_ifsc || business.bank_upi_id;
 
   return (
     <div className="doc-footer">
-      {total != null && <p className="doc-amount-words"><strong>Total In Words:</strong> {amountToWords(total)}</p>}
+      {total != null && <p className="doc-amount-words"><strong>Total In Words:</strong> {amountToWords(total, currency)}</p>}
 
       {hasBankDetails && (
         <div className="doc-footer-section doc-bank-and-qr">

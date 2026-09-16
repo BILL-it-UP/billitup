@@ -3,9 +3,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, getUser, setSession, clearSession } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import {
-  IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash,
+  IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash, IconAlert,
 } from "../components/Icons";
 import { INDIAN_STATES } from "../lib/gst";
+import { CURRENCIES } from "../lib/currencies";
 import { DEFAULT_TEMPLATES as DEFAULT_EMAIL_TEMPLATES } from "../lib/emailTemplates";
 
 // A small header block shared by every card below — an icon in a colored
@@ -147,6 +148,14 @@ export default function Settings() {
                 <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-09-09)</option>
               </select>
             </label>
+            <label>Default currency (what a new invoice starts with, changeable per invoice)
+              <select
+                value={business.default_currency || "INR"}
+                onChange={(e) => setBusiness({ ...business, default_currency: e.target.value })}
+              >
+                {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} ({c.symbol}), {c.name}</option>)}
+              </select>
+            </label>
             <div className="field-row">
               <label>Invoice number prefix
                 <input value={business.invoice_prefix || ""} onChange={(e) => setBusiness({ ...business, invoice_prefix: e.target.value })} />
@@ -185,6 +194,7 @@ export default function Settings() {
         {activeTab === "email" && (
           <>
             <EmailSettings business={business} setBusiness={setBusiness} />
+            <AutoRemindersCard business={business} setBusiness={setBusiness} />
             <EmailTemplatesCard business={business} setBusiness={setBusiness} />
           </>
         )}
@@ -595,6 +605,77 @@ function EmailSettings({ business, setBusiness }) {
       </p>
       {testResult?.ok && <p className="muted">Test email sent to {testResult.to} — check your inbox (and spam folder).</p>}
       {testResult?.error && <p className="error">{testResult.error}</p>}
+    </div>
+  );
+}
+
+// Automatic payment reminder emails — runs hourly on the server, checking
+// each unpaid invoice against these two settings (days before the due date,
+// and how often to repeat once it's overdue). Reuses the same SMTP settings
+// and "Payment Reminder" template as the manual "Send Payment Reminder"
+// button on an invoice, so there's nothing new to configure there.
+function AutoRemindersCard({ business, setBusiness }) {
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSavedMsg("");
+    setSaving(true);
+    try {
+      const updated = await api.updateBusiness(business);
+      setBusiness(updated);
+      setSavedMsg("Saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="settings-card">
+      <CardHeader
+        icon={IconAlert}
+        title="Automatic Payment Reminders"
+        description="Automatically email customers about unpaid invoices, using your SMTP settings above and the Payment Reminder template below. Checked once an hour."
+      />
+      <form onSubmit={handleSave} className="settings-form">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={!!business.reminders_enabled}
+            onChange={(e) => setBusiness({ ...business, reminders_enabled: e.target.checked })}
+          />
+          {" "}Send automatic payment reminders
+        </label>
+        <div className="field-row">
+          <label>Days before the due date to remind
+            <input
+              type="number"
+              min="0"
+              value={business.reminder_days_before_due ?? 3}
+              onChange={(e) => setBusiness({ ...business, reminder_days_before_due: e.target.value })}
+            />
+          </label>
+          <label>Repeat an overdue reminder every (days)
+            <input
+              type="number"
+              min="0"
+              value={business.reminder_overdue_repeat_days ?? 7}
+              onChange={(e) => setBusiness({ ...business, reminder_overdue_repeat_days: e.target.value })}
+            />
+          </label>
+        </div>
+        <p className="muted" style={{ marginTop: -8 }}>
+          Set either to 0 to turn that reminder off. A reminder is only ever sent for an invoice that's still unpaid, and only once your email settings above are working.
+        </p>
+        {error && <p className="error">{error}</p>}
+        {savedMsg && <p className="muted">{savedMsg}</p>}
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save reminder settings"}</button>
+      </form>
     </div>
   );
 }

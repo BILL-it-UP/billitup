@@ -7,6 +7,7 @@ import ItemPicker from "../components/ItemPicker";
 import CustomerPicker from "../components/CustomerPicker";
 import TaxRateInput from "../components/TaxRateInput";
 import { GST_TREATMENTS } from "../lib/gst";
+import { CURRENCIES, currencySymbol } from "../lib/currencies";
 
 export default function NewInvoice() {
   const navigate = useNavigate();
@@ -32,6 +33,10 @@ export default function NewInvoice() {
   const [ewayTransporterId, setEwayTransporterId] = useState("");
   const [ewayVehicleNumber, setEwayVehicleNumber] = useState("");
   const [ewayDistanceKm, setEwayDistanceKm] = useState("");
+  const [currency, setCurrency] = useState("INR");
+  const [projectName, setProjectName] = useState("");
+  const [milestoneLabel, setMilestoneLabel] = useState("");
+  const [projectTotalAmount, setProjectTotalAmount] = useState("");
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -40,7 +45,15 @@ export default function NewInvoice() {
   useEffect(() => {
     api.listCustomers().then(setCustomers);
     api.listItems().then(setItems);
-    api.getBusiness().then(setBusiness);
+    // A brand new invoice defaults to the business's own default currency —
+    // an edit in progress below overwrites this with the invoice's actual
+    // currency once it loads, so this only matters for a genuinely new
+    // invoice (2026-09-16).
+    api.getBusiness().then((b) => {
+      setBusiness(b);
+      if (!isEdit) setCurrency(b.default_currency || "INR");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Edit mode: load the existing invoice and prefill every field. Runs once
@@ -65,6 +78,10 @@ export default function NewInvoice() {
       setEwayTransporterId(inv.eway_transporter_id || "");
       setEwayVehicleNumber(inv.eway_vehicle_number || "");
       setEwayDistanceKm(inv.eway_distance_km || "");
+      setCurrency(inv.currency || "INR");
+      setProjectName(inv.project_name || "");
+      setMilestoneLabel(inv.milestone_label || "");
+      setProjectTotalAmount(inv.project_total_amount || "");
       setLines(
         (inv.lineItems || []).map((li) => ({
           item_id: li.item_id || "",
@@ -158,6 +175,10 @@ export default function NewInvoice() {
     gst_treatment: gstTreatment,
     terms: terms || null,
     notes: notes || null,
+    currency,
+    project_name: projectName || null,
+    milestone_label: milestoneLabel || null,
+    project_total_amount: projectTotalAmount || null,
     ...(isPremium && {
       eway_bill_number: ewayBillNumber || null,
       eway_transporter_name: ewayTransporterName || null,
@@ -211,6 +232,8 @@ export default function NewInvoice() {
     }
   };
 
+  const symbol = currencySymbol(currency);
+
   if (loadingInvoice) return <p className="muted">Loading...</p>;
 
   return (
@@ -241,6 +264,11 @@ export default function NewInvoice() {
           </label>
           <label className="block">PO / Reference number (optional)
             <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PO-4021" />
+          </label>
+          <label className="block">Currency
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>)}
+            </select>
           </label>
         </div>
         <div className="form-row">
@@ -290,7 +318,7 @@ export default function NewInvoice() {
                 <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
                 <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
                 <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
-                <td className="num">₹{formatMoney(lineAmount(line))}</td>
+                <td className="num">{symbol}{formatMoney(lineAmount(line))}</td>
                 <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
               </tr>
             ))}
@@ -299,10 +327,10 @@ export default function NewInvoice() {
         <button type="button" className="link-btn" onClick={addLine}>+ Add line</button>
 
         <div className="totals-box">
-          <div><span>Sub Total</span><span>₹{formatMoney(subTotal)}</span></div>
-          <div><span>Discount</span><span>-₹{formatMoney(discountTotal)}</span></div>
-          <div><span>{gstTreatment === "rcm" ? "Tax (reverse charge)" : "Tax"}</span><span>₹{formatMoney(gstTreatment === "none" ? 0 : taxTotal)}</span></div>
-          <div className="grand-total"><span>Total</span><span>₹{formatMoney(total)}</span></div>
+          <div><span>Sub Total</span><span>{symbol}{formatMoney(subTotal)}</span></div>
+          <div><span>Discount</span><span>-{symbol}{formatMoney(discountTotal)}</span></div>
+          <div><span>{gstTreatment === "rcm" ? "Tax (reverse charge)" : "Tax"}</span><span>{symbol}{formatMoney(gstTreatment === "none" ? 0 : taxTotal)}</span></div>
+          <div className="grand-total"><span>Total</span><span>{symbol}{formatMoney(total)}</span></div>
         </div>
 
         <label className="block">Terms (optional)
@@ -311,6 +339,26 @@ export default function NewInvoice() {
         <label className="block">Notes (optional, shown on the invoice)
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
+
+        <fieldset className="eway-fieldset">
+          <legend>Milestone / Project Billing (optional)</legend>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Billing a project in stages? Give it a name and, optionally, a total value — every invoice you raise
+            with the same project name (for this customer) is added up automatically and shown on each one, so
+            you and your client can both see how much of the project has been billed so far.
+          </p>
+          <div className="form-row">
+            <label className="block">Project name
+              <input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Website Redesign" />
+            </label>
+            <label className="block">Milestone label
+              <input value={milestoneLabel} onChange={(e) => setMilestoneLabel(e.target.value)} placeholder="e.g. Milestone 1 of 3, Advance" />
+            </label>
+            <label className="block">Project total (optional)
+              <input type="number" step="0.01" value={projectTotalAmount} onChange={(e) => setProjectTotalAmount(e.target.value)} placeholder={`Total ${currency} value of the whole project`} />
+            </label>
+          </div>
+        </fieldset>
 
         {isPremium ? (
           <fieldset className="eway-fieldset">

@@ -557,6 +557,19 @@ ensureColumn("businesses", "state", "state TEXT");
 // backfilled or reparsed automatically.
 ensureColumn("businesses", "pincode", "pincode TEXT");
 ensureColumn("businesses", "country", "country TEXT DEFAULT 'India'");
+// The currency a NEW invoice defaults to (see lib/currency.js for the
+// supported list) — a business billing only Indian clients never has to
+// touch this, INR stays the default exactly as before (2026-09-16).
+ensureColumn("businesses", "default_currency", "default_currency TEXT DEFAULT 'INR'");
+// Automatic payment reminder emails — off by default so nobody's inbox
+// starts getting reminder mail they didn't ask for. When on, a background
+// job (lib/paymentReminders.js) sends the same "Payment Reminder" template
+// already used by the manual "Send Payment Reminder" button, once before
+// the due date and, optionally, repeating while overdue. 0 in either day
+// field means "don't send that kind of reminder" (2026-09-16).
+ensureColumn("businesses", "reminders_enabled", "reminders_enabled INTEGER DEFAULT 0");
+ensureColumn("businesses", "reminder_days_before_due", "reminder_days_before_due INTEGER DEFAULT 3");
+ensureColumn("businesses", "reminder_overdue_repeat_days", "reminder_overdue_repeat_days INTEGER DEFAULT 7");
 
 // items
 ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");
@@ -635,6 +648,30 @@ ensureColumn("invoices", "eway_transporter_name", "eway_transporter_name TEXT");
 ensureColumn("invoices", "eway_transporter_id", "eway_transporter_id TEXT");
 ensureColumn("invoices", "eway_vehicle_number", "eway_vehicle_number TEXT");
 ensureColumn("invoices", "eway_distance_km", "eway_distance_km REAL");
+
+// Which currency this specific invoice was billed in (see lib/currency.js).
+// Defaults to INR so every invoice created before this existed is treated
+// exactly as it always was — nothing changes for a business that never
+// touches the new currency picker (2026-09-16).
+ensureColumn("invoices", "currency", "currency TEXT DEFAULT 'INR'");
+
+// Automatic reminder tracking — when each kind of reminder was last sent
+// for THIS invoice, so the background job (lib/paymentReminders.js) never
+// sends the same "coming due" reminder twice, and only repeats an overdue
+// one after the business's chosen gap (2026-09-16).
+ensureColumn("invoices", "reminder_before_due_sent_at", "reminder_before_due_sent_at TEXT");
+ensureColumn("invoices", "last_overdue_reminder_sent_at", "last_overdue_reminder_sent_at TEXT");
+
+// Lightweight milestone/progress billing (2026-09-16) — deliberately just
+// three fields on the invoice itself rather than a whole new Projects
+// module, matching how Vendors/Purchases stayed a simple record-keeping
+// table instead of a full ledger. Any invoice sharing the same project_name
+// for the same customer counts toward that project's running total — see
+// lib/projectProgress.js. All three are optional; an invoice that doesn't
+// set project_name behaves exactly as before.
+ensureColumn("invoices", "project_name", "project_name TEXT");
+ensureColumn("invoices", "milestone_label", "milestone_label TEXT");
+ensureColumn("invoices", "project_total_amount", "project_total_amount REAL");
 
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the

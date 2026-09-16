@@ -12,6 +12,7 @@
 import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
 import { amountToWords } from "./numberToWords.js";
+import { printPrefix } from "./currency.js";
 
 export class SmtpNotConfiguredError extends Error {
   constructor() {
@@ -41,6 +42,12 @@ function dataUrlToBuffer(dataUrl) {
 // shape: branding header/parties/line-items/totals/footer) into a PDF
 // buffer, mirroring the on-screen print layout as closely as pdfkit allows.
 export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = [], business, party, partyLabel, lineItems, totals, notes, headlineLabel = "Total", headlineValue, upiQrPngBuffer }) {
+  // Which text prefix stands in for a currency symbol on this document — see
+  // lib/currency.js for why this is always plain ASCII text, never a ₹/€/£
+  // glyph (2026-09-16). totals.currency is the invoice's own currency
+  // (defaults to INR for every document type that doesn't set one yet).
+  const prefix = printPrefix(totals.currency);
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 40 });
     const chunks = [];
@@ -99,7 +106,7 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     let y = tableTop + 26;
     lineItems.forEach((line, i) => {
       x = 40;
-      const cells = [String(i + 1), line.description, String(line.qty), `Rs ${Number(line.rate).toFixed(2)}`, `Rs ${Number(line.discount).toFixed(2)}`, `Rs ${Number(line.amount).toFixed(2)}`];
+      const cells = [String(i + 1), line.description, String(line.qty), `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`];
       cells.forEach((c, ci) => { doc.fontSize(9).text(c, x, y, { width: cols[ci] }); x += cols[ci]; });
       y += 18;
     });
@@ -123,7 +130,7 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     ];
     totalLines.forEach(([label, val]) => {
       doc.fontSize(label === "Total" ? 11 : 9).text(label, 380, y, { width: 100 });
-      doc.text(`Rs ${Number(val).toFixed(2)}`, 480, y, { width: 80, align: "right" });
+      doc.text(`${prefix} ${Number(val).toFixed(2)}`, 480, y, { width: 80, align: "right" });
       y += 16;
     });
 
@@ -138,7 +145,7 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       doc.fontSize(8).fillColor("#555").text("No GST charged on this document.", 40, doc.y);
       doc.moveDown(0.5);
     }
-    doc.fontSize(9).fillColor("#555").text(`Total In Words: ${amountToWords(totals.total)}`, 40, doc.y);
+    doc.fontSize(9).fillColor("#555").text(`Total In Words: ${amountToWords(totals.total, totals.currency)}`, 40, doc.y);
     doc.fillColor("#000");
 
     if (notes) {
@@ -157,6 +164,24 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       }
       if (totals.eway_vehicle_number) doc.text(`Vehicle Number: ${totals.eway_vehicle_number}`);
       if (totals.eway_distance_km) doc.text(`Distance: ${totals.eway_distance_km} km`);
+      doc.fillColor("#000");
+    }
+
+    // Milestone/project progress (2026-09-16) — only shown once a business
+    // has actually named a project on this invoice (see lib/projectProgress.js
+    // for how billed-to-date is worked out). project_total_amount is
+    // optional even then, since a business might just want to label a
+    // milestone without tracking against a fixed project value.
+    if (totals.project_name) {
+      doc.moveDown(1);
+      doc.fontSize(9).fillColor("#000").text("Project / Milestone Billing", { underline: true });
+      doc.fontSize(9).fillColor("#555");
+      doc.text(`Project: ${totals.project_name}${totals.milestone_label ? ` — ${totals.milestone_label}` : ""}`);
+      if (totals.project_total_amount) {
+        doc.text(
+          `Project Total: ${prefix} ${Number(totals.project_total_amount).toFixed(2)}   ·   Billed To Date: ${prefix} ${Number(totals.project_billed_to_date || 0).toFixed(2)}   ·   Remaining: ${prefix} ${Number(totals.project_remaining || 0).toFixed(2)}`
+        );
+      }
       doc.fillColor("#000");
     }
 

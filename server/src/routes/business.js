@@ -30,10 +30,11 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from_name, smtp_from_email,
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
-    reset_invoice_numbering_yearly, date_format,
+    reset_invoice_numbering_yearly, date_format, default_currency,
     email_subject_invoice, email_body_invoice, email_subject_quote, email_body_quote,
     email_subject_credit_note, email_body_credit_note, email_subject_reminder, email_body_reminder,
     email_subject_receipt, email_body_receipt,
+    reminders_enabled, reminder_days_before_due, reminder_overdue_repeat_days,
   } = req.body;
 
   db.prepare(
@@ -68,6 +69,7 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       signature_name = COALESCE(?, signature_name),
       reset_invoice_numbering_yearly = COALESCE(?, reset_invoice_numbering_yearly),
       date_format = COALESCE(?, date_format),
+      default_currency = COALESCE(?, default_currency),
       email_subject_invoice = COALESCE(?, email_subject_invoice),
       email_body_invoice = COALESCE(?, email_body_invoice),
       email_subject_quote = COALESCE(?, email_subject_quote),
@@ -77,7 +79,10 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       email_subject_reminder = COALESCE(?, email_subject_reminder),
       email_body_reminder = COALESCE(?, email_body_reminder),
       email_subject_receipt = COALESCE(?, email_subject_receipt),
-      email_body_receipt = COALESCE(?, email_body_receipt)
+      email_body_receipt = COALESCE(?, email_body_receipt),
+      reminders_enabled = COALESCE(?, reminders_enabled),
+      reminder_days_before_due = COALESCE(?, reminder_days_before_due),
+      reminder_overdue_repeat_days = COALESCE(?, reminder_overdue_repeat_days)
     WHERE id = ?`
   ).run(
     name, address, pincode, country, phone, email, website, gstin, state,
@@ -88,10 +93,17 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     logo_data_url, bank_account_name, bank_name, bank_account_number, bank_ifsc, bank_upi_id,
     terms_and_conditions, signature_data_url, signature_name,
     reset_invoice_numbering_yearly === undefined ? undefined : (reset_invoice_numbering_yearly ? 1 : 0),
-    date_format,
+    date_format, default_currency,
     email_subject_invoice, email_body_invoice, email_subject_quote, email_body_quote,
     email_subject_credit_note, email_body_credit_note, email_subject_reminder, email_body_reminder,
     email_subject_receipt, email_body_receipt,
+    reminders_enabled === undefined ? undefined : (reminders_enabled ? 1 : 0),
+    // 0 is a valid, meaningful value here ("don't send this kind of
+    // reminder"), so — same reasoning as smtp_port above — only actually
+    // undefined (field left out of the request entirely) is treated as
+    // "leave it alone"; an explicit 0 or "" from the form is not.
+    reminder_days_before_due === undefined ? undefined : Number(reminder_days_before_due) || 0,
+    reminder_overdue_repeat_days === undefined ? undefined : Number(reminder_overdue_repeat_days) || 0,
     req.auth.businessId
   );
 

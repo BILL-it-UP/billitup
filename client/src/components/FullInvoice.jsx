@@ -2,18 +2,20 @@ import DocumentBrandHeader from "./DocumentBrandHeader";
 import DocumentFooter from "./DocumentFooter";
 import { GstBreakdown, GstNote } from "./GstBreakdown";
 import { formatMoney, formatQty, formatDate } from "../lib/format";
+import { currencySymbol } from "../lib/currencies";
 
 // The actual A4 invoice document — shared by the authenticated Invoice
 // detail view, the master-detail Invoices list, and the public (no-login)
 // invoice page, so all three can never drift apart visually.
 export default function FullInvoice({ invoice }) {
   const { business, customer, lineItems } = invoice;
+  const symbol = currencySymbol(invoice.currency);
   return (
     <>
       {invoice.status === "cancelled" && <div className="doc-cancelled-stamp">CANCELLED</div>}
       <DocumentBrandHeader
         business={business} docLabel="Invoice" docNumber={invoice.invoice_number}
-        headline={{ label: "Balance Due", value: `₹${formatMoney(invoice.balance_due)}` }}
+        headline={{ label: "Balance Due", value: `${symbol}${formatMoney(invoice.balance_due)}` }}
       />
 
       <div className="invoice-parties">
@@ -47,31 +49,48 @@ export default function FullInvoice({ invoice }) {
         </div>
       )}
 
+      {invoice.project_name && (
+        <div className="invoice-eway">
+          <strong>Project / Milestone Billing</strong>
+          <p>
+            Project: {invoice.project_name}{invoice.milestone_label ? ` — ${invoice.milestone_label}` : ""}
+            {invoice.project_total_amount != null && (
+              <>
+                <br />
+                Project Total: {symbol}{formatMoney(invoice.project_total_amount)}
+                {" · "}Billed To Date: {symbol}{formatMoney(invoice.project_billed_to_date)}
+                {" · "}Remaining: {symbol}{formatMoney(invoice.project_remaining)}
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
       <table className="table doc-line-items">
         <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>
         <tbody>
           {lineItems.map((line, i) => (
             <tr key={line.id}>
               <td>{i + 1}</td><td>{line.description}</td><td>{formatQty(line.qty)}</td>
-              <td>₹{formatMoney(line.rate)}</td><td>₹{formatMoney(line.discount)}</td>
-              <td>₹{formatMoney(line.amount)}</td>
+              <td>{symbol}{formatMoney(line.rate)}</td><td>{symbol}{formatMoney(line.discount)}</td>
+              <td>{symbol}{formatMoney(line.amount)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
       <div className="totals-box">
-        <div><span>Sub Total</span><span>₹{formatMoney(invoice.sub_total)}</span></div>
-        <div><span>Discount</span><span>-₹{formatMoney(invoice.discount)}</span></div>
-        <GstBreakdown doc={invoice} />
-        <div className="grand-total"><span>Total</span><span>₹{formatMoney(invoice.total)}</span></div>
-        <div className="doc-balance-due-row"><span>Balance Due</span><span>₹{formatMoney(invoice.balance_due)}</span></div>
+        <div><span>Sub Total</span><span>{symbol}{formatMoney(invoice.sub_total)}</span></div>
+        <div><span>Discount</span><span>-{symbol}{formatMoney(invoice.discount)}</span></div>
+        <GstBreakdown doc={invoice} symbol={symbol} />
+        <div className="grand-total"><span>Total</span><span>{symbol}{formatMoney(invoice.total)}</span></div>
+        <div className="doc-balance-due-row"><span>Balance Due</span><span>{symbol}{formatMoney(invoice.balance_due)}</span></div>
       </div>
       <GstNote doc={invoice} />
 
       {invoice.notes && <p className="invoice-notes">{invoice.notes}</p>}
 
-      <DocumentFooter business={business} total={invoice.total} upiQrDataUrl={invoice.upi_qr_data_url} />
+      <DocumentFooter business={business} total={invoice.total} upiQrDataUrl={invoice.upi_qr_data_url} currency={invoice.currency} />
     </>
   );
 }

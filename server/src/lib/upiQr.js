@@ -40,6 +40,11 @@ export function buildUpiQrPngBuffer(uri) {
 // instead of repeating this logic three times.
 function upiUriForInvoice(business, invoice) {
   if (!business?.bank_upi_id) return null;
+  // UPI is an Indian payment rail quoted in rupees — a QR built from a
+  // foreign-currency invoice's raw balance_due would silently ask for the
+  // wrong amount (e.g. a $500 invoice producing a "pay ₹500" code), so this
+  // only ever shows for an invoice actually billed in INR (2026-09-16).
+  if ((invoice?.currency || "INR") !== "INR") return null;
   const balance = Number(invoice?.balance_due);
   if (!(balance > 0) || invoice?.status === "cancelled") return null;
   return buildUpiPaymentUri({

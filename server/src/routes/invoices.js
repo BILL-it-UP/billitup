@@ -8,6 +8,8 @@ import { nextInvoiceNumber } from "../lib/invoiceNumbering.js";
 import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates.js";
 import { upiQrForInvoice, upiQrPngBufferForInvoice } from "../lib/upiQr.js";
+import { computeProjectProgress } from "../lib/projectProgress.js";
+import { printPrefix } from "../lib/currency.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -65,8 +67,9 @@ router.get("/:id", async (req, res) => {
   const payments = db.prepare("SELECT * FROM payments WHERE invoice_id = ?").all(invoice.id);
   const isOverdue = !!(invoice.status !== "cancelled" && invoice.balance_due > 0 && invoice.due_date && invoice.due_date < new Date().toISOString().slice(0, 10));
   const upiQr = await upiQrForInvoice(business, invoice);
+  const projectProgress = computeProjectProgress(invoice);
 
-  res.json({ ...invoice, is_overdue: isOverdue, lineItems, customer, business, payments, upi_qr_data_url: upiQr?.dataUrl || null });
+  res.json({ ...invoice, ...projectProgress, is_overdue: isOverdue, lineItems, customer, business, payments, upi_qr_data_url: upiQr?.dataUrl || null });
 });
 
 // Create an invoice with its line items in one call. Server computes all totals —
@@ -75,6 +78,7 @@ router.post("/", (req, res) => {
   const {
     customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment,
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
+    currency, project_name, milestone_label, project_total_amount,
   } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
@@ -108,13 +112,15 @@ router.post("/", (req, res) => {
   const ewayTransporterId = isPremium ? eway_transporter_id || null : null;
   const ewayVehicleNumber = isPremium ? eway_vehicle_number || null : null;
   const ewayDistanceKm = isPremium && eway_distance_km ? Number(eway_distance_km) : null;
+  const invoiceCurrency = currency || business.default_currency || "INR";
 
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
       (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, subject, gstin, status,
        sub_total, discount, tax_total, total, balance_due, notes, public_token, gst_treatment, cgst, sgst, igst,
-       eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
+       currency, project_name, milestone_label, project_total_amount)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -128,7 +134,9 @@ router.post("/", (req, res) => {
       terms || null, reference || null, subject || null, gstin || null,
       subTotal, discountTotal, taxTotal, total, total, notes || null,
       randomUUID().replace(/-/g, ""), treatment, cgst, sgst, igst,
-      ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm
+      ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm,
+      invoiceCurrency, project_name || null, milestone_label || null,
+      project_total_amount ? Number(project_total_amount) : null
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
@@ -154,6 +162,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const {
     customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment,
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
+    currency, project_name, milestone_label, project_total_amount,
   } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
@@ -224,7 +233,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
         customer_id = ?, invoice_date = ?, due_date = ?, terms = ?, reference = ?, subject = ?, gstin = ?, notes = ?,
         sub_total = ?, discount = ?, tax_total = ?, total = ?, balance_due = ?, status = ?,
         gst_treatment = ?, cgst = ?, sgst = ?, igst = ?,
-        eway_bill_number = ?, eway_transporter_name = ?, eway_transporter_id = ?, eway_vehicle_number = ?, eway_distance_km = ?
+        eway_bill_number = ?, eway_transporter_name = ?, eway_transporter_id = ?, eway_vehicle_number = ?, eway_distance_km = ?,
+        currency = ?, project_name = ?, milestone_label = ?, project_total_amount = ?
        WHERE id = ?`
     ).run(
       customer_id || null, invoice_date || invoice.invoice_date, due_date || null,
@@ -232,6 +242,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
       subTotal, discountTotal, taxTotal, total, newBalanceDue, newStatus,
       treatment, cgst, sgst, igst,
       ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm,
+      currency || invoice.currency || "INR", project_name || null, milestone_label || null,
+      project_total_amount ? Number(project_total_amount) : null,
       invoice.id
     );
 
@@ -329,6 +341,7 @@ router.post("/:id/send", async (req, res) => {
   // amount_paid/status_line only matter for the receipt template, but there's
   // no harm computing them unconditionally — a template that doesn't
   // reference a placeholder just never sees it.
+  const prefix = printPrefix(invoice.currency);
   const templateVars = {
     business_name: business.name || "",
     customer_name: customer?.name || "there",
@@ -338,7 +351,7 @@ router.post("/:id/send", async (req, res) => {
     due_date: invoice.due_date ? ` (due ${formatDate(invoice.due_date, business.date_format)})` : "",
     amount_paid: Number(invoice.total - invoice.balance_due).toFixed(2),
     status_line: invoice.balance_due > 0
-      ? ` A balance of Rs ${Number(invoice.balance_due).toFixed(2)} is still outstanding.`
+      ? ` A balance of ${prefix} ${Number(invoice.balance_due).toFixed(2)} is still outstanding.`
       : " Your invoice is now fully paid.",
   };
   const template = getTemplate(business, templateType);
@@ -350,10 +363,12 @@ router.post("/:id/send", async (req, res) => {
 
   try {
     const upiQrPngBuffer = await upiQrPngBufferForInvoice(business, invoice);
+    const projectProgress = computeProjectProgress(invoice);
     const pdfBuffer = await renderDocumentPdf({
       docLabel: "Invoice", docNumber: invoice.invoice_number, docDate: formatDate(invoice.invoice_date, business.date_format),
-      headlineLabel: "Balance Due", headlineValue: `Rs ${Number(invoice.balance_due).toFixed(2)}`,
-      business, party: customer, partyLabel: "Bill To", lineItems, totals: invoice, notes: invoice.notes, upiQrPngBuffer,
+      headlineLabel: "Balance Due", headlineValue: `${prefix} ${Number(invoice.balance_due).toFixed(2)}`,
+      business, party: customer, partyLabel: "Bill To", lineItems,
+      totals: { ...invoice, ...projectProgress }, notes: invoice.notes, upiQrPngBuffer,
     });
     // Invoices have a public no-login share link (public_token) — quotes and
     // credit notes don't, so only invoice emails get a "View Invoice" button.
@@ -363,13 +378,13 @@ router.post("/:id/send", async (req, res) => {
       summaryRows: isReceipt
         ? [
             ["Invoice Number", invoice.invoice_number],
-            ["Amount Paid", `Rs ${templateVars.amount_paid}`],
-            ...(invoice.balance_due > 0 ? [["Balance Due", `Rs ${Number(invoice.balance_due).toFixed(2)}`]] : []),
+            ["Amount Paid", `${prefix} ${templateVars.amount_paid}`],
+            ...(invoice.balance_due > 0 ? [["Balance Due", `${prefix} ${Number(invoice.balance_due).toFixed(2)}`]] : []),
           ]
         : [
             ["Invoice Number", invoice.invoice_number],
-            ["Amount", `Rs ${Number(invoice.total).toFixed(2)}`],
-            ...(invoice.balance_due > 0 ? [["Balance Due", `Rs ${Number(invoice.balance_due).toFixed(2)}`]] : []),
+            ["Amount", `${prefix} ${Number(invoice.total).toFixed(2)}`],
+            ...(invoice.balance_due > 0 ? [["Balance Due", `${prefix} ${Number(invoice.balance_due).toFixed(2)}`]] : []),
             ...(invoice.due_date ? [["Due Date", formatDate(invoice.due_date, business.date_format)]] : []),
           ],
     });

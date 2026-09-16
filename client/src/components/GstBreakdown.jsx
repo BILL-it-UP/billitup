@@ -5,7 +5,7 @@ import { formatMoney } from "../lib/format";
 // tax into CGST+SGST, inter-state supplies show it as IGST. Falls back to a
 // single "Tax" line for older documents saved before this split existed
 // (cgst/sgst/igst all zero but tax_total isn't).
-export function GstBreakdown({ doc }) {
+export function GstBreakdown({ doc, symbol = "₹" }) {
   const cgst = Number(doc.cgst) || 0;
   const sgst = Number(doc.sgst) || 0;
   const igst = Number(doc.igst) || 0;
@@ -13,14 +13,14 @@ export function GstBreakdown({ doc }) {
   const taxLabel = doc.gst_treatment === "rcm" ? " (reverse charge)" : "";
 
   if (!cgst && !sgst && !igst) {
-    return <div><span>Tax{taxLabel}</span><span>₹{formatMoney(taxTotal)}</span></div>;
+    return <div><span>Tax{taxLabel}</span><span>{symbol}{formatMoney(taxTotal)}</span></div>;
   }
 
   return (
     <>
-      {cgst > 0 && <div><span>CGST{taxLabel}</span><span>₹{formatMoney(cgst)}</span></div>}
-      {sgst > 0 && <div><span>SGST{taxLabel}</span><span>₹{formatMoney(sgst)}</span></div>}
-      {igst > 0 && <div><span>IGST{taxLabel}</span><span>₹{formatMoney(igst)}</span></div>}
+      {cgst > 0 && <div><span>CGST{taxLabel}</span><span>{symbol}{formatMoney(cgst)}</span></div>}
+      {sgst > 0 && <div><span>SGST{taxLabel}</span><span>{symbol}{formatMoney(sgst)}</span></div>}
+      {igst > 0 && <div><span>IGST{taxLabel}</span><span>{symbol}{formatMoney(igst)}</span></div>}
     </>
   );
 }

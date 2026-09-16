@@ -12,6 +12,7 @@ import reportsRouter from "./routes/reports.js";
 import reportsLibraryRouter from "./routes/reportsLibrary.js";
 import creditNotesRouter from "./routes/credit-notes.js";
 import recurringInvoicesRouter, { runDueRecurringInvoices } from "./routes/recurring-invoices.js";
+import { runDueReminders } from "./lib/paymentReminders.js";
 import publicRouter from "./routes/public.js";
 import portalAuthRouter from "./routes/portalAuth.js";
 import portalRouter from "./routes/portal.js";
@@ -139,6 +140,19 @@ function runDueRecurringInvoicesSafely() {
 }
 runDueRecurringInvoicesSafely();
 setInterval(runDueRecurringInvoicesSafely, 60 * 60 * 1000);
+
+// Automatic payment reminder emails: same "check at startup, then hourly"
+// pattern as recurring invoices above — off for every business until they
+// turn it on in Settings > Email, and safe to run often since each invoice
+// only ever matches one reminder condition until its own sent-at column
+// moves past it (2026-09-16).
+function runDueRemindersSafely() {
+  runDueReminders().catch((err) => {
+    console.error("Payment reminders run failed:", err);
+  });
+}
+runDueRemindersSafely();
+setInterval(runDueRemindersSafely, 60 * 60 * 1000);
 
 // Automated backups — see lib/backup.js. Runs once shortly after startup,
 // then daily. startBackupSchedule sets up its own timer internally, so it's

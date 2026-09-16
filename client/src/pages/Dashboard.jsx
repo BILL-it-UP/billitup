@@ -5,6 +5,7 @@ import CashFlowChart from "../components/CashFlowChart";
 import InvoiceDetail from "../components/InvoiceDetail";
 import { relativeDueLabel } from "../lib/invoiceStatus";
 import { formatMoney, formatDate } from "../lib/format";
+import { currencySymbol } from "../lib/currencies";
 import { useDateFormat } from "../lib/useDateFormat";
 import ExportInvoicesModal from "../components/ExportInvoicesModal";
 
@@ -170,7 +171,7 @@ export default function Dashboard() {
                   >
                     <div className="invoice-list-item-top">
                       <span className="invoice-list-item-name">{inv.customer_name || "Walk-in customer"}</span>
-                      <span className="invoice-list-item-amount">₹{formatMoney(inv.total)}</span>
+                      <span className="invoice-list-item-amount">{currencySymbol(inv.currency)}{formatMoney(inv.total)}</span>
                     </div>
                     <div className="invoice-list-item-bottom">
                       <span className="muted">{inv.invoice_number} · {formatDate(inv.invoice_date, dateFormat)}</span>

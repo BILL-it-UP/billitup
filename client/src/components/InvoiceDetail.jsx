@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
 import { buildWhatsappUrl } from "../lib/whatsapp";
+import { currencySymbol } from "../lib/currencies";
 import SendDocumentModal from "./SendDocumentModal";
 import ConfirmDialog from "./ConfirmDialog";
 import RecordPaymentForm from "./RecordPaymentForm";
@@ -110,7 +111,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     amount_paid: Number(invoice.total - invoice.balance_due).toFixed(2),
     balance_due: Number(invoice.balance_due).toFixed(2),
     status_line: invoice.balance_due > 0
-      ? ` A balance of Rs ${Number(invoice.balance_due).toFixed(2)} is still outstanding.`
+      ? ` A balance of ${currencySymbol(invoice.currency)}${Number(invoice.balance_due).toFixed(2)} is still outstanding.`
       : " Your invoice is now fully paid.",
   };
   const receiptDefaults = {
@@ -153,16 +154,17 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   // WhatsApp is how most customers actually get contacted day to day — a
   // ready-to-send message plus the same shareable link, opened straight in
   // the customer's own chat when their phone number is on file (2026-09-16).
+  const symbol = currencySymbol(invoice.currency);
   const whatsappShareUrl = shareUrl
     ? buildWhatsappUrl(
         invoice.customer?.phone,
-        `Hi ${invoice.customer?.name || "there"}, here is invoice ${invoice.invoice_number} from ${invoice.business?.name || "us"} for Rs ${Number(invoice.total).toFixed(2)}. View and download it here: ${shareUrl}`
+        `Hi ${invoice.customer?.name || "there"}, here is invoice ${invoice.invoice_number} from ${invoice.business?.name || "us"} for ${symbol}${Number(invoice.total).toFixed(2)}. View and download it here: ${shareUrl}`
       )
     : null;
   const whatsappReminderUrl = shareUrl && invoice.balance_due > 0
     ? buildWhatsappUrl(
         invoice.customer?.phone,
-        `Hi ${invoice.customer?.name || "there"}, a quick reminder that invoice ${invoice.invoice_number} from ${invoice.business?.name || "us"} has a balance of Rs ${Number(invoice.balance_due).toFixed(2)}${invoice.due_date ? ` (due ${invoice.due_date})` : ""} still pending. View and pay here: ${shareUrl}`
+        `Hi ${invoice.customer?.name || "there"}, a quick reminder that invoice ${invoice.invoice_number} from ${invoice.business?.name || "us"} has a balance of ${symbol}${Number(invoice.balance_due).toFixed(2)}${invoice.due_date ? ` (due ${invoice.due_date})` : ""} still pending. View and pay here: ${shareUrl}`
       )
     : null;
 
