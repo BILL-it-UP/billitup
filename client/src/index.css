@@ -370,7 +370,10 @@ textarea { resize: vertical; }
 }
 .stat-label { font-size: 13px; color: var(--muted); }
 .stat-value { font-size: 22px; font-weight: 700; }
-.report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+/* align-items: start stops the shorter Total Receivables card from being
+   stretched to match the taller Cash Flow card's height, which used to
+   leave a large empty gap under its "View full reports" link (2026-09-16). */
+.report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; align-items: start; }
 .panel-header-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 4px; }
 .panel-header-row h2 { margin-bottom: 0; }
 .dashboard-invoices .table { margin-top: 8px; }

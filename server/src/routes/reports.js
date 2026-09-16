@@ -89,17 +89,29 @@ router.get("/summary", (req, res) => {
     )
     .all(businessId);
 
-  // Cash flow — total payments received per month, most recent 6 months,
-  // returned oldest-first so it plots left-to-right.
-  const cashFlow = db
+  // Cash flow — total payments received per month, always the 6 most recent
+  // CALENDAR months (this one plus the five before it), not just whichever
+  // months happen to have a payment in them. A business with only one or
+  // two months of history used to get a chart with only one or two bars in
+  // it, floating in an otherwise-empty box — filling in the quiet months at
+  // ₹0 makes it read as a normal 6-month chart instead of looking broken or
+  // sparse (2026-09-16).
+  const cashFlowRows = db
     .prepare(
       `SELECT strftime('%Y-%m', payments.paid_at) AS month, SUM(payments.amount) AS total
        FROM payments JOIN invoices ON invoices.id = payments.invoice_id
        WHERE invoices.business_id = ?
-       GROUP BY month ORDER BY month DESC LIMIT 6`
+       GROUP BY month`
     )
-    .all(businessId)
-    .reverse();
+    .all(businessId);
+  const cashFlowByMonth = Object.fromEntries(cashFlowRows.map((r) => [r.month, r.total]));
+  const cashFlow = [];
+  const cashFlowNow = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(cashFlowNow.getFullYear(), cashFlowNow.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    cashFlow.push({ month: key, total: cashFlowByMonth[key] || 0 });
+  }
 
   // AR aging — every unpaid invoice bucketed by how many days past its due
   // date it is. An invoice with no due date set, or not yet due, counts as
