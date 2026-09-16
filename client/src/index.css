@@ -541,6 +541,25 @@ textarea { resize: vertical; }
 .portal-tab:hover { color: var(--ink); }
 .portal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+/* ---- Generalized tab bar (2026-09-16) ----
+   Same look as .portal-tabs above, but under a name that isn't tied to the
+   customer portal, so Master Admin and Settings can use it too without the
+   whole page turning into one long stack of always-visible sections. A tab
+   can carry a small count badge (open tickets, feedback waiting, businesses
+   needing attention) so what needs a look is visible before you click in. */
+.tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+.tab-btn {
+  background: none; border: none; padding: 10px 16px; font: inherit; font-size: 14px; font-weight: 600;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--ink); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn-badge {
+  background: var(--accent-amber); color: white; font-size: 11px; font-weight: 700;
+  border-radius: 999px; padding: 1px 7px; line-height: 1.6; min-width: 8px; text-align: center;
+}
+
 .portal-table-wrap { overflow-x: auto; }
 .portal-invoice-actions { white-space: nowrap; }
 .portal-pay-qr { display: flex; align-items: center; gap: 16px; padding: 12px 4px; }
@@ -778,7 +797,7 @@ textarea { resize: vertical; }
 .admin-stat-tile.attention .admin-stat-icon { background: #fdf1e6; color: var(--accent-amber); }
 .admin-stat-tile.attention .stat-value { color: var(--accent-amber); }
 
-.admin-section { margin-top: 28px; }
+.admin-section { margin-top: 4px; }
 .admin-section-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
 .admin-section-header .settings-card-icon { background: #eaf5ef; color: var(--accent); }
 .admin-section-header h2 { margin: 0 0 2px; font-size: 17px; }

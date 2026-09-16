@@ -69,6 +69,7 @@ export default function AdminPanel() {
   const [sort, setSort] = useState({ key: "created_at", dir: "desc" });
   const [planTarget, setPlanTarget] = useState(null); // business pending plan-change confirmation
   const [deleteTarget, setDeleteTarget] = useState(null); // suggestion pending delete confirmation
+  const [activeTab, setActiveTab] = useState("businesses");
 
   const load = () => {
     Promise.all([
@@ -97,6 +98,11 @@ export default function AdminPanel() {
       return;
     }
     load();
+    // Poll so a new business, support message, feedback item, or
+    // announcement shows up on its own — nobody should have to hit refresh
+    // to notice something changed on this page (2026-09-16).
+    const interval = setInterval(load, 20000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -255,12 +261,46 @@ export default function AdminPanel() {
           })}
         </div>
 
+        <div className="tab-bar">
+          <button
+            type="button"
+            className={`tab-btn${activeTab === "businesses" ? " active" : ""}`}
+            onClick={() => setActiveTab("businesses")}
+          >
+            <IconBuilding size={16} /> Businesses
+            {attentionCount > 0 && <span className="tab-btn-badge">{attentionCount}</span>}
+          </button>
+          <button
+            type="button"
+            className={`tab-btn${activeTab === "support" ? " active" : ""}`}
+            onClick={() => setActiveTab("support")}
+          >
+            <IconChat size={16} /> Support
+            {stats.openSupportTickets > 0 && <span className="tab-btn-badge">{stats.openSupportTickets}</span>}
+          </button>
+          <button
+            type="button"
+            className={`tab-btn${activeTab === "feedback" ? " active" : ""}`}
+            onClick={() => setActiveTab("feedback")}
+          >
+            <IconSuggestion size={16} /> Feedback
+            {stats.openSuggestions > 0 && <span className="tab-btn-badge">{stats.openSuggestions}</span>}
+          </button>
+          <button
+            type="button"
+            className={`tab-btn${activeTab === "announcements" ? " active" : ""}`}
+            onClick={() => setActiveTab("announcements")}
+          >
+            <IconAnnouncement size={16} /> Announcements
+          </button>
+        </div>
+
+        {activeTab === "businesses" && (
         <div className="admin-section">
           <SectionHeader
             icon={IconBuilding}
             title="Businesses"
             description="Everything else in BillItUp stays free. The only thing Premium unlocks is running more than one firm under the same login. Flip a business here once you've been paid directly."
-            badge={attentionCount > 0 ? <span className="badge badge-attention admin-section-badge">{attentionCount} need attention</span> : null}
           />
           <div className="admin-table-card">
             <div className="list-toolbar">
@@ -334,7 +374,9 @@ export default function AdminPanel() {
             )}
           </div>
         </div>
+        )}
 
+        {activeTab === "support" && (
         <div className="admin-section">
           <SectionHeader
             icon={IconChat}
@@ -371,7 +413,9 @@ export default function AdminPanel() {
             )}
           </div>
         </div>
+        )}
 
+        {activeTab === "feedback" && (
         <div className="admin-section">
           <SectionHeader
             icon={IconSuggestion}
@@ -424,7 +468,9 @@ export default function AdminPanel() {
             )}
           </div>
         </div>
+        )}
 
+        {activeTab === "announcements" && (
         <div className="admin-section">
           <SectionHeader
             icon={IconAnnouncement}
@@ -471,6 +517,7 @@ export default function AdminPanel() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {planTarget && (

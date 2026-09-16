@@ -84,6 +84,12 @@ export function AdminTicketThread({ ticket, onUpdated }) {
 
   useEffect(() => {
     adminApi.getSupportTicketMessages(ticket.id).then(setMessages).catch(() => {});
+    // Poll while this thread is open so a new reply from the business shows
+    // up on its own, without needing a page refresh (2026-09-16).
+    const interval = setInterval(() => {
+      adminApi.getSupportTicketMessages(ticket.id).then(setMessages).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
   }, [ticket.id]);
 
   const send = async (e) => {

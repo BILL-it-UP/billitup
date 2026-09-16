@@ -24,11 +24,28 @@ function CardHeader({ icon: Icon, title, description }) {
   );
 }
 
+// One tab bar instead of nine cards stacked one under another — Naveen's
+// own words were that Settings was "stuck on a wall like a billboard"
+// (2026-09-16). Firms/Staff/Backups/Cloud Backup/Danger Zone stay
+// owner-only exactly as before, just as a tab filter instead of a
+// conditionally-rendered card.
+const SETTINGS_TABS = [
+  { key: "business", label: "Business", icon: IconBuilding },
+  { key: "branding", label: "Branding & Payments", icon: IconImage },
+  { key: "email", label: "Email", icon: IconMail },
+  { key: "firms", label: "Firms & Staff", icon: IconTeam, ownerOnly: true },
+  { key: "backups", label: "Backups", icon: IconCloud, ownerOnly: true },
+  { key: "danger", label: "Danger Zone", icon: IconTrash, ownerOnly: true },
+];
+
 export default function Settings() {
   const user = getUser();
+  const isOwner = user?.role === "owner";
+  const tabs = SETTINGS_TABS.filter((t) => !t.ownerOnly || isOwner);
   const [business, setBusiness] = useState(null);
   const [savedMsg, setSavedMsg] = useState("");
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("business");
 
   useEffect(() => { api.getBusiness().then(setBusiness); }, []);
 
@@ -55,9 +72,23 @@ export default function Settings() {
 
       <div className="settings-page">
         {isFirstTimeSetup && (
-          <p className="muted">Finish setting up your business — fill in the details below, then add your branding and bank details further down.</p>
+          <p className="muted">Finish setting up your business. Fill in the details below, then switch to the Branding & Payments tab for your logo and bank details.</p>
         )}
 
+        <div className="tab-bar">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`tab-btn${activeTab === t.key ? " active" : ""}`}
+              onClick={() => setActiveTab(t.key)}
+            >
+              <t.icon size={16} /> {t.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "business" && (
         <div className="settings-card">
           <CardHeader
             icon={IconBuilding}
@@ -137,7 +168,7 @@ export default function Settings() {
             </label>
             {!!business.reset_invoice_numbering_yearly && (
               <p className="muted" style={{ marginTop: -8 }}>
-                Applies from your next new invoice onward — invoices you've already created keep their existing numbers.
+                Applies from your next new invoice onward, invoices you've already created keep their existing numbers.
               </p>
             )}
             {error && <p className="error">{error}</p>}
@@ -145,22 +176,34 @@ export default function Settings() {
             <button type="submit">Save</button>
           </form>
         </div>
+        )}
 
-        <InvoiceBrandingSettings business={business} setBusiness={setBusiness} />
+        {activeTab === "branding" && (
+          <InvoiceBrandingSettings business={business} setBusiness={setBusiness} />
+        )}
 
-        <EmailSettings business={business} setBusiness={setBusiness} />
+        {activeTab === "email" && (
+          <>
+            <EmailSettings business={business} setBusiness={setBusiness} />
+            <EmailTemplatesCard business={business} setBusiness={setBusiness} />
+          </>
+        )}
 
-        <EmailTemplatesCard business={business} setBusiness={setBusiness} />
+        {activeTab === "firms" && isOwner && (
+          <>
+            <FirmManagement />
+            <StaffManagement />
+          </>
+        )}
 
-        {user?.role === "owner" && <FirmManagement />}
+        {activeTab === "backups" && isOwner && (
+          <>
+            <BackupSettings />
+            <CloudBackupSettings />
+          </>
+        )}
 
-        {user?.role === "owner" && <StaffManagement />}
-
-        {user?.role === "owner" && <BackupSettings />}
-
-        {user?.role === "owner" && <CloudBackupSettings />}
-
-        {user?.role === "owner" && <DangerZone business={business} />}
+        {activeTab === "danger" && isOwner && <DangerZone business={business} />}
       </div>
     </div>
   );
