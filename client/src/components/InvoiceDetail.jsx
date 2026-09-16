@@ -37,6 +37,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   const [paymentNotice, setPaymentNotice] = useState("");
   const [approving, setApproving] = useState(false);
   const [gstImsBusy, setGstImsBusy] = useState(false);
+  const [recordPaymentSignal, setRecordPaymentSignal] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const autoSendConsumed = useRef(false);
 
@@ -266,6 +267,38 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     }
   };
 
+  // A diagonal corner ribbon on the document preview, on-screen only — see
+  // .status-ribbon in index.css. Cancelled already gets its own big stamp on
+  // the document itself, so it doesn't need a ribbon too (2026-09-16).
+  const ribbonTone = invoice.status === "cancelled" ? null
+    : invoice.status === "paid" ? "paid"
+    : invoice.is_overdue ? "overdue"
+    : invoice.status === "partially_paid" ? "partially_paid"
+    : invoice.status === "sent" ? "sent"
+    : "draft";
+  const RIBBON_TEXT = { draft: "Draft", sent: "Sent", partially_paid: "Partially Paid", paid: "Paid", overdue: "Overdue" };
+
+  // A single contextual nudge toward whatever's next for this invoice —
+  // matches the "What's next?" banner Zoho shows above its own invoice
+  // preview. Skipped once it's cancelled, or while it's still waiting on the
+  // separate internal-approval banner above, so the two never stack.
+  let nextStep = null;
+  if (invoice.approval_status !== "pending" && invoice.status !== "cancelled") {
+    if (invoice.status === "draft") {
+      nextStep = {
+        text: "This invoice hasn't been sent yet. Email it to your customer when you're ready.",
+        actionLabel: "Email to Customer",
+        onAction: () => setShowSendModal(true),
+      };
+    } else if (invoice.balance_due > 0 && ["sent", "partially_paid"].includes(invoice.status)) {
+      nextStep = {
+        text: "This invoice has been sent. Record a payment for it as soon as you receive one.",
+        actionLabel: "Record Payment",
+        onAction: () => setRecordPaymentSignal((s) => s + 1),
+      };
+    }
+  }
+
   return (
     <div>
       <div className="no-print toolbar invoice-toolbar">
@@ -290,7 +323,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
           <a className="btn-secondary" href={whatsappReminderUrl} target="_blank" rel="noreferrer">Remind via WhatsApp</a>
         )}
         {invoice.balance_due > 0 && invoice.status !== "cancelled" && (
-          <RecordPaymentForm balanceDue={invoice.balance_due} onRecord={recordPayment} />
+          <RecordPaymentForm balanceDue={invoice.balance_due} onRecord={recordPayment} openSignal={recordPaymentSignal} />
         )}
         {canEdit && invoice.status === "draft" && invoice.approval_status !== "pending" && (
           <button type="button" className="btn-secondary" onClick={() => setConfirmingMarkSent(true)}>
@@ -321,6 +354,15 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
           )}
         </div>
       )}
+      {nextStep && (
+        <div className="no-print banner-next-step">
+          <div className="banner-next-step-text">
+            <span className="banner-next-step-eyebrow">What's next?</span>
+            {nextStep.text}
+          </div>
+          <button type="button" onClick={nextStep.onAction}>{nextStep.actionLabel}</button>
+        </div>
+      )}
       {invoice.last_viewed_at && (
         <p className="muted no-print">
           Viewed by client on {new Date(invoice.first_viewed_at).toLocaleString()}
@@ -345,8 +387,13 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         </label>
       )}
 
-      <div className="invoice-doc invoice-full" style={{ width: standalone ? "210mm" : "100%", maxWidth: "210mm" }}>
-        <FullInvoice invoice={invoice} />
+      <div className="invoice-doc-wrap">
+        {ribbonTone && (
+          <span className={`status-ribbon status-ribbon-${ribbonTone} no-print`}>{RIBBON_TEXT[ribbonTone]}</span>
+        )}
+        <div className="invoice-doc invoice-full" style={{ width: standalone ? "210mm" : "100%", maxWidth: "210mm" }}>
+          <FullInvoice invoice={invoice} />
+        </div>
       </div>
 
       <InvoiceComments

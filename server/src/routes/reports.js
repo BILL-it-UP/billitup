@@ -133,6 +133,23 @@ router.get("/summary", (req, res) => {
     .prepare(`SELECT COALESCE(SUM(total), 0) AS total FROM credit_notes WHERE business_id = ?`)
     .get(businessId).total;
 
+  // "Average No. of Days for Getting Paid" — same metric Zoho shows on its
+  // Invoices page. For every fully paid invoice, the gap between its
+  // invoice date and its last payment date (the payment that actually
+  // brought it to paid, whether that was one payment or several); averaged
+  // across every paid invoice this business has (2026-09-16).
+  const avgDaysToPayRow = db
+    .prepare(
+      `SELECT AVG(days_to_pay) AS avg_days FROM (
+         SELECT julianday(MAX(payments.paid_at)) - julianday(invoices.invoice_date) AS days_to_pay
+         FROM invoices JOIN payments ON payments.invoice_id = invoices.id
+         WHERE invoices.business_id = ? AND invoices.status = 'paid'
+         GROUP BY invoices.id
+       )`
+    )
+    .get(businessId);
+  const avgDaysToPay = avgDaysToPayRow?.avg_days != null ? Math.round(avgDaysToPayRow.avg_days) : null;
+
   // An invoice is overdue once its due date has passed and it's not fully
   // paid — computed live off due_date rather than a stored status, so it's
   // always accurate without a background job to keep it in sync.
@@ -153,7 +170,7 @@ router.get("/summary", (req, res) => {
 
   res.json({
     ...totals, topCustomers, topItems, statusBreakdown, totalCredited, overdueInvoices, overdueAmount,
-    receivables, cashFlow, arAging, salesByCustomer, salesByItem, customerBalances, paymentsReceived,
+    receivables, cashFlow, arAging, salesByCustomer, salesByItem, customerBalances, paymentsReceived, avgDaysToPay,
   });
 });
 

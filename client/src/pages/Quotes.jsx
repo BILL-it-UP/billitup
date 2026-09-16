@@ -6,6 +6,10 @@ import { exportSheet } from "../lib/exportExcel";
 import { useDateFormat } from "../lib/useDateFormat";
 
 const STATUS_LABEL = { draft: "Draft", sent: "Sent", accepted: "Accepted", declined: "Declined", converted: "Converted to Invoice" };
+// Reuses the same colored-pill tones as the Invoices list (see .status-pill
+// in index.css) so a quote's status reads the same way an invoice's does —
+// blue for sent, green for a good outcome, red for a bad one (2026-09-16).
+const STATUS_TONE = { draft: "draft", sent: "due", accepted: "paid", declined: "overdue", converted: "paid" };
 
 export default function Quotes() {
   const [quotes, setQuotes] = useState([]);
@@ -77,7 +81,7 @@ export default function Quotes() {
                 <td><Link to={`/quotes/${q.id}`}>{q.quote_number}</Link></td>
                 <td>{q.customer_name || "—"}</td>
                 <td>{formatDate(q.quote_date, dateFormat)}</td>
-                <td><span className={`badge badge-${q.status === "converted" ? "paid" : q.status}`}>{STATUS_LABEL[q.status] || q.status}</span></td>
+                <td><span className={`status-pill status-pill-${STATUS_TONE[q.status] || "draft"}`}>{STATUS_LABEL[q.status] || q.status}</span></td>
                 <td>₹{formatMoney(q.total)}</td>
               </tr>
             ))}

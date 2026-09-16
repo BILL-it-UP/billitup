@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import CashFlowChart from "../components/CashFlowChart";
 import InvoiceDetail from "../components/InvoiceDetail";
-import { relativeDueLabel } from "../lib/invoiceStatus";
+import { relativeDueLabel, computePaymentSummary } from "../lib/invoiceStatus";
 import { formatMoney, formatDate } from "../lib/format";
 import { currencySymbol } from "../lib/currencies";
 import { useDateFormat } from "../lib/useDateFormat";
@@ -77,6 +77,8 @@ export default function Dashboard() {
       setBulkBusy(false);
     }
   };
+
+  const paymentSummary = useMemo(() => computePaymentSummary(invoices), [invoices]);
 
   const filteredInvoices = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -160,6 +162,33 @@ export default function Dashboard() {
             </div>
           </div>
         </>
+      )}
+
+      {invoices.length > 0 && (
+        <div className="payment-summary-bar">
+          <div className="payment-summary-item">
+            <span className="payment-summary-label">Total Outstanding Receivables</span>
+            <span className="payment-summary-value">{currencySymbol("INR")}{formatMoney(paymentSummary.totalOutstanding)}</span>
+          </div>
+          <div className="payment-summary-item">
+            <span className="payment-summary-label">Due Today</span>
+            <span className="payment-summary-value">{currencySymbol("INR")}{formatMoney(paymentSummary.dueToday)}</span>
+          </div>
+          <div className="payment-summary-item">
+            <span className="payment-summary-label">Due Within 30 Days</span>
+            <span className="payment-summary-value">{currencySymbol("INR")}{formatMoney(paymentSummary.dueWithin30)}</span>
+          </div>
+          <div className="payment-summary-item">
+            <span className="payment-summary-label">Overdue Invoices</span>
+            <span className="payment-summary-value payment-summary-overdue">{currencySymbol("INR")}{formatMoney(paymentSummary.overdue)}</span>
+          </div>
+          {isOwnerOrAdmin && summary?.avgDaysToPay != null && (
+            <div className="payment-summary-item">
+              <span className="payment-summary-label">Average Days to Get Paid</span>
+              <span className="payment-summary-value">{summary.avgDaysToPay} Day{summary.avgDaysToPay === 1 ? "" : "s"}</span>
+            </div>
+          )}
+        </div>
       )}
 
       <div className="page-header">

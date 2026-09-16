@@ -370,6 +370,31 @@ textarea { resize: vertical; }
 .cash-flow-value { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .cash-flow-label { font-size: 12px; color: var(--muted); }
 
+/* Payment Summary bar above the Invoices list, matching the strip Zoho shows
+   above its own "All Invoices" table (2026-09-16). Total Outstanding/Due
+   Today/Due Within 30 Days/Overdue are computed client-side from whatever
+   invoices are already loaded, so every role sees them; Average Days to Get
+   Paid needs payment history from the reports summary, so it only appears
+   for Owner/Admin, same access level as the rest of that summary. */
+.payment-summary-bar {
+  display: flex; flex-wrap: wrap; background: linear-gradient(135deg, #fbeee0 0%, #eaf3fb 100%);
+  border: 1px solid var(--border); border-radius: 12px; padding: 18px 24px; margin: 20px 0 4px;
+}
+.payment-summary-item {
+  flex: 1; min-width: 170px; padding: 0 22px; border-left: 1px solid rgba(28, 31, 38, 0.08);
+}
+.payment-summary-item:first-child { border-left: none; padding-left: 0; }
+.payment-summary-label {
+  display: block; font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.03em; margin-bottom: 6px;
+}
+.payment-summary-value { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.payment-summary-value.payment-summary-overdue { color: #b3261e; }
+@media (max-width: 900px) {
+  .payment-summary-bar { gap: 16px 0; }
+  .payment-summary-item { flex: 1 1 45%; border-left: none; padding-left: 0; }
+}
+
 /* ---- Master-detail Invoices list ---- */
 .invoices-split { display: grid; grid-template-columns: 340px 1fr; gap: 20px; height: 680px; margin-top: 12px; }
 .invoice-list-wrap { height: 100%; display: flex; flex-direction: column; min-height: 0; }
@@ -390,13 +415,20 @@ textarea { resize: vertical; }
 .invoice-list-item-bottom { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .bulk-action-toolbar { padding: 8px 2px; font-size: 13px; }
 .bulk-action-toolbar span { font-weight: 600; margin-right: 4px; }
-.due-label { font-weight: 600; white-space: nowrap; }
-.due-label-overdue { color: #b3261e; }
-.due-label-due, .due-label-sent { color: var(--accent); }
-.due-label-due-soon { color: #b26a00; }
-.due-label-paid { color: #166534; }
-.due-label-draft { color: var(--muted); }
-.due-label-cancelled { color: #b3261e; text-decoration: line-through; }
+/* Colored status pills, matching Zoho's own DUE IN X DAYS / OVERDUE BY X DAYS
+   look — a filled rounded badge instead of plain colored text, so the state
+   of an invoice/quote reads at a glance in a scanned list (2026-09-16). Also
+   used directly (as .status-pill) by the Quotes list for the same reason. */
+.due-label, .status-pill {
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+}
+.due-label-overdue, .status-pill-overdue { background: #fee2e2; color: #991b1b; }
+.due-label-due, .due-label-sent, .status-pill-due { background: #dbeafe; color: #1e40af; }
+.due-label-due-soon, .status-pill-due-soon { background: #fef9c3; color: #854d0e; }
+.due-label-paid, .status-pill-paid { background: #dcfce7; color: #166534; }
+.due-label-draft, .status-pill-draft { background: #eee; color: #555; }
+.due-label-cancelled, .status-pill-cancelled { background: #fee2e2; color: #991b1b; text-decoration: line-through; }
 
 .invoice-detail-pane {
   background: white; border: 1px solid var(--border); border-radius: 10px;
@@ -413,7 +445,40 @@ textarea { resize: vertical; }
   .invoice-detail-pane { height: 600px; }
 }
 
+/* "What's next" banner on the invoice detail pane — a contextual nudge
+   toward the next thing to do with this invoice (send it, record a
+   payment), matching the banner Zoho shows above its own invoice preview
+   (2026-09-16). */
+.banner-next-step {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: #eef4ff; border: 1px solid #d3e0fb; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
+}
+.banner-next-step-text { font-size: 13px; }
+.banner-next-step-eyebrow {
+  display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: #1e40af; margin-bottom: 2px;
+}
+.banner-next-step button { flex-shrink: 0; }
+
 /* ---- Invoice / Quote / Credit Note document ---- */
+.invoice-doc-wrap { position: relative; overflow: hidden; }
+/* A diagonal corner ribbon on the on-screen invoice preview showing its
+   status at a glance (Draft/Sent/Overdue/Partially Paid/Paid), same idea as
+   Zoho's own "Sent" ribbon. Screen-only (no-print) — a customer looking at
+   the emailed/downloaded PDF shouldn't see an internal status stamp, and a
+   cancelled invoice already gets its own big CANCELLED stamp on the
+   document itself (2026-09-16). */
+.status-ribbon {
+  position: absolute; top: 22px; left: -46px; width: 180px; padding: 5px 0; text-align: center;
+  transform: rotate(-45deg); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: white; box-shadow: 0 2px 4px rgba(28, 31, 38, 0.18); z-index: 3; pointer-events: none;
+}
+.status-ribbon-draft { background: #6b7280; }
+.status-ribbon-sent { background: #1d6fd8; }
+.status-ribbon-partially_paid { background: #b26a00; }
+.status-ribbon-paid { background: #1a7f5a; }
+.status-ribbon-overdue { background: #b3261e; }
+
 .invoice-doc {
   background: white; margin: 0 auto; border: 1px solid var(--border); position: relative;
 }

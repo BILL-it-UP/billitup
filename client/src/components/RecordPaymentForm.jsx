@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const MODES = [
   { value: "cash", label: "Cash" },
@@ -13,8 +13,13 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 // A proper Record Payment form (amount, date, mode, reference/notes) instead
 // of the old single amount box — collapsed to a button until clicked, same
 // pattern as SendEmailButton, so it doesn't clutter the toolbar by default.
-export default function RecordPaymentForm({ balanceDue, onRecord }) {
+// openSignal is an optional counter — a "What's next?" banner elsewhere on
+// the page can bump it to pop this form open on demand, the same as clicking
+// the Record Payment button below, without this component needing to know
+// anything about who's asking (2026-09-16).
+export default function RecordPaymentForm({ balanceDue, onRecord, openSignal }) {
   const [open, setOpen] = useState(false);
+  const openSignalMounted = useRef(false);
   const [amount, setAmount] = useState("");
   const [paidAt, setPaidAt] = useState(todayISO());
   const [mode, setMode] = useState("cash");
@@ -52,6 +57,15 @@ export default function RecordPaymentForm({ balanceDue, onRecord }) {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!openSignalMounted.current) {
+      openSignalMounted.current = true;
+      return;
+    }
+    startOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
 
   if (!open) {
     return <button type="button" onClick={startOpen}>Record Payment</button>;
