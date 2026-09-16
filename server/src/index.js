@@ -49,7 +49,20 @@ process.on("unhandledRejection", (reason) => {
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Business Settings (routes/business.js PUT /me) stores the logo and
+// signature as base64 data: URLs right on the business row (see db.js for
+// why) — the client caps a logo at 500KB and a signature at 300KB before
+// encoding (Settings.jsx's readFileAsDataUrl), but base64 inflates that by
+// ~33%, and both fields plus the rest of the business profile (terms and
+// conditions, five pairs of email subject/body templates, etc.) travel in
+// ONE PUT request. Express's default body-parser limit is only 100KB, far
+// below even one image alone, so any real logo upload was rejected outright
+// as "request entity too large" before it ever reached routes/business.js —
+// this is exactly what a run of "PUT /api/business/me — request entity too
+// large" rows in error_log turned out to be (Naveen found six of them
+// 2026-09-16 and had no way to tell what they meant). 5mb gives comfortable
+// headroom above the client's own caps combined.
+app.use(express.json({ limit: "5mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "billitup-server", time: new Date().toISOString() });
@@ -92,6 +105,14 @@ app.use((err, req, res, _next) => {
     route: `${req.method} ${req.path}`,
     message: err?.message || String(err),
   });
+  // body-parser throws this specific shape when a request body is over the
+  // express.json() limit set above — give whoever hit it (most likely
+  // uploading a logo/signature in Settings) something they can actually act
+  // on, instead of the generic 500 message that made this indistinguishable
+  // from every other server error in error_log (2026-09-16).
+  if (err?.type === "entity.too.large" || err?.status === 413) {
+    return res.status(413).json({ error: "That's too large to save — try a smaller image, or shorten the text." });
+  }
   res.status(500).json({ error: "Something went wrong" });
 });
 
