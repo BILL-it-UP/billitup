@@ -9,3 +9,7 @@ server/data/*.sqlite
 server/data/*.sqlite-journal
 .vite/
 coverage/
+
+# Files delivered by Claude during development sessions — not part of the
+# project itself, kept out so a stray `git add -A` can never sweep them in.
+Claude outputs/

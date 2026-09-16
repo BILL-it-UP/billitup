@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { adminApi, getAdminSecret } from "../lib/adminApi";
-import { formatDateTime } from "../lib/format";
-import { IconChevron, IconAlert, IconChat } from "../components/Icons";
+import { formatDateTime, formatMoney } from "../lib/format";
+import { ATTENTION_LABELS, buildBusinessSummary } from "../lib/businessSummary";
+import { IconChevron, IconAlert, IconChat, IconBuilding } from "../components/Icons";
 
 const STATUS_LABELS = { open: "Open", in_progress: "In progress", resolved: "Resolved" };
 
@@ -141,9 +142,11 @@ export default function BusinessHealth() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [business, setBusiness] = useState(null);
+  const [users, setUsers] = useState(null);
   const [errors, setErrors] = useState(null);
   const [tickets, setTickets] = useState(null);
   const [expandedTicketId, setExpandedTicketId] = useState(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
   const loadErrors = () => adminApi.getBusinessErrors(id).then(setErrors).catch((err) => setError(err.message));
@@ -152,12 +155,28 @@ export default function BusinessHealth() {
   useEffect(() => {
     if (!getAdminSecret()) { navigate("/admin/login"); return; }
     adminApi.getBusiness(id).then(setBusiness).catch((err) => setError(err.message));
+    adminApi.getBusinessUsers(id).then(setUsers).catch((err) => setError(err.message));
     loadErrors();
     loadTickets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const openErrorCount = errors?.filter((e) => e.status === "open").length || 0;
+  const reasons = business?.attention || [];
+
+  const copySummary = async () => {
+    const text = buildBusinessSummary(business);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API can refuse (no permission, non-HTTPS context) — fall
+      // back to something the browser always allows, rather than the button
+      // silently doing nothing.
+      window.prompt("Copy this:", text);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   if (!business) {
     return (
@@ -187,6 +206,67 @@ export default function BusinessHealth() {
             </p>
           </div>
           <span className={`badge ${business.plan === "premium" ? "badge-premium" : "badge-free"}`}>{business.plan === "premium" ? "Premium" : "Free"}</span>
+        </div>
+
+        {reasons.length > 0 && (
+          <p className="error" style={{ marginTop: -8 }}>
+            Needs attention: {reasons.map((r) => ATTENTION_LABELS[r] || r).join("; ")}
+          </p>
+        )}
+
+        <div className="admin-section">
+          <div className="admin-section-header">
+            <span className="settings-card-icon"><IconBuilding size={19} /></span>
+            <div>
+              <h2>Business details</h2>
+              <p className="muted">Everything about this business at a glance — no client data, just the account itself.</p>
+            </div>
+          </div>
+          <div className="admin-table-card">
+            <div className="admin-detail-panel">
+              <div className="admin-detail-facts">
+                <div><span className="muted">GSTIN</span><strong>{business.gstin || "Not set"}</strong></div>
+                <div><span className="muted">State</span><strong>{business.state || "Not set"}</strong></div>
+                <div><span className="muted">Customers</span><strong>{business.customer_count}</strong></div>
+                <div><span className="muted">Invoices</span><strong>{business.invoice_count} (₹{formatMoney(business.invoiced_total)})</strong></div>
+                <div><span className="muted">Last login</span><strong>{business.last_login_at ? formatDateTime(business.last_login_at) : "Never"}</strong></div>
+                <div><span className="muted">Signed up</span><strong>{formatDateTime(business.created_at)}</strong></div>
+                <div>
+                  <span className="muted">Cloud backup</span>
+                  <strong className={business.cloud_backup_status === "error" ? "admin-attention-text" : undefined}>
+                    {business.cloud_backup_status === "error" ? "Connected, upload failing" : business.cloud_backup_status === "connected" ? "Connected" : "Not connected"}
+                  </strong>
+                </div>
+                <button type="button" className="btn btn-secondary admin-copy-btn" onClick={copySummary}>
+                  {copied ? "Copied" : "Copy details"}
+                </button>
+              </div>
+              <div className="admin-detail-users">
+                <span className="muted">Logins under this business</span>
+                {users === null ? (
+                  <p className="muted">Loading...</p>
+                ) : users.length ? (
+                  <table className="table admin-detail-users-table">
+                    <thead>
+                      <tr><th>Name</th><th>Email</th><th>Role</th><th>Last Login</th></tr>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id}>
+                          <td>{u.name}</td>
+                          <td>{u.email || "—"}</td>
+                          <td>{u.role}</td>
+                          <td>{u.last_login_at ? formatDateTime(u.last_login_at) : "Never"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="muted">No logins recorded.</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="admin-section">

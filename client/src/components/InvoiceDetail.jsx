@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
+import { buildWhatsappUrl } from "../lib/whatsapp";
 import SendDocumentModal from "./SendDocumentModal";
 import ConfirmDialog from "./ConfirmDialog";
 import RecordPaymentForm from "./RecordPaymentForm";
@@ -149,6 +150,22 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     }
   };
 
+  // WhatsApp is how most customers actually get contacted day to day — a
+  // ready-to-send message plus the same shareable link, opened straight in
+  // the customer's own chat when their phone number is on file (2026-09-16).
+  const whatsappShareUrl = shareUrl
+    ? buildWhatsappUrl(
+        invoice.customer?.phone,
+        `Hi ${invoice.customer?.name || "there"}, here is invoice ${invoice.invoice_number} from ${invoice.business?.name || "us"} for Rs ${Number(invoice.total).toFixed(2)}. View and download it here: ${shareUrl}`
+      )
+    : null;
+  const whatsappReminderUrl = shareUrl && invoice.balance_due > 0
+    ? buildWhatsappUrl(
+        invoice.customer?.phone,
+        `Hi ${invoice.customer?.name || "there"}, a quick reminder that invoice ${invoice.invoice_number} from ${invoice.business?.name || "us"} has a balance of Rs ${Number(invoice.balance_due).toFixed(2)}${invoice.due_date ? ` (due ${invoice.due_date})` : ""} still pending. View and pay here: ${shareUrl}`
+      )
+    : null;
+
   const cancelInvoice = async () => {
     setError("");
     setStatusBusy(true);
@@ -217,10 +234,16 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         <button onClick={() => window.print()}>Print / Save PDF</button>
         <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
         {shareUrl && <button type="button" onClick={copyLink}>{copied ? "Link copied!" : "Copy shareable link"}</button>}
+        {whatsappShareUrl && (
+          <a className="btn-secondary" href={whatsappShareUrl} target="_blank" rel="noreferrer">Share via WhatsApp</a>
+        )}
         {invoice.balance_due > 0 && !["draft", "cancelled"].includes(invoice.status) && (
           <button type="button" onClick={sendReminder} disabled={sendingReminder}>
             {sendingReminder ? "Sending..." : "Send Payment Reminder"}
           </button>
+        )}
+        {whatsappReminderUrl && !["draft", "cancelled"].includes(invoice.status) && (
+          <a className="btn-secondary" href={whatsappReminderUrl} target="_blank" rel="noreferrer">Remind via WhatsApp</a>
         )}
         {invoice.balance_due > 0 && invoice.status !== "cancelled" && (
           <RecordPaymentForm balanceDue={invoice.balance_due} onRecord={recordPayment} />

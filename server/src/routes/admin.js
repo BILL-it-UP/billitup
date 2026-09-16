@@ -100,19 +100,34 @@ router.get("/businesses", (req, res) => {
 
 // One business's full profile for the Business Health page — includes the
 // logo (Naveen asked to see uploaded images so a business is recognizable
-// at a glance while diagnosing), never anything from their actual client
-// data (customers, invoices, and so on stay off this route entirely).
+// at a glance while diagnosing), and the same activity/contact figures the
+// businesses list shows, so this one page is genuinely "the entire thing"
+// for a business and the separate "Details" row on the list can go away
+// (2026-09-16). Never anything from their actual client data (customers,
+// invoices, and so on stay off this route as real rows — only the counts).
 router.get("/businesses/:id", (req, res) => {
   if (!checkAdminSecret(req, res)) return;
   const business = db
     .prepare(
-      `SELECT id, name, plan, created_at, email AS owner_email, phone AS owner_phone,
-              gstin, state, logo_data_url, signature_data_url
-       FROM businesses WHERE id = ?`
+      `SELECT b.id, b.name, b.plan, b.created_at,
+              b.email AS owner_email, b.phone AS owner_phone, b.gstin, b.state,
+              b.logo_data_url, b.signature_data_url,
+              (SELECT COUNT(*) FROM customers c WHERE c.business_id = b.id) AS customer_count,
+              (SELECT COUNT(*) FROM invoices i WHERE i.business_id = b.id) AS invoice_count,
+              (SELECT COALESCE(SUM(i.total), 0) FROM invoices i WHERE i.business_id = b.id) AS invoiced_total,
+              (SELECT MAX(le.logged_in_at) FROM login_events le WHERE le.business_id = b.id) AS last_login_at,
+              CASE
+                WHEN EXISTS(SELECT 1 FROM cloud_backup_connections cbc WHERE cbc.business_id = b.id AND cbc.last_upload_status = 'error') THEN 'error'
+                WHEN EXISTS(SELECT 1 FROM cloud_backup_connections cbc WHERE cbc.business_id = b.id) THEN 'connected'
+                ELSE 'none'
+              END AS cloud_backup_status,
+              (SELECT COUNT(*) FROM error_log e WHERE e.business_id = b.id AND e.status = 'open') AS open_error_count,
+              (SELECT COUNT(*) FROM support_tickets t WHERE t.business_id = b.id AND t.status != 'resolved') AS open_ticket_count
+       FROM businesses b WHERE b.id = ?`
     )
     .get(req.params.id);
   if (!business) return res.status(404).json({ error: "Not found" });
-  res.json(business);
+  res.json({ ...business, attention: attentionReasons(business) });
 });
 
 // One business's own users — who's actually logging in under that business,

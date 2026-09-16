@@ -117,7 +117,13 @@ async function request(path, { method = "GET", body } = {}) {
         window.location.assign("/login?expired=1");
       }
     }
-    throw new Error(data?.error || `Request failed (${res.status})`);
+    const err = new Error(data?.error || `Request failed (${res.status})`);
+    // Some errors (e.g. adding a firm without premium) carry a machine-
+    // readable `code` alongside the human message, so a caller can react to
+    // the specific case (offer a "Request premium access" button) without
+    // matching on the wording of the message itself (2026-09-16).
+    if (data?.code) err.code = data.code;
+    throw err;
   }
   return data;
 }

@@ -168,6 +168,9 @@ export default function Settings() {
 
 function FirmManagement() {
   const [businesses, setBusinesses] = useState([]);
+  const [requesting, setRequesting] = useState(false);
+  const [requested, setRequested] = useState(false);
+  const [error, setError] = useState("");
   const user = getUser();
 
   const load = () => api.getMyBusinesses().then(setBusinesses);
@@ -181,6 +184,25 @@ function FirmManagement() {
   };
 
   const hasPremiumFirm = businesses.some((b) => b.plan === "premium");
+
+  // Same idea as the one on the Add Firm page — reuses Support chat so a
+  // request to upgrade is a real, trackable message rather than something
+  // said outside the app (2026-09-16).
+  const requestPremium = async () => {
+    setRequesting(true);
+    setError("");
+    try {
+      await api.createSupportTicket(
+        "Request: upgrade to Premium",
+        "Hi, I'd like to add another firm under my account, which needs Premium. Please let me know how to pay and I'll get it sorted."
+      );
+      setRequested(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRequesting(false);
+    }
+  };
 
   return (
     <div className="settings-card">
@@ -206,8 +228,17 @@ function FirmManagement() {
       {!hasPremiumFirm && (
         <p className="muted" style={{ marginTop: 8 }}>
           Adding another firm needs a premium plan on at least one of your firms — everything else here stays free.
+          {" "}
+          {requested ? (
+            "Request sent — check Support for the reply."
+          ) : (
+            <button type="button" className="link-btn" onClick={requestPremium} disabled={requesting}>
+              {requesting ? "Sending request..." : "Request premium access"}
+            </button>
+          )}
         </p>
       )}
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }

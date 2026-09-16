@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { adminApi, getAdminSecret, clearAdminSecret } from "../lib/adminApi";
 import { formatDateTime, formatMoney } from "../lib/format";
+import { ATTENTION_LABELS } from "../lib/businessSummary";
 import {
   IconTrash, IconBuilding, IconReports, IconCloud, IconTeam,
   IconInvoice, IconDashboard, IconSuggestion, IconChat, IconAnnouncement, IconAlert,
@@ -50,46 +51,6 @@ function SectionHeader({ icon: Icon, title, description, badge }) {
   );
 }
 
-// Human labels for the "attention" reasons the server computes per business
-// (see attentionReasons in routes/admin.js) — used both as the tooltip on a
-// flagged row and inside the plain-text copy summary, so the wording matches
-// wherever it shows up.
-const ATTENTION_LABELS = {
-  no_contact: "No email or phone on file",
-  inactive: "Hasn't logged in for a while",
-  backup_error: "Cloud backup is connected but failing",
-  has_errors: "Has unresolved errors — open their health page",
-  has_open_ticket: "Waiting on a reply in Support",
-};
-
-// A plain, fully-labelled block instead of a raw table row — Naveen asked
-// that anything he copies out of the admin page be easy to understand on its
-// own, e.g. pasted into WhatsApp or a note, without the table's column
-// headers alongside it for context (2026-09-15).
-function buildBusinessSummary(b) {
-  const backupLine =
-    b.cloud_backup_status === "error"
-      ? "Connected, but the last upload failed"
-      : b.cloud_backup_status === "connected"
-        ? "Connected"
-        : "Not connected";
-  return [
-    `BillItUp business: ${b.name}`,
-    `Plan: ${b.plan === "premium" ? "Premium" : "Free"}`,
-    `Contact: ${[b.owner_email, b.owner_phone].filter(Boolean).join(", ") || "Not provided"}`,
-    `GSTIN: ${b.gstin || "Not set"}`,
-    `State: ${b.state || "Not set"}`,
-    `Customers: ${b.customer_count}`,
-    `Invoices: ${b.invoice_count} (₹${formatMoney(b.invoiced_total)} invoiced)`,
-    `Last login: ${b.last_login_at ? formatDateTime(b.last_login_at) : "Never"}`,
-    `Signed up: ${formatDateTime(b.created_at)}`,
-    `Cloud backup: ${backupLine}`,
-    `Open errors: ${b.open_error_count || 0}`,
-    `Open support conversations: ${b.open_ticket_count || 0}`,
-    ...(b.attention?.length ? [`Needs attention: ${b.attention.map((r) => ATTENTION_LABELS[r] || r).join("; ")}`] : []),
-  ].join("\n");
-}
-
 export default function AdminPanel() {
   const navigate = useNavigate();
   const [businesses, setBusinesses] = useState(null);
@@ -106,12 +67,8 @@ export default function AdminPanel() {
   const [businessSearch, setBusinessSearch] = useState("");
   const [businessAttentionFilter, setBusinessAttentionFilter] = useState("all");
   const [sort, setSort] = useState({ key: "created_at", dir: "desc" });
-  const [copiedId, setCopiedId] = useState(null);
   const [planTarget, setPlanTarget] = useState(null); // business pending plan-change confirmation
   const [deleteTarget, setDeleteTarget] = useState(null); // suggestion pending delete confirmation
-  const [expandedId, setExpandedId] = useState(null); // business whose detail row (GSTIN, state, cloud backup, individual users) is open
-  const [businessUsers, setBusinessUsers] = useState({}); // businessId -> users array, fetched on first expand and cached
-  const [usersLoadingId, setUsersLoadingId] = useState(null);
 
   const load = () => {
     Promise.all([
@@ -181,22 +138,6 @@ export default function AdminPanel() {
     }
   };
 
-  const toggleDetails = (b) => {
-    if (expandedId === b.id) {
-      setExpandedId(null);
-      return;
-    }
-    setExpandedId(b.id);
-    if (!businessUsers[b.id]) {
-      setUsersLoadingId(b.id);
-      adminApi
-        .getBusinessUsers(b.id)
-        .then((rows) => setBusinessUsers((prev) => ({ ...prev, [b.id]: rows })))
-        .catch((err) => setError(err.message))
-        .finally(() => setUsersLoadingId(null));
-    }
-  };
-
   const submitAnnouncement = async (e) => {
     e.preventDefault();
     if (!announcementForm.title.trim() || !announcementForm.message.trim()) return;
@@ -221,20 +162,6 @@ export default function AdminPanel() {
     } catch (err) {
       setError(err.message);
     }
-  };
-
-  const copySummary = async (b) => {
-    const text = buildBusinessSummary(b);
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Clipboard API can refuse (no permission, non-HTTPS context) — fall
-      // back to something the browser always allows, rather than the button
-      // silently doing nothing.
-      window.prompt("Copy this:", text);
-    }
-    setCopiedId(b.id);
-    setTimeout(() => setCopiedId((id) => (id === b.id ? null : id)), 2000);
   };
 
   const handleSort = (key) => {
@@ -364,7 +291,6 @@ export default function AdminPanel() {
                     <SortTh label="Last Login" sortKey="last_login_at" />
                     <SortTh label="Created" sortKey="created_at" />
                     <th />
-                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -376,83 +302,31 @@ export default function AdminPanel() {
                         ? "admin-row-warn"
                         : "";
                     const rowTitle = reasons.length
-                      ? reasons.map((r) => ATTENTION_LABELS[r] || r).join("; ")
-                      : undefined;
+                      ? reasons.map((r) => ATTENTION_LABELS[r] || r).join("; ") + " — click the name for the full picture"
+                      : "Click the name for the full picture";
                     return (
-                      <Fragment key={b.id}>
-                        <tr className={rowClass} title={rowTitle}>
-                          <td><Link to={`/admin/businesses/${b.id}`}>{b.name}</Link></td>
-                          <td><span className={`badge ${b.plan === "premium" ? "badge-premium" : "badge-free"}`}>{b.plan === "premium" ? "Premium" : "Free"}</span></td>
-                          <td className="admin-contact-cell">
-                            {b.owner_email ? <div><a href={`mailto:${b.owner_email}`}>{b.owner_email}</a></div> : null}
-                            {b.owner_phone ? <div><a href={`tel:${b.owner_phone}`}>{b.owner_phone}</a></div> : null}
-                            {reasons.includes("no_contact") ? <span className="badge badge-attention">Missing</span> : null}
-                          </td>
-                          <td>{b.customer_count}</td>
-                          <td>{b.user_count}</td>
-                          <td>{b.invoice_count}</td>
-                          <td>{formatMoney(b.invoiced_total)}</td>
-                          <td className={reasons.includes("inactive") ? "admin-attention-text" : undefined}>
-                            {b.last_login_at ? formatDateTime(b.last_login_at) : "Never"}
-                          </td>
-                          <td>{formatDateTime(b.created_at)}</td>
-                          <td>
-                            <button type="button" className="link-btn" disabled={busyId === b.id} onClick={() => setPlanTarget(b)}>
-                              {busyId === b.id ? "Saving..." : b.plan === "premium" ? "Move to Free" : "Move to Premium"}
-                            </button>
-                          </td>
-                          <td>
-                            <button type="button" className="link-btn" onClick={() => toggleDetails(b)}>
-                              {expandedId === b.id ? "Hide details" : "Details"}
-                            </button>
-                          </td>
-                        </tr>
-                        {expandedId === b.id && (
-                          <tr className="admin-detail-row">
-                            <td colSpan={11}>
-                              <div className="admin-detail-panel">
-                                <div className="admin-detail-facts">
-                                  <div><span className="muted">GSTIN</span><strong>{b.gstin || "Not set"}</strong></div>
-                                  <div><span className="muted">State</span><strong>{b.state || "Not set"}</strong></div>
-                                  <div>
-                                    <span className="muted">Cloud backup</span>
-                                    <strong className={b.cloud_backup_status === "error" ? "admin-attention-text" : undefined}>
-                                      {b.cloud_backup_status === "error" ? "Connected, upload failing" : b.cloud_backup_status === "connected" ? "Connected" : "Not connected"}
-                                    </strong>
-                                  </div>
-                                  <button type="button" className="btn btn-secondary admin-copy-btn" onClick={() => copySummary(b)}>
-                                    {copiedId === b.id ? "Copied" : "Copy details"}
-                                  </button>
-                                </div>
-                                <div className="admin-detail-users">
-                                  <span className="muted">Logins under this business</span>
-                                  {usersLoadingId === b.id ? (
-                                    <p className="muted">Loading...</p>
-                                  ) : businessUsers[b.id]?.length ? (
-                                    <table className="table admin-detail-users-table">
-                                      <thead>
-                                        <tr><th>Name</th><th>Email</th><th>Role</th><th>Last Login</th></tr>
-                                      </thead>
-                                      <tbody>
-                                        {businessUsers[b.id].map((u) => (
-                                          <tr key={u.id}>
-                                            <td>{u.name}</td>
-                                            <td>{u.email || "—"}</td>
-                                            <td>{u.role}</td>
-                                            <td>{u.last_login_at ? formatDateTime(u.last_login_at) : "Never"}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  ) : (
-                                    <p className="muted">No logins recorded.</p>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
+                      <tr key={b.id} className={rowClass} title={rowTitle}>
+                        <td><Link to={`/admin/businesses/${b.id}`}>{b.name}</Link></td>
+                        <td><span className={`badge ${b.plan === "premium" ? "badge-premium" : "badge-free"}`}>{b.plan === "premium" ? "Premium" : "Free"}</span></td>
+                        <td className="admin-contact-cell">
+                          {b.owner_email ? <div><a href={`mailto:${b.owner_email}`}>{b.owner_email}</a></div> : null}
+                          {b.owner_phone ? <div><a href={`tel:${b.owner_phone}`}>{b.owner_phone}</a></div> : null}
+                          {reasons.includes("no_contact") ? <span className="badge badge-attention">Missing</span> : null}
+                        </td>
+                        <td>{b.customer_count}</td>
+                        <td>{b.user_count}</td>
+                        <td>{b.invoice_count}</td>
+                        <td>{formatMoney(b.invoiced_total)}</td>
+                        <td className={reasons.includes("inactive") ? "admin-attention-text" : undefined}>
+                          {b.last_login_at ? formatDateTime(b.last_login_at) : "Never"}
+                        </td>
+                        <td>{formatDateTime(b.created_at)}</td>
+                        <td>
+                          <button type="button" className="link-btn" disabled={busyId === b.id} onClick={() => setPlanTarget(b)}>
+                            {busyId === b.id ? "Saving..." : b.plan === "premium" ? "Move to Free" : "Move to Premium"}
+                          </button>
+                        </td>
+                      </tr>
                     );
                   })}
                 </tbody>
