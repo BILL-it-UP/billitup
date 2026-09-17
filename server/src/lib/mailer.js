@@ -41,7 +41,7 @@ function dataUrlToBuffer(dataUrl) {
 // Renders a document (invoice, quote, or credit note all share the same
 // shape: branding header/parties/line-items/totals/footer) into a PDF
 // buffer, mirroring the on-screen print layout as closely as pdfkit allows.
-export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = [], business, party, partyLabel, lineItems, totals, notes, headlineLabel = "Total", headlineValue, upiQrPngBuffer }) {
+export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = [], business, party, partyLabel, lineItems, totals, notes, headlineLabel = "Total", headlineValue, upiQrPngBuffer, termsAndConditions }) {
   // Which text prefix stands in for a currency symbol on this document — see
   // lib/currency.js for why this is always plain ASCII text, never a ₹/€/£
   // glyph (2026-09-16). totals.currency is the invoice's own currency
@@ -214,10 +214,15 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       }
     }
 
-    if (business.terms_and_conditions) {
+    // The document's own snapshotted Terms & Conditions (from whichever
+    // saved template applied when it was created) takes priority; a document
+    // from before this existed falls back to the business's old single
+    // terms_and_conditions field, matching DocumentFooter.jsx (2026-09-16).
+    const terms = termsAndConditions ?? business.terms_and_conditions;
+    if (terms) {
       doc.moveDown(1);
       doc.fontSize(10).text("Terms & Conditions", { underline: true });
-      doc.fontSize(8).fillColor("#555").text(business.terms_and_conditions);
+      doc.fontSize(8).fillColor("#555").text(terms);
       doc.fillColor("#000");
     }
 

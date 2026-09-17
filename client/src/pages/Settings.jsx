@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, getUser, setSession, clearSession } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import {
-  IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash, IconAlert,
+  IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash, IconAlert, IconInvoice,
 } from "../components/Icons";
 import { INDIAN_STATES } from "../lib/gst";
 import { CURRENCIES } from "../lib/currencies";
@@ -264,7 +264,10 @@ export default function Settings() {
         )}
 
         {activeTab === "branding" && (
-          <InvoiceBrandingSettings business={business} setBusiness={setBusiness} />
+          <>
+            <InvoiceBrandingSettings business={business} setBusiness={setBusiness} />
+            <TermsTemplatesCard />
+          </>
         )}
 
         {activeTab === "email" && (
@@ -427,7 +430,7 @@ function InvoiceBrandingSettings({ business, setBusiness }) {
       <CardHeader
         icon={IconImage}
         title="Invoice Branding & Payment Details"
-        description="Shown on every invoice, quote, and credit note — logo, bank/UPI details for getting paid, and your standard terms."
+        description="Shown on every invoice, quote, and credit note — logo and bank/UPI details for getting paid."
       />
       <form onSubmit={handleSave} className="settings-form">
         <label>Logo
@@ -463,18 +466,6 @@ function InvoiceBrandingSettings({ business, setBusiness }) {
           Set this and a scannable QR code is added automatically to every unpaid invoice, the emailed/downloaded PDF, and the customer portal — the client scans it in any UPI app to pay you directly. BillItUp never handles the payment itself; you still mark the invoice paid once you see it land in your account.
         </p>
 
-        <label>Terms &amp; Conditions
-          <textarea
-            rows={5}
-            value={business.terms_and_conditions ?? DEFAULT_TERMS_AND_CONDITIONS}
-            onChange={(e) => setBusiness({ ...business, terms_and_conditions: e.target.value })}
-          />
-        </label>
-        <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
-          This starts filled in with generic wording you can edit or replace outright, and it's exactly what will
-          print on your invoices, so what you see here is what your customers see.
-        </p>
-
         <div className="field-row">
           <label>Authorized signatory name
             <input value={business.signature_name || ""} onChange={(e) => setBusiness({ ...business, signature_name: e.target.value })} />
@@ -494,6 +485,121 @@ function InvoiceBrandingSettings({ business, setBusiness }) {
         {savedMsg && <p className="muted">{savedMsg}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save branding & payment details"}</button>
       </form>
+    </div>
+  );
+}
+
+// A small library of Terms & Conditions blocks a business can pick between
+// per invoice, rather than being stuck with one fixed paragraph — replaces
+// the single free-text box this section used to be (2026-09-16). Its own
+// save/add/delete calls go straight to /api/terms-templates rather than
+// riding along on the Business Details "Save" button, since a template can
+// be added or removed independently of the rest of this page.
+function TermsTemplatesCard() {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null); // null = not editing, "new" = adding
+  const [form, setForm] = useState({ title: "", content: "", is_default: false });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = () => api.listTermsTemplates().then((list) => { setTemplates(list); setLoading(false); });
+  useEffect(() => { load(); }, []);
+
+  const startAdd = () => {
+    setError("");
+    setForm({
+      title: templates.length === 0 ? "Standard Terms" : "",
+      content: templates.length === 0 ? DEFAULT_TERMS_AND_CONDITIONS : "",
+      is_default: templates.length === 0,
+    });
+    setEditingId("new");
+  };
+  const startEdit = (t) => {
+    setError("");
+    setForm({ title: t.title, content: t.content, is_default: !!t.is_default });
+    setEditingId(t.id);
+  };
+  const cancelEdit = () => setEditingId(null);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim() || !form.content.trim()) {
+      setError("Title and content are both required.");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      if (editingId === "new") await api.createTermsTemplate(form);
+      else await api.updateTermsTemplate(editingId, form);
+      setEditingId(null);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (t) => {
+    if (!window.confirm(`Delete the "${t.title}" template? This can't be undone.`)) return;
+    await api.deleteTermsTemplate(t.id);
+    load();
+  };
+
+  return (
+    <div className="settings-card">
+      <CardHeader
+        icon={IconInvoice}
+        title="Terms & Conditions"
+        description="Save a few reusable blocks of wording and pick between them on each invoice, instead of one fixed paragraph for everyone."
+      />
+
+      {!loading && templates.length === 0 && editingId === null && (
+        <p className="muted">
+          Nothing saved yet, so every invoice prints with no Terms &amp; Conditions until you add one.
+        </p>
+      )}
+
+      {templates.length > 0 && (
+        <ul className="terms-template-list">
+          {templates.map((t) => (
+            <li key={t.id} className="terms-template-row">
+              <div>
+                <strong>{t.title}</strong>{t.is_default ? <span className="muted"> (default, used on a new invoice)</span> : null}
+                <p className="muted terms-template-preview">{t.content}</p>
+              </div>
+              <div className="terms-template-actions">
+                <button type="button" className="link-btn" onClick={() => startEdit(t)}>Edit</button>
+                <button type="button" className="link-btn" onClick={() => handleDelete(t)}>Delete</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {editingId !== null ? (
+        <form onSubmit={handleSave} className="settings-form" style={{ marginTop: templates.length > 0 ? 16 : 0 }}>
+          <label>Title
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Standard Terms, Advance Payment" />
+          </label>
+          <label>Content
+            <textarea rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+          </label>
+          <label className="checkbox-label">
+            <input type="checkbox" checked={form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} />
+            {" "}Make this the default for new invoices
+          </label>
+          {error && <p className="error">{error}</p>}
+          <div className="modal-actions" style={{ padding: 0 }}>
+            <button type="button" className="link-btn" onClick={cancelEdit}>Cancel</button>
+            <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save template"}</button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" className="link-btn" onClick={startAdd}>+ Add a Terms &amp; Conditions template</button>
+      )}
     </div>
   );
 }

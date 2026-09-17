@@ -90,7 +90,10 @@ export default function FullInvoice({ invoice }) {
 
       {invoice.notes && <p className="invoice-notes">{invoice.notes}</p>}
 
-      <DocumentFooter business={business} total={invoice.total} upiQrDataUrl={invoice.upi_qr_data_url} currency={invoice.currency} />
+      <DocumentFooter
+        business={business} total={invoice.total} upiQrDataUrl={invoice.upi_qr_data_url} currency={invoice.currency}
+        termsAndConditions={invoice.terms_and_conditions}
+      />
     </>
   );
 }

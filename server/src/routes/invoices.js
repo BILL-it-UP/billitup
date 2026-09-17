@@ -76,7 +76,7 @@ router.get("/:id", async (req, res) => {
 // the client sends qty/rate/discount/tax_rate per line, never trusts client-side amounts.
 router.post("/", (req, res) => {
   const {
-    customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment,
+    customer_id, invoice_date, due_date, terms, terms_and_conditions, reference, subject, gstin, notes, lineItems, gst_treatment,
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
     currency, project_name, milestone_label, project_total_amount,
     retainer_applied, time_entry_ids, billable_purchase_ids,
@@ -135,12 +135,12 @@ router.post("/", (req, res) => {
 
   const insertInvoice = db.prepare(
     `INSERT INTO invoices
-      (business_id, customer_id, invoice_number, invoice_date, due_date, terms, reference, subject, gstin, status,
+      (business_id, customer_id, invoice_number, invoice_date, due_date, terms, terms_and_conditions, reference, subject, gstin, status,
        sub_total, discount, tax_total, total, balance_due, notes, public_token, gst_treatment, cgst, sgst, igst,
        eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
        currency, project_name, milestone_label, project_total_amount,
        approval_status, created_by_user_id, created_by_role, retainer_applied)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
     `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
@@ -151,7 +151,7 @@ router.post("/", (req, res) => {
     const result = insertInvoice.run(
       req.auth.businessId, customer_id || null, invoiceNumber,
       invoice_date || new Date().toISOString().slice(0, 10), due_date || null,
-      terms || null, reference || null, subject || null, gstin || null,
+      terms || null, terms_and_conditions || null, reference || null, subject || null, gstin || null,
       subTotal, discountTotal, taxTotal, total, balanceDue, notes || null,
       randomUUID().replace(/-/g, ""), treatment, cgst, sgst, igst,
       ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm,
@@ -207,7 +207,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   const {
-    customer_id, invoice_date, due_date, terms, reference, subject, gstin, notes, lineItems, gst_treatment,
+    customer_id, invoice_date, due_date, terms, terms_and_conditions, reference, subject, gstin, notes, lineItems, gst_treatment,
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
     currency, project_name, milestone_label, project_total_amount,
   } = req.body;
@@ -268,7 +268,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
       JSON.stringify({
         invoice: {
           customer_id: invoice.customer_id, invoice_date: invoice.invoice_date, due_date: invoice.due_date,
-          terms: invoice.terms, reference: invoice.reference, subject: invoice.subject, gstin: invoice.gstin,
+          terms: invoice.terms, terms_and_conditions: invoice.terms_and_conditions,
+          reference: invoice.reference, subject: invoice.subject, gstin: invoice.gstin,
           notes: invoice.notes,
         },
         lineItems: existingLineItems,
@@ -277,7 +278,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
 
     db.prepare(
       `UPDATE invoices SET
-        customer_id = ?, invoice_date = ?, due_date = ?, terms = ?, reference = ?, subject = ?, gstin = ?, notes = ?,
+        customer_id = ?, invoice_date = ?, due_date = ?, terms = ?, terms_and_conditions = ?, reference = ?, subject = ?, gstin = ?, notes = ?,
         sub_total = ?, discount = ?, tax_total = ?, total = ?, balance_due = ?, status = ?,
         gst_treatment = ?, cgst = ?, sgst = ?, igst = ?,
         eway_bill_number = ?, eway_transporter_name = ?, eway_transporter_id = ?, eway_vehicle_number = ?, eway_distance_km = ?,
@@ -285,7 +286,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
        WHERE id = ?`
     ).run(
       customer_id || null, invoice_date || invoice.invoice_date, due_date || null,
-      terms || null, reference || null, subject || null, gstin || null, notes || null,
+      terms || null, terms_and_conditions || null, reference || null, subject || null, gstin || null, notes || null,
       subTotal, discountTotal, taxTotal, total, newBalanceDue, newStatus,
       treatment, cgst, sgst, igst,
       ewayBillNumber, ewayTransporterName, ewayTransporterId, ewayVehicleNumber, ewayDistanceKm,
@@ -491,6 +492,7 @@ router.post("/bulk-send", requireRole("owner", "admin"), async (req, res) => {
         headlineLabel: "Balance Due", headlineValue: `${prefix} ${Number(invoice.balance_due).toFixed(2)}`,
         business, party: customer, partyLabel: "Bill To", lineItems,
         totals: { ...invoice, ...projectProgress }, notes: invoice.notes, upiQrPngBuffer,
+        termsAndConditions: invoice.terms_and_conditions,
       });
       const ctaUrl = invoice.public_token ? `${req.protocol}://${req.get("host")}/view/invoice/${invoice.public_token}` : null;
       const html = renderEmailHtml({
@@ -562,6 +564,7 @@ router.post("/:id/send", async (req, res) => {
       headlineLabel: "Balance Due", headlineValue: `${prefix} ${Number(invoice.balance_due).toFixed(2)}`,
       business, party: customer, partyLabel: "Bill To", lineItems,
       totals: { ...invoice, ...projectProgress }, notes: invoice.notes, upiQrPngBuffer,
+      termsAndConditions: invoice.terms_and_conditions,
     });
     // Invoices have a public no-login share link (public_token) — quotes and
     // credit notes don't, so only invoice emails get a "View Invoice" button.

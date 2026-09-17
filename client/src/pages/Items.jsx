@@ -2,10 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
 import TaxRateInput from "../components/TaxRateInput";
+import UnitSelect from "../components/UnitSelect";
+import { unitsForType } from "../lib/units";
 
 export default function Items() {
   const [items, setItems] = useState([]);
-  const [form, setForm] = useState({ name: "", unit: "pcs", rate: "", tax_rate: "0", hsn_sac_code: "" });
+  // Defaults to Service — most BillItUp businesses bill hours or jobs, not
+  // physical stock, so a service-shaped starting point (and its matching
+  // unit list) fits more new items out of the box (2026-09-16).
+  const [form, setForm] = useState({ name: "", type: "service", unit: "hrs", rate: "", tax_rate: "0", hsn_sac_code: "" });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const canManage = ["owner", "admin"].includes(getUser()?.role);
@@ -27,7 +32,7 @@ export default function Items() {
     setError("");
     try {
       await api.createItem({ ...form, rate: Number(form.rate), tax_rate: Number(form.tax_rate) });
-      setForm({ name: "", unit: "pcs", rate: "", tax_rate: "0", hsn_sac_code: "" });
+      setForm({ name: "", type: "service", unit: "hrs", rate: "", tax_rate: "0", hsn_sac_code: "" });
       load();
     } catch (err) {
       setError(err.message);
@@ -45,14 +50,32 @@ export default function Items() {
         )}
       </div>
       {canManage ? (
-        <form className="inline-form" onSubmit={handleSubmit}>
-          <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <input placeholder="Unit (pcs, hrs...)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
-          <input placeholder="Rate (₹)" type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} required />
-          <TaxRateInput value={form.tax_rate} onChange={(v) => setForm({ ...form, tax_rate: v })} />
-          <input placeholder="HSN/SAC (optional)" value={form.hsn_sac_code} onChange={(e) => setForm({ ...form, hsn_sac_code: e.target.value })} />
-          <button type="submit">Add item</button>
-        </form>
+        <>
+          <div className="radio-row">
+            <label className="radio-option">
+              <input
+                type="radio" name="item-type" checked={form.type === "goods"}
+                onChange={() => setForm({ ...form, type: "goods", unit: unitsForType("goods")[0].value })}
+              />
+              Goods
+            </label>
+            <label className="radio-option">
+              <input
+                type="radio" name="item-type" checked={form.type === "service"}
+                onChange={() => setForm({ ...form, type: "service", unit: unitsForType("service")[0].value })}
+              />
+              Service
+            </label>
+          </div>
+          <form className="inline-form" onSubmit={handleSubmit}>
+            <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <UnitSelect type={form.type} value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} />
+            <input placeholder="Rate (₹)" type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} required />
+            <TaxRateInput value={form.tax_rate} onChange={(v) => setForm({ ...form, tax_rate: v })} />
+            <input placeholder="HSN/SAC (optional)" value={form.hsn_sac_code} onChange={(e) => setForm({ ...form, hsn_sac_code: e.target.value })} />
+            <button type="submit">Add item</button>
+          </form>
+        </>
       ) : (
         <p className="muted">Ask an Owner or Admin to add or edit items.</p>
       )}
@@ -75,12 +98,12 @@ export default function Items() {
 
       <table className="table">
         <thead>
-          <tr><th>Name</th><th>Unit</th><th>Rate</th><th>Tax %</th><th>HSN/SAC</th></tr>
+          <tr><th>Name</th><th>Type</th><th>Unit</th><th>Rate</th><th>Tax %</th><th>HSN/SAC</th></tr>
         </thead>
         <tbody>
           {filteredItems.map((i) => (
             <tr key={i.id}>
-              <td>{i.name}</td><td>{i.unit}</td><td>₹{i.rate}</td><td>{i.tax_rate}%</td><td>{i.hsn_sac_code}</td>
+              <td>{i.name}</td><td>{i.type === "service" ? "Service" : "Goods"}</td><td>{i.unit}</td><td>₹{i.rate}</td><td>{i.tax_rate}%</td><td>{i.hsn_sac_code}</td>
             </tr>
           ))}
         </tbody>
@@ -92,6 +115,7 @@ export default function Items() {
 function exportItemsToExcel(items) {
   const rows = items.map((i) => ({
     Name: i.name,
+    Type: i.type === "service" ? "Service" : "Goods",
     Unit: i.unit || "",
     Rate: Number(i.rate),
     "Tax %": Number(i.tax_rate) || 0,

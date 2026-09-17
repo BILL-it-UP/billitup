@@ -544,20 +544,15 @@ textarea { resize: vertical; }
 .eway-fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 4px 16px 8px; margin: 0 0 16px; }
 .eway-fieldset legend { padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
 
-/* ---- New Invoice / Edit Invoice: two column layout (2026-09-16) ----
-   Main column carries the fields every invoice needs (customer, line
-   items, terms); the sidebar holds settings and the sections most
-   invoices never touch, so the page reads as one clear flow instead of
-   a stack of same-weight boxes. Collapses to a single column on
-   narrower screens. */
+/* ---- New Invoice / Edit Invoice: single column layout (2026-09-16) ----
+   Was a two column grid (main + a fixed 320px sidebar); Naveen found that
+   split awkward, so every section — Invoice Details, Line Items, Terms,
+   Invoice Settings, and the rest — now just flows top to bottom in one
+   full-width column instead. */
 .invoice-form-grid {
-  display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px;
-  align-items: start;
+  display: flex; flex-direction: column; gap: 20px;
 }
 .invoice-form-main, .invoice-form-sidebar { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-@media (max-width: 900px) {
-  .invoice-form-grid { grid-template-columns: 1fr; }
-}
 
 .form-card {
   background: white; border: 1px solid var(--border); border-radius: 12px;
@@ -625,6 +620,16 @@ textarea { resize: vertical; }
 .tax-rate-input { display: flex; align-items: center; gap: 6px; }
 .tax-rate-input input { width: 70px; }
 .tax-rate-back { font-size: 11px; white-space: nowrap; }
+
+.unit-select { display: flex; align-items: center; gap: 6px; }
+.unit-select input { width: 90px; }
+
+/* Goods/Service type picker on the item form (2026-09-16) — plain radio
+   buttons, not a full form-row, since it's one quick choice that decides
+   which Unit list applies below it. */
+.radio-row { display: flex; align-items: center; gap: 20px; margin: 8px 0 12px; }
+.radio-option { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+.radio-option input { width: auto; margin-top: 0; }
 
 /* ---- Print ----
    Printing an invoice/quote/credit note can happen from a standalone page
@@ -1291,6 +1296,18 @@ textarea { resize: vertical; }
 .invoice-gst-ims { max-width: 220px; margin: 10px 0; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 4px 0; }
 .checkbox-row input { width: auto; margin-top: 0; }
+
+/* Settings > Terms & Conditions template library (2026-09-16) */
+.terms-template-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.terms-template-row {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 8px;
+}
+.terms-template-preview {
+  margin: 4px 0 0; font-size: 12px; white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.terms-template-actions { display: flex; gap: 12px; white-space: nowrap; }
 
 /* ---- Two-sided invoice comment thread (2026-09-16) ---- */
 .invoice-comments { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); max-width: 560px; }

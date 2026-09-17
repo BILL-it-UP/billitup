@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
+import TaxRateInput from "./TaxRateInput";
+import UnitSelect from "./UnitSelect";
+import { unitsForType } from "../lib/units";
 
 // A single Zoho-style "Item Details" cell: before anything is picked it's
 // just a type-to-search combobox. Once an item is selected (or free-typed
@@ -156,9 +159,13 @@ export default function ItemPicker({
 }
 
 function AddItemModal({ initialName, onClose, onCreated }) {
+  // Defaults to Service, not Goods — most BillItUp businesses bill hours or
+  // jobs, not physical stock, so a service-shaped starting point (and its
+  // matching unit list) fits more new items out of the box (2026-09-16).
   const [form, setForm] = useState({
     name: initialName || "",
-    unit: "pcs",
+    type: "service",
+    unit: "hrs",
     rate: "",
     tax_rate: "0",
     hsn_sac_code: "",
@@ -218,6 +225,22 @@ function AddItemModal({ initialName, onClose, onCreated }) {
               autoFocus
             />
           </label>
+          <div className="radio-row">
+            <label className="radio-option">
+              <input
+                type="radio" name="add-item-type" checked={form.type === "goods"}
+                onChange={() => setForm({ ...form, type: "goods", unit: unitsForType("goods")[0].value })}
+              />
+              Goods
+            </label>
+            <label className="radio-option">
+              <input
+                type="radio" name="add-item-type" checked={form.type === "service"}
+                onChange={() => setForm({ ...form, type: "service", unit: unitsForType("service")[0].value })}
+              />
+              Service
+            </label>
+          </div>
           <div className="form-row">
             <label className="block">
               Rate (₹)
@@ -231,16 +254,11 @@ function AddItemModal({ initialName, onClose, onCreated }) {
             </label>
             <label className="block">
               Tax %
-              <input
-                type="number"
-                step="0.01"
-                value={form.tax_rate}
-                onChange={(e) => setForm({ ...form, tax_rate: e.target.value })}
-              />
+              <TaxRateInput value={form.tax_rate} onChange={(v) => setForm({ ...form, tax_rate: v })} />
             </label>
             <label className="block">
               Unit
-              <input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
+              <UnitSelect type={form.type} value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} />
             </label>
           </div>
           <label className="block">

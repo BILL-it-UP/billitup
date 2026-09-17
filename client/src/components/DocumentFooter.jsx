@@ -4,8 +4,13 @@ import { amountToWords } from "../lib/numberToWords";
 // details, terms & conditions, and a signature block. Each section only
 // renders if the business has actually filled it in, so a business that
 // hasn't set up bank details or T&C yet just gets a plain document.
-export default function DocumentFooter({ business, total, upiQrDataUrl, currency }) {
+export default function DocumentFooter({ business, total, upiQrDataUrl, currency, termsAndConditions }) {
   const hasBankDetails = business.bank_account_name || business.bank_account_number || business.bank_ifsc || business.bank_upi_id;
+  // The document's own snapshotted Terms & Conditions (picked from a saved
+  // template, or hand-edited) takes priority; a document created before this
+  // existed falls back to the business's old single terms_and_conditions
+  // field, so nothing that used to print now goes blank (2026-09-16).
+  const terms = termsAndConditions ?? business.terms_and_conditions;
 
   return (
     <div className="doc-footer">
@@ -29,10 +34,10 @@ export default function DocumentFooter({ business, total, upiQrDataUrl, currency
         </div>
       )}
 
-      {business.terms_and_conditions && (
+      {terms && (
         <div className="doc-footer-section">
           <h4>Terms &amp; Conditions</h4>
-          <p className="doc-terms">{business.terms_and_conditions}</p>
+          <p className="doc-terms">{terms}</p>
         </div>
       )}
 

@@ -28,6 +28,9 @@ export default function NewInvoice() {
   const [gstin, setGstin] = useState("");
   const [gstTreatment, setGstTreatment] = useState("gst");
   const [terms, setTerms] = useState("");
+  const [termsAndConditions, setTermsAndConditions] = useState("");
+  const [termsTemplateId, setTermsTemplateId] = useState("custom");
+  const [termsTemplates, setTermsTemplates] = useState([]);
   const [notes, setNotes] = useState("");
   const [ewayBillNumber, setEwayBillNumber] = useState("");
   const [ewayTransporterName, setEwayTransporterName] = useState("");
@@ -63,6 +66,19 @@ export default function NewInvoice() {
       setBusiness(b);
       if (!isEdit) setCurrency(b.default_currency || "INR");
     });
+    // A brand new invoice starts on whichever saved Terms & Conditions
+    // template is marked default (if any) — same "an edit overwrites this
+    // once it loads" reasoning as currency above (2026-09-16).
+    api.listTermsTemplates().then((list) => {
+      setTermsTemplates(list);
+      if (!isEdit) {
+        const defaultTemplate = list.find((t) => t.is_default) || list[0];
+        if (defaultTemplate) {
+          setTermsTemplateId(defaultTemplate.id);
+          setTermsAndConditions(defaultTemplate.content);
+        }
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -82,6 +98,8 @@ export default function NewInvoice() {
       setGstin(inv.gstin || "");
       setGstTreatment(inv.gst_treatment || "gst");
       setTerms(inv.terms || "");
+      setTermsAndConditions(inv.terms_and_conditions || "");
+      setTermsTemplateId("custom");
       setNotes(inv.notes || "");
       setEwayBillNumber(inv.eway_bill_number || "");
       setEwayTransporterName(inv.eway_transporter_name || "");
@@ -233,6 +251,7 @@ export default function NewInvoice() {
     gstin: gstin || null,
     gst_treatment: gstTreatment,
     terms: terms || null,
+    terms_and_conditions: termsAndConditions || null,
     notes: notes || null,
     currency,
     project_name: projectName || null,
@@ -298,7 +317,13 @@ export default function NewInvoice() {
 
   const symbol = currencySymbol(currency);
   const userRole = getUser()?.role;
-  const willNeedApproval = !isEdit && business?.require_invoice_approval && !["owner", "admin"].includes(userRole);
+  // Boolean(...) matters here — SQLite stores require_invoice_approval as an
+  // integer 0/1, not a real boolean, so "false" was actually the NUMBER 0.
+  // React renders {0 && ...} as the literal text "0" (only false/null/
+  // undefined are skipped), which is exactly the stray "0" that showed up
+  // under the New Invoice heading for any business with the setting off
+  // (2026-09-16).
+  const willNeedApproval = Boolean(!isEdit && business?.require_invoice_approval && !["owner", "admin"].includes(userRole));
   const retainerBalance = Number(selectedCustomer?.retainer_balance) || 0;
 
   if (loadingInvoice) return <p className="muted">Loading...</p>;
@@ -402,11 +427,35 @@ export default function NewInvoice() {
 
             <section className="form-card">
               <h2>Terms &amp; Notes</h2>
-              <label className="block" style={{ maxWidth: "none" }}>Terms (optional)
+              <label className="block" style={{ maxWidth: "none" }}>Payment Terms (optional)
                 <input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="e.g. Net 15" />
               </label>
               <label className="block" style={{ maxWidth: "none" }}>Notes (optional, shown on the invoice)
                 <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </label>
+              <label className="block" style={{ maxWidth: "none" }}>Terms &amp; Conditions (optional, printed on the invoice)
+                <select
+                  value={termsTemplateId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setTermsTemplateId(id);
+                    if (id !== "custom") {
+                      const picked = termsTemplates.find((t) => String(t.id) === String(id));
+                      if (picked) setTermsAndConditions(picked.content);
+                    }
+                  }}
+                >
+                  {termsTemplates.map((t) => <option key={t.id} value={t.id}>{t.title}{t.is_default ? " (default)" : ""}</option>)}
+                  <option value="custom">Custom text</option>
+                </select>
+              </label>
+              {termsTemplates.length === 0 && (
+                <p className="muted" style={{ marginTop: -8, fontSize: 13 }}>
+                  Save a reusable Terms &amp; Conditions template in Settings to pick from here next time.
+                </p>
+              )}
+              <label className="block" style={{ maxWidth: "none" }}>
+                <textarea rows={4} value={termsAndConditions} onChange={(e) => { setTermsAndConditions(e.target.value); setTermsTemplateId("custom"); }} />
               </label>
             </section>
           </div>

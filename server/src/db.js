@@ -524,6 +524,22 @@ CREATE TABLE IF NOT EXISTS retainer_transactions (
   invoice_id INTEGER REFERENCES invoices(id),
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- A small library of reusable Terms & Conditions blocks (2026-09-16) — a
+-- business can save more than one (e.g. "Standard", "Advance Payment") and
+-- pick whichever applies when creating an invoice, rather than being stuck
+-- with the single fixed paragraph businesses.terms_and_conditions used to be.
+-- is_default marks the one that's pre-selected on a brand new invoice; at
+-- most one template per business should have it set (enforced in the route,
+-- not here, since SQLite has no easy partial-unique-index shorthand for it).
+CREATE TABLE IF NOT EXISTS terms_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Migrations for existing databases -------------------------------------
@@ -809,6 +825,20 @@ ensureColumn("invoices", "retainer_applied", "retainer_applied REAL DEFAULT 0");
 // applicable" (e.g. a B2C invoice with no GSTIN). BillItUp never talks to
 // the GST portal itself to read or set this.
 ensureColumn("invoices", "gst_ims_status", "gst_ims_status TEXT");
+
+// The actual Terms & Conditions text applied to this invoice, snapshotted
+// from a terms_templates row at creation/edit time — a later edit to the
+// template (or the business's old single terms_and_conditions field) never
+// retroactively changes what an already-issued invoice shows, same
+// reasoning as every other snapshot in this file (2026-09-16).
+ensureColumn("invoices", "terms_and_conditions", "terms_and_conditions TEXT");
+
+// Goods vs Service — lets the Unit picker on the item form offer sensible
+// units for what's actually being sold (hours/sessions for a service
+// business like a law firm, instead of only pcs/box/kg) rather than one
+// goods-shaped unit list for everyone (2026-09-16). Existing items default
+// to 'goods' so their current 'pcs'-style units keep meaning what they did.
+ensureColumn("items", "type", "type TEXT DEFAULT 'goods'");
 
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the

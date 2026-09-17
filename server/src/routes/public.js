@@ -79,6 +79,7 @@ router.get("/invoices/:token/pdf", async (req, res) => {
       headlineLabel: "Balance Due", headlineValue: `${printPrefix(invoice.currency)} ${Number(invoice.balance_due).toFixed(2)}`,
       business: publicBusinessFields(business), party: customer, partyLabel: "Bill To",
       lineItems, totals: { ...invoice, ...projectProgress }, notes: invoice.notes, upiQrPngBuffer,
+      termsAndConditions: invoice.terms_and_conditions,
     });
     res.set("Content-Type", "application/pdf");
     res.set("Content-Disposition", `inline; filename="${invoice.invoice_number}.pdf"`);
