@@ -155,6 +155,7 @@ export const api = {
   listItems: () => request("/api/items"),
   createItem: (payload) => request("/api/items", { method: "POST", body: payload }),
   updateItem: (id, payload) => request(`/api/items/${id}`, { method: "PUT", body: payload }),
+  deleteItem: (id) => request(`/api/items/${id}`, { method: "DELETE" }),
 
   listTermsTemplates: () => request("/api/terms-templates"),
   createTermsTemplate: (payload) => request("/api/terms-templates", { method: "POST", body: payload }),

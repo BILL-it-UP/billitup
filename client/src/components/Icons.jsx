@@ -221,6 +221,15 @@ export function IconSuggestion({ size = 18 }) {
   );
 }
 
+export function IconEdit({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M14.5 4.5 19 9l-9.5 9.5H5v-4.5Z" />
+      <path d="M13 6 18 10.5" />
+    </svg>
+  );
+}
+
 export function IconTrash({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>

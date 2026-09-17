@@ -49,9 +49,29 @@ router.put("/:id", (req, res) => {
   res.json(updated);
 });
 
+// Foreign keys are enforced (db.js turns them on), and purchases.vendor_id
+// references vendors(id) with no ON DELETE rule — so a vendor that already
+// has a purchase bill logged against them can't actually be deleted; the
+// query below throws instead. Caught here and turned into an honest
+// message: the Vendors page's own delete confirmation used to claim this
+// would silently succeed and just leave old purchases without a vendor
+// name, which isn't what actually happens — fixed alongside this same bug
+// in items.js (2026-09-17).
 router.delete("/:id", (req, res) => {
-  db.prepare("DELETE FROM vendors WHERE id = ? AND business_id = ?").run(req.params.id, req.auth.businessId);
-  res.status(204).end();
+  try {
+    const result = db
+      .prepare("DELETE FROM vendors WHERE id = ? AND business_id = ?")
+      .run(req.params.id, req.auth.businessId);
+    if (result.changes === 0) return res.status(404).json({ error: "Vendor not found." });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === "SQLITE_CONSTRAINT_FOREIGN_KEY") {
+      return res.status(409).json({
+        error: "This vendor has purchase bills logged against them, so they can't be deleted, that would break those existing records. Edit their details instead if something needs correcting.",
+      });
+    }
+    throw err;
+  }
 });
 
 export default router;

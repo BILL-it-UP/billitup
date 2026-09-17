@@ -331,7 +331,7 @@ export default function Vendors() {
       {deleteTarget && (
         <ConfirmDialog
           title="Delete this vendor?"
-          message={`This removes "${deleteTarget.name}" from your vendor list. It can't be undone. Any purchase bills already logged against them keep their amounts, they just won't show a vendor name anymore.`}
+          message={`This removes "${deleteTarget.name}" from your vendor list. It can't be undone. If they already have purchase bills logged against them, deleting won't be allowed, you'll see a message explaining why instead.`}
           confirmLabel="Delete Vendor"
           danger
           busy={deleting}

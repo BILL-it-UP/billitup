@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
 import ItemFormModal from "../components/ItemFormModal";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { IconEdit, IconTrash } from "../components/Icons";
 
 export default function Items() {
   const [items, setItems] = useState([]);
@@ -10,6 +12,8 @@ export default function Items() {
   // null = closed, {} = Add mode, an item object = Edit mode for that item.
   const [modalItem, setModalItem] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const canManage = ["owner", "admin"].includes(getUser()?.role);
 
   const load = () => api.listItems().then(setItems);
@@ -30,6 +34,25 @@ export default function Items() {
   const handleSaved = () => {
     setShowModal(false);
     load();
+  };
+
+  // Deleting is blocked server-side (with a clear message) for any item
+  // already used on an invoice, quote, or purchase — see the comment on the
+  // DELETE route in server/src/routes/items.js. That error surfaces here the
+  // same way any other save error does.
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.deleteItem(deleteTarget.id);
+      setItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      setError(err.message);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -78,8 +101,13 @@ export default function Items() {
               <td>{i.name}</td><td>{i.type === "service" ? "Service" : "Goods"}</td><td>{i.unit}</td><td>₹{i.rate}</td><td>{i.tax_rate}%</td><td>{i.hsn_sac_code}</td>
               <td>{i.sales_account || ""}</td>
               {canManage && (
-                <td>
-                  <button type="button" className="link-btn" onClick={() => openEdit(i)}>Edit</button>
+                <td className="item-row-actions">
+                  <button type="button" className="icon-btn" onClick={() => openEdit(i)} title="Edit item" aria-label="Edit item">
+                    <IconEdit size={16} />
+                  </button>
+                  <button type="button" className="icon-btn" onClick={() => setDeleteTarget(i)} title="Delete item" aria-label="Delete item">
+                    <IconTrash size={16} />
+                  </button>
                 </td>
               )}
             </tr>
@@ -92,6 +120,18 @@ export default function Items() {
           item={modalItem}
           onClose={() => setShowModal(false)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete this item?"
+          message={`This removes "${deleteTarget.name}" from your item catalog. It can't be undone. If it's already been used on an invoice, quote, or purchase, deleting it won't be allowed, you'll see a message explaining why instead.`}
+          confirmLabel="Delete Item"
+          danger
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </div>

@@ -59,9 +59,30 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   res.json(updated);
 });
 
+// Items has a real "used elsewhere" problem a plain delete doesn't: the
+// foreign key from invoice_line_items (and purchases, time entries, and the
+// old stock_adjustments table) to items is enforced (db.js turns foreign
+// keys on), so deleting an item that's ever been billed throws a raw SQLite
+// constraint error rather than actually deleting anything — deleting it
+// would otherwise strand those existing documents' line items. Caught here
+// and turned into an honest, actionable message instead of a generic
+// "Request failed (500)" (2026-09-17).
 router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
-  db.prepare("DELETE FROM items WHERE id = ? AND business_id = ?").run(req.params.id, req.auth.businessId);
-  res.status(204).end();
+  try {
+    const result = db
+      .prepare("DELETE FROM items WHERE id = ? AND business_id = ?")
+      .run(req.params.id, req.auth.businessId);
+    if (result.changes === 0) return res.status(404).json({ error: "Item not found." });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === "SQLITE_CONSTRAINT_FOREIGN_KEY") {
+      return res.status(409).json({
+        error:
+          "This item has already been used on an invoice, quote, or purchase, so it can't be deleted, that would break those existing documents. Rename it or change its price instead if something needs updating.",
+      });
+    }
+    throw err;
+  }
 });
 
 export default router;

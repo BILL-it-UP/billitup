@@ -148,6 +148,17 @@ button:disabled { opacity: 0.6; cursor: default; }
 .btn-secondary { background: white; color: var(--ink); border: 1px solid var(--border); }
 .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
+/* A compact icon-only row action (Edit/Delete on a list row), reusable
+   anywhere a text link would take up more room than it needs to — the
+   Items page's Edit/Delete pair is the first user (2026-09-17). */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; background: none; border: none; border-radius: 6px;
+  color: var(--muted); cursor: pointer; padding: 0;
+}
+.icon-btn:hover { background: var(--bg); color: var(--ink); }
+.item-row-actions { display: flex; gap: 4px; align-items: center; }
+
 .form-submit-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .form-submit-row .muted { font-size: 12px; width: 100%; margin-top: -2px; }
 
