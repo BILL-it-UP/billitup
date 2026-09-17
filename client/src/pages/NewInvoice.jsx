@@ -403,12 +403,12 @@ export default function NewInvoice() {
                               onItemCreated={(item) => handleItemCreated(i, item)}
                             />
                           </td>
-                          <td><input className="num" style={{ width: 80 }} value={line.hsn_sac_code || ""} onChange={(e) => updateLine(i, { hsn_sac_code: e.target.value })} /></td>
-                          <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
-                          <td><UnitSelect type={lineItemType} value={line.unit} onChange={(v) => updateLine(i, { unit: v })} /></td>
-                          <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
-                          <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
-                          <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
+                          <td style={{ width: 90 }}><input className="num" value={line.hsn_sac_code || ""} onChange={(e) => updateLine(i, { hsn_sac_code: e.target.value })} /></td>
+                          <td style={{ width: 64 }}><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
+                          <td style={{ width: 140 }}><UnitSelect type={lineItemType} value={line.unit} onChange={(v) => updateLine(i, { unit: v })} /></td>
+                          <td style={{ width: 90 }}><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
+                          <td style={{ width: 90 }}><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
+                          <td style={{ width: 90 }}><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
                           <td className="num">{symbol}{formatMoney(lineAmount(line))}</td>
                           <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
                         </tr>

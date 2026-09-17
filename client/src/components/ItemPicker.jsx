@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ItemFormModal from "./ItemFormModal";
 
 // A single Zoho-style "Item Details" cell: before anything is picked it's
@@ -22,7 +23,13 @@ export default function ItemPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(itemName || "");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState(null);
   const wrapRef = useRef(null);
+  // The dropdown now lives in a portal on <body>, outside wrapRef's own DOM
+  // subtree — "click outside" has to check this ref too, or clicking an
+  // option or "+ Add New Item" would itself count as an outside click and
+  // close the dropdown before its own onClick gets a chance to fire.
+  const dropdownRef = useRef(null);
 
   // Keep the visible text in sync when the parent changes the line from
   // outside (e.g. a fresh empty line, or an item picked in another way).
@@ -32,11 +39,51 @@ export default function ItemPicker({
 
   useEffect(() => {
     function handleClickOutside(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      const insideWrap = wrapRef.current && wrapRef.current.contains(e.target);
+      const insideDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!insideWrap && !insideDropdown) setOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // The dropdown is portaled straight onto <body> (see the .item-picker-
+  // dropdown CSS comment for why) so it needs its own position tracked in
+  // JS rather than just sitting under the search box via CSS. Recomputed
+  // whenever it opens, and kept in sync with scrolling (the line item table
+  // scrolls horizontally in its own box, and the page itself can scroll
+  // vertically) or the window resizing while it's open. Scroll events don't
+  // bubble, so the listener is attached with capture:true on the window —
+  // that still catches a scroll happening on any element underneath it.
+  //
+  // The dropdown's own width is deliberately NOT tied to the search box's
+  // width. The search box itself is a narrow table cell, but the item name
+  // and rate shown per suggestion need real room, so the dropdown is made
+  // wider than its anchor and left free to spill out over whatever sits
+  // below/beside that cell (it's on <body>, above everything else, so
+  // nothing beneath it is disturbed). It's kept at least as wide as the
+  // input, at least 360px wide, and clamped so it never runs past the right
+  // edge of the viewport.
+  useEffect(() => {
+    if (!open) return;
+    const MIN_DROPDOWN_WIDTH = 360;
+    const VIEWPORT_MARGIN = 16;
+    const updatePosition = () => {
+      if (!wrapRef.current) return;
+      const rect = wrapRef.current.getBoundingClientRect();
+      const desiredWidth = Math.max(rect.width, MIN_DROPDOWN_WIDTH);
+      const maxWidth = window.innerWidth - rect.left - VIEWPORT_MARGIN;
+      const width = Math.min(desiredWidth, maxWidth);
+      setDropdownRect({ top: rect.bottom, left: rect.left, width });
+    };
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open]);
 
   const filtered = items.filter((it) =>
     it.name.toLowerCase().includes(query.trim().toLowerCase())
@@ -96,8 +143,12 @@ export default function ItemPicker({
           }}
         />
       )}
-      {open && (
-        <div className="item-picker-dropdown">
+      {open && dropdownRect && createPortal(
+        <div
+          ref={dropdownRef}
+          className="item-picker-dropdown"
+          style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width }}
+        >
           {filtered.length === 0 && (
             <div className="item-picker-empty">
               No matching item — this line will be billed as a custom item.
@@ -128,7 +179,8 @@ export default function ItemPicker({
               + Add New Item
             </button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
       {showDescription && (
         <textarea

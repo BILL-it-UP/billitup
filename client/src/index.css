@@ -195,7 +195,14 @@ textarea { resize: vertical; }
    widget (search box, or the confirmed name + its description), matching how
    Zoho's item table has one combined column instead of two cramped
    side-by-side fields. */
-.line-item-details { min-width: 220px; }
+/* Bumped from 220px (2026-09-17): with HSN/SAC and Unit added as two more
+   columns, a table in auto layout mode will happily shrink every column,
+   including this one, right down to its floor rather than ever triggering
+   the wrap's horizontal scroll — a 220px floor left almost no real room for
+   the item search box itself once the other columns claimed their share of
+   the row. 300px is enough to type and read a real item name comfortably,
+   and forces the row to scroll sideways on a narrow screen instead. */
+.line-item-details { min-width: 300px; }
 
 /* Item picker — a type-to-search combobox standing in for the old plain
    <select>, matching Zoho's "type or click to select an item" field. Before
@@ -219,8 +226,17 @@ textarea { resize: vertical; }
 }
 .item-picker-locked-clear:hover { color: #b3261e; }
 .item-picker-description { margin-top: 6px; font-size: 13px; }
+/* Rendered through a portal straight onto <body> (2026-09-17), positioned by
+   JS with a fixed top/left/width taken from the search box's own position —
+   NOT a plain absolutely-positioned child of .item-picker any more. That
+   matters once the line item table sits inside a horizontally-scrolling box
+   (see .line-item-table-wrap): setting overflow-x on a container makes the
+   browser also start clipping it vertically (a well-known CSS quirk — an
+   overflow-y of "visible" only stays visible when overflow-x is "visible"
+   too), which was cutting this dropdown off and forcing a scrollbar just to
+   see "+ Add New Item". Escaping to the body sidesteps that entirely. */
 .item-picker-dropdown {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 30; margin-top: 4px;
+  position: fixed; z-index: 1000;
   background: white; border: 1px solid var(--border); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); max-height: 260px; overflow-y: auto;
 }
