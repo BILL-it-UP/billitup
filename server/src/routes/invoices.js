@@ -143,8 +143,8 @@ router.post("/", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const invoiceId = db.transaction(() => {
@@ -161,7 +161,7 @@ router.post("/", (req, res) => {
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
-      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null);
     }
     commitInvoiceNumber();
 
@@ -253,8 +253,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const editorUser = db.prepare("SELECT name FROM users WHERE id = ?").get(req.auth.userId);
 
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   db.transaction(() => {
@@ -297,7 +297,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
 
     db.prepare("DELETE FROM invoice_line_items WHERE invoice_id = ?").run(invoice.id);
     for (const line of computedLines) {
-      insertLine.run(invoice.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      insertLine.run(invoice.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null);
     }
   })();
 

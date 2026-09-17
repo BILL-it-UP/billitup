@@ -31,6 +31,11 @@ export default function UnitSelect({ type, value, onChange, className }) {
     );
   }
 
+  // Service's option list is grouped (Time & Work vs Measurement, see
+  // lib/units.js) so a long combined dropdown is still easy to scan; Goods
+  // has no groups, so it renders as a flat list same as before (2026-09-17).
+  const groups = [...new Set(options.filter((o) => o.group).map((o) => o.group))];
+
   return (
     <select
       className={className}
@@ -40,7 +45,13 @@ export default function UnitSelect({ type, value, onChange, className }) {
         onChange(e.target.value);
       }}
     >
-      {options.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+      {groups.length > 0
+        ? groups.map((g) => (
+            <optgroup key={g} label={g}>
+              {options.filter((u) => u.group === g).map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+            </optgroup>
+          ))
+        : options.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
       <option value="other">Other...</option>
     </select>
   );

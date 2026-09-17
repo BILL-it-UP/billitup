@@ -6,6 +6,7 @@ import { formatMoney } from "../lib/format";
 import ItemPicker from "../components/ItemPicker";
 import CustomerPicker from "../components/CustomerPicker";
 import TaxRateInput from "../components/TaxRateInput";
+import UnitSelect from "../components/UnitSelect";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { GST_TREATMENTS } from "../lib/gst";
 import { CURRENCIES, currencySymbol } from "../lib/currencies";
@@ -119,6 +120,8 @@ export default function NewInvoice() {
           rate: li.rate,
           discount: li.discount,
           tax_rate: li.tax_rate,
+          unit: li.unit || "",
+          hsn_sac_code: li.hsn_sac_code || "",
         }))
       );
       setLoadingInvoice(false);
@@ -220,6 +223,8 @@ export default function NewInvoice() {
           item_name: item.name,
           rate: item.rate,
           tax_rate: item.tax_rate,
+          unit: item.unit || "",
+          hsn_sac_code: item.hsn_sac_code || "",
           description: line.description || item.description || item.name,
         };
       })
@@ -375,36 +380,43 @@ export default function NewInvoice() {
 
             <section className="form-card">
               <h2>Line Items</h2>
-              <table className="table line-item-table">
-                <thead>
-                  <tr><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
-                </thead>
-                <tbody>
-                  {lines.map((line, i) => (
-                    <tr key={i}>
-                      <td className="line-item-details">
-                        <ItemPicker
-                          items={items}
-                          itemId={line.item_id}
-                          itemName={line.item_name}
-                          description={line.description}
-                          canManage={canManageItems}
-                          onSelect={(item) => pickItem(i, item)}
-                          onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
-                          onDescriptionChange={(text) => updateLine(i, { description: text })}
-                          onItemCreated={(item) => handleItemCreated(i, item)}
-                        />
-                      </td>
-                      <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
-                      <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
-                      <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
-                      <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
-                      <td className="num">{symbol}{formatMoney(lineAmount(line))}</td>
-                      <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="line-item-table-wrap">
+                <table className="table line-item-table">
+                  <thead>
+                    <tr><th>Item &amp; Description</th><th>HSN/SAC</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line, i) => {
+                      const lineItemType = items.find((it) => String(it.id) === String(line.item_id))?.type || "goods";
+                      return (
+                        <tr key={i}>
+                          <td className="line-item-details">
+                            <ItemPicker
+                              items={items}
+                              itemId={line.item_id}
+                              itemName={line.item_name}
+                              description={line.description}
+                              canManage={canManageItems}
+                              onSelect={(item) => pickItem(i, item)}
+                              onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
+                              onDescriptionChange={(text) => updateLine(i, { description: text })}
+                              onItemCreated={(item) => handleItemCreated(i, item)}
+                            />
+                          </td>
+                          <td><input className="num" style={{ width: 80 }} value={line.hsn_sac_code || ""} onChange={(e) => updateLine(i, { hsn_sac_code: e.target.value })} /></td>
+                          <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
+                          <td><UnitSelect type={lineItemType} value={line.unit} onChange={(v) => updateLine(i, { unit: v })} /></td>
+                          <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
+                          <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
+                          <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
+                          <td className="num">{symbol}{formatMoney(lineAmount(line))}</td>
+                          <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
               <button type="button" className="link-btn" onClick={addLine}>+ Add line</button>
 
               {gstTreatment === "rcm" && (

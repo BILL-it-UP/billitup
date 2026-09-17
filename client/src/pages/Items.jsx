@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
-import TaxRateInput from "../components/TaxRateInput";
-import UnitSelect from "../components/UnitSelect";
-import { unitsForType } from "../lib/units";
+import ItemFormModal from "../components/ItemFormModal";
 
 export default function Items() {
   const [items, setItems] = useState([]);
-  // Defaults to Service — most BillItUp businesses bill hours or jobs, not
-  // physical stock, so a service-shaped starting point (and its matching
-  // unit list) fits more new items out of the box (2026-09-16).
-  const [form, setForm] = useState({ name: "", type: "service", unit: "hrs", rate: "", tax_rate: "0", hsn_sac_code: "" });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  // null = closed, {} = Add mode, an item object = Edit mode for that item.
+  const [modalItem, setModalItem] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const canManage = ["owner", "admin"].includes(getUser()?.role);
 
   const load = () => api.listItems().then(setItems);
@@ -27,58 +24,30 @@ export default function Items() {
     );
   }, [items, search]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    try {
-      await api.createItem({ ...form, rate: Number(form.rate), tax_rate: Number(form.tax_rate) });
-      setForm({ name: "", type: "service", unit: "hrs", rate: "", tax_rate: "0", hsn_sac_code: "" });
-      load();
-    } catch (err) {
-      setError(err.message);
-    }
+  const openAdd = () => { setModalItem(null); setShowModal(true); setError(""); };
+  const openEdit = (item) => { setModalItem(item); setShowModal(true); setError(""); };
+
+  const handleSaved = () => {
+    setShowModal(false);
+    load();
   };
 
   return (
     <div>
       <div className="page-header">
         <h1>Items</h1>
-        {items.length > 0 && (
-          <button type="button" className="link-btn" onClick={() => exportItemsToExcel(items)}>
-            Export to Excel
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          {items.length > 0 && (
+            <button type="button" className="link-btn" onClick={() => exportItemsToExcel(items)}>
+              Export to Excel
+            </button>
+          )}
+          {canManage && (
+            <button type="button" onClick={openAdd}>+ Add Item</button>
+          )}
+        </div>
       </div>
-      {canManage ? (
-        <>
-          <div className="radio-row">
-            <label className="radio-option">
-              <input
-                type="radio" name="item-type" checked={form.type === "goods"}
-                onChange={() => setForm({ ...form, type: "goods", unit: unitsForType("goods")[0].value })}
-              />
-              Goods
-            </label>
-            <label className="radio-option">
-              <input
-                type="radio" name="item-type" checked={form.type === "service"}
-                onChange={() => setForm({ ...form, type: "service", unit: unitsForType("service")[0].value })}
-              />
-              Service
-            </label>
-          </div>
-          <form className="inline-form" onSubmit={handleSubmit}>
-            <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            <UnitSelect type={form.type} value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} />
-            <input placeholder="Rate (₹)" type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} required />
-            <TaxRateInput value={form.tax_rate} onChange={(v) => setForm({ ...form, tax_rate: v })} />
-            <input placeholder="HSN/SAC (optional)" value={form.hsn_sac_code} onChange={(e) => setForm({ ...form, hsn_sac_code: e.target.value })} />
-            <button type="submit">Add item</button>
-          </form>
-        </>
-      ) : (
-        <p className="muted">Ask an Owner or Admin to add or edit items.</p>
-      )}
+      {!canManage && <p className="muted">Ask an Owner or Admin to add or edit items.</p>}
       {error && <p className="error">{error}</p>}
 
       {items.length > 0 && (
@@ -98,16 +67,33 @@ export default function Items() {
 
       <table className="table">
         <thead>
-          <tr><th>Name</th><th>Type</th><th>Unit</th><th>Rate</th><th>Tax %</th><th>HSN/SAC</th></tr>
+          <tr>
+            <th>Name</th><th>Type</th><th>Unit</th><th>Rate</th><th>Tax %</th><th>HSN/SAC</th><th>Sales Account</th>
+            {canManage && <th />}
+          </tr>
         </thead>
         <tbody>
           {filteredItems.map((i) => (
             <tr key={i.id}>
               <td>{i.name}</td><td>{i.type === "service" ? "Service" : "Goods"}</td><td>{i.unit}</td><td>₹{i.rate}</td><td>{i.tax_rate}%</td><td>{i.hsn_sac_code}</td>
+              <td>{i.sales_account || ""}</td>
+              {canManage && (
+                <td>
+                  <button type="button" className="link-btn" onClick={() => openEdit(i)}>Edit</button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+
+      {showModal && (
+        <ItemFormModal
+          item={modalItem}
+          onClose={() => setShowModal(false)}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   );
 }
@@ -120,6 +106,11 @@ function exportItemsToExcel(items) {
     Rate: Number(i.rate),
     "Tax %": Number(i.tax_rate) || 0,
     "HSN/SAC": i.hsn_sac_code || "",
+    Description: i.description || "",
+    "Sales Account": i.sales_account || "",
+    "Cost Price": i.cost_price != null ? Number(i.cost_price) : "",
+    "Purchase Account": i.purchase_account || "",
+    "Purchase Description": i.purchase_description || "",
   }));
   exportSheet("items.xlsx", "Items", rows);
 }

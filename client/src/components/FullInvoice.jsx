@@ -66,18 +66,35 @@ export default function FullInvoice({ invoice }) {
         </div>
       )}
 
-      <table className="table doc-line-items">
-        <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>
-        <tbody>
-          {lineItems.map((line, i) => (
-            <tr key={line.id}>
-              <td>{i + 1}</td><td>{line.description}</td><td>{formatQty(line.qty)}</td>
-              <td>{symbol}{formatMoney(line.rate)}</td><td>{symbol}{formatMoney(line.discount)}</td>
-              <td>{symbol}{formatMoney(line.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {(() => {
+        // Older invoices (created before HSN/SAC and Unit were tracked per
+        // line, 2026-09-17) never have these on their line items — the extra
+        // column only shows up once there's actually something to put in it,
+        // so a pre-existing invoice's printed layout never changes.
+        const showHsn = lineItems.some((l) => l.hsn_sac_code);
+        return (
+          <table className="table doc-line-items">
+            <thead>
+              <tr>
+                <th>#</th><th>Item &amp; Description</th>
+                {showHsn && <th>HSN/SAC</th>}
+                <th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lineItems.map((line, i) => (
+                <tr key={line.id}>
+                  <td>{i + 1}</td><td>{line.description}</td>
+                  {showHsn && <td>{line.hsn_sac_code || ""}</td>}
+                  <td>{formatQty(line.qty)}{line.unit ? ` ${line.unit}` : ""}</td>
+                  <td>{symbol}{formatMoney(line.rate)}</td><td>{symbol}{formatMoney(line.discount)}</td>
+                  <td>{symbol}{formatMoney(line.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      })()}
 
       <div className="totals-box">
         <div><span>Sub Total</span><span>{symbol}{formatMoney(invoice.sub_total)}</span></div>

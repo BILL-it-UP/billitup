@@ -631,6 +631,24 @@ textarea { resize: vertical; }
 .radio-option { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
 .radio-option input { width: auto; margin-top: 0; }
 
+/* Sales Information / Purchase Information section headers inside
+   ItemFormModal (2026-09-17) — a small labeled divider, not a full <h2>,
+   since these are subsections of one modal rather than separate cards. */
+.modal-section-title {
+  margin: 18px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e2e5ea);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* New Invoice's line item table grew an HSN/SAC and a Unit column
+   (2026-09-17) — wide enough on a small screen that it needs to scroll
+   sideways in its own box rather than pushing the whole page wider. */
+.line-item-table-wrap { overflow-x: auto; }
+
 /* ---- Print ----
    Printing an invoice/quote/credit note can happen from a standalone page
    (fine on its own) OR from the embedded pane inside the master-detail

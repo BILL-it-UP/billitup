@@ -840,6 +840,28 @@ ensureColumn("invoices", "terms_and_conditions", "terms_and_conditions TEXT");
 // to 'goods' so their current 'pcs'-style units keep meaning what they did.
 ensureColumn("items", "type", "type TEXT DEFAULT 'goods'");
 
+// Zoho-style Sales/Purchase Information on an item (2026-09-17) — a plain
+// organizing label for now, not a real ledger: BillItUp has no chart of
+// accounts or P&L report yet, so picking an account here doesn't change any
+// totals or reports. It's stored so that work is already in place once (or
+// if) a real accounting report is built later. sales_account/purchase_account
+// default to Zoho's own defaults ("Sales" / "Cost of Goods Sold") so a new
+// item never has a blank account unless the user clears it on purpose.
+// cost_price and purchase_description mirror the existing rate/description
+// pair, just for the purchase side, matching Zoho's "New Item" popup shape.
+ensureColumn("items", "sales_account", "sales_account TEXT DEFAULT 'Sales'");
+ensureColumn("items", "purchase_account", "purchase_account TEXT DEFAULT 'Cost of Goods Sold'");
+ensureColumn("items", "cost_price", "cost_price REAL");
+ensureColumn("items", "purchase_description", "purchase_description TEXT");
+
+// Per-line HSN/SAC and Unit on an invoice (2026-09-17) — until now only the
+// item catalog carried these, so a proper GST invoice couldn't show either
+// one next to the actual billed line. Both are filled in automatically when
+// a line is created from a catalog item (see routes/invoices.js) but stay
+// freely editable per line, same as every other line item field.
+ensureColumn("invoice_line_items", "unit", "unit TEXT");
+ensureColumn("invoice_line_items", "hsn_sac_code", "hsn_sac_code TEXT");
+
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the
 // "Copy shareable link" button always has something to share, not just

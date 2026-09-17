@@ -15,27 +15,45 @@ router.get("/", (req, res) => {
 // Cashiers pick items/rates while billing, but only Owner/Admin maintain
 // the price list itself — a cashier editing rates would affect every future invoice.
 router.post("/", requireRole("owner", "admin"), (req, res) => {
-  const { name, description, unit, rate, tax_rate, hsn_sac_code, type } = req.body;
+  const {
+    name, description, unit, rate, tax_rate, hsn_sac_code, type,
+    sales_account, purchase_account, cost_price, purchase_description,
+  } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
   const result = db
     .prepare(
-      `INSERT INTO items (business_id, name, description, unit, rate, tax_rate, hsn_sac_code, type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO items (
+        business_id, name, description, unit, rate, tax_rate, hsn_sac_code, type,
+        sales_account, purchase_account, cost_price, purchase_description
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(req.auth.businessId, name, description || null, unit || "pcs", rate || 0, tax_rate || 0, hsn_sac_code || null, type === "service" ? "service" : "goods");
+    .run(
+      req.auth.businessId, name, description || null, unit || "pcs", rate || 0, tax_rate || 0, hsn_sac_code || null,
+      type === "service" ? "service" : "goods",
+      sales_account || "Sales", purchase_account || "Cost of Goods Sold",
+      cost_price === "" || cost_price == null ? null : Number(cost_price), purchase_description || null
+    );
   const created = db.prepare("SELECT * FROM items WHERE id = ?").get(result.lastInsertRowid);
   res.status(201).json(created);
 });
 
 router.put("/:id", requireRole("owner", "admin"), (req, res) => {
-  const { name, description, unit, rate, tax_rate, hsn_sac_code, type } = req.body;
+  const {
+    name, description, unit, rate, tax_rate, hsn_sac_code, type,
+    sales_account, purchase_account, cost_price, purchase_description,
+  } = req.body;
   db.prepare(
     `UPDATE items SET
       name = COALESCE(?, name), description = COALESCE(?, description), unit = COALESCE(?, unit),
       rate = COALESCE(?, rate), tax_rate = COALESCE(?, tax_rate), hsn_sac_code = COALESCE(?, hsn_sac_code),
-      type = COALESCE(?, type)
+      type = COALESCE(?, type), sales_account = COALESCE(?, sales_account),
+      purchase_account = COALESCE(?, purchase_account), cost_price = ?, purchase_description = COALESCE(?, purchase_description)
      WHERE id = ? AND business_id = ?`
-  ).run(name, description, unit, rate, tax_rate, hsn_sac_code, type, req.params.id, req.auth.businessId);
+  ).run(
+    name, description, unit, rate, tax_rate, hsn_sac_code, type, sales_account, purchase_account,
+    cost_price === "" || cost_price == null ? null : Number(cost_price), purchase_description,
+    req.params.id, req.auth.businessId
+  );
   const updated = db.prepare("SELECT * FROM items WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!updated) return res.status(404).json({ error: "Not found" });
   res.json(updated);

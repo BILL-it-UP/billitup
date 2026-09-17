@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { api } from "../lib/api";
-import TaxRateInput from "./TaxRateInput";
-import UnitSelect from "./UnitSelect";
-import { unitsForType } from "../lib/units";
+import ItemFormModal from "./ItemFormModal";
 
 // A single Zoho-style "Item Details" cell: before anything is picked it's
 // just a type-to-search combobox. Once an item is selected (or free-typed
@@ -144,10 +140,10 @@ export default function ItemPicker({
         />
       )}
       {showAddModal && (
-        <AddItemModal
+        <ItemFormModal
           initialName={query}
           onClose={() => setShowAddModal(false)}
-          onCreated={(item) => {
+          onSaved={(item) => {
             setShowAddModal(false);
             setQuery(item.name);
             onItemCreated(item);
@@ -155,139 +151,5 @@ export default function ItemPicker({
         />
       )}
     </div>
-  );
-}
-
-function AddItemModal({ initialName, onClose, onCreated }) {
-  // Defaults to Service, not Goods — most BillItUp businesses bill hours or
-  // jobs, not physical stock, so a service-shaped starting point (and its
-  // matching unit list) fits more new items out of the box (2026-09-16).
-  const [form, setForm] = useState({
-    name: initialName || "",
-    type: "service",
-    unit: "hrs",
-    rate: "",
-    tax_rate: "0",
-    hsn_sac_code: "",
-    description: "",
-  });
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  // Rendered via a portal (see below) and NOT as a nested <form> — this modal
-  // is opened from inside the invoice/quote form, and browsers silently break
-  // <form> elements nested inside another <form>, so a plain div + button
-  // click (plus Enter-to-submit on the name field) is used instead.
-  const handleSubmit = async () => {
-    if (!form.name.trim() || !form.rate) {
-      setError("Name and rate are required.");
-      return;
-    }
-    setError("");
-    setSaving(true);
-    try {
-      const created = await api.createItem({
-        ...form,
-        rate: Number(form.rate) || 0,
-        tax_rate: Number(form.tax_rate) || 0,
-      });
-      onCreated(created);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  return createPortal(
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal-panel" onMouseDown={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
-        <div className="modal-header">
-          <h3>New Item</h3>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            &times;
-          </button>
-        </div>
-        <div>
-          <label className="block">
-            Name
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-              autoFocus
-            />
-          </label>
-          <div className="radio-row">
-            <label className="radio-option">
-              <input
-                type="radio" name="add-item-type" checked={form.type === "goods"}
-                onChange={() => setForm({ ...form, type: "goods", unit: unitsForType("goods")[0].value })}
-              />
-              Goods
-            </label>
-            <label className="radio-option">
-              <input
-                type="radio" name="add-item-type" checked={form.type === "service"}
-                onChange={() => setForm({ ...form, type: "service", unit: unitsForType("service")[0].value })}
-              />
-              Service
-            </label>
-          </div>
-          <div className="form-row">
-            <label className="block">
-              Rate (₹)
-              <input
-                type="number"
-                step="0.01"
-                value={form.rate}
-                onChange={(e) => setForm({ ...form, rate: e.target.value })}
-                required
-              />
-            </label>
-            <label className="block">
-              Tax %
-              <TaxRateInput value={form.tax_rate} onChange={(v) => setForm({ ...form, tax_rate: v })} />
-            </label>
-            <label className="block">
-              Unit
-              <UnitSelect type={form.type} value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} />
-            </label>
-          </div>
-          <label className="block">
-            Description (optional — fetched onto the invoice line when this item is picked)
-            <textarea
-              rows={2}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-          </label>
-          <label className="block">
-            HSN/SAC (optional)
-            <input
-              value={form.hsn_sac_code}
-              onChange={(e) => setForm({ ...form, hsn_sac_code: e.target.value })}
-            />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <div className="modal-actions">
-            <button type="button" className="link-btn" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="button" onClick={handleSubmit} disabled={saving}>
-              {saving ? "Adding..." : "Add Item"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
   );
 }

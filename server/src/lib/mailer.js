@@ -94,10 +94,18 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     if (party?.billing_address) doc.text(party.billing_address);
     doc.moveDown(1);
 
+    // Older invoices (and every Quote/Credit Note/Receipt, which never carry
+    // these two per-line fields at all) simply won't have hsn_sac_code on any
+    // line — the extra column only appears once there's real data for it, so
+    // this stays the shared renderer for every document type without any of
+    // them needing their own copy of this table (2026-09-17).
+    const showHsn = lineItems.some((l) => l.hsn_sac_code);
     const tableTop = doc.y;
     doc.rect(40, tableTop, 520, 20).fill("#2b2f38");
-    const cols = [40, 220, 60, 80, 80, 80];
-    const headers = ["#", "Description", "Qty", "Rate", "Discount", "Amount"];
+    const cols = showHsn ? [30, 160, 70, 60, 80, 80, 80] : [40, 220, 60, 80, 80, 80];
+    const headers = showHsn
+      ? ["#", "Description", "HSN/SAC", "Qty", "Rate", "Discount", "Amount"]
+      : ["#", "Description", "Qty", "Rate", "Discount", "Amount"];
     let x = 40;
     doc.fillColor("#fff").fontSize(9);
     headers.forEach((h, i) => { doc.text(h, x + 4, tableTop + 6, { width: cols[i] - 4 }); x += cols[i]; });
@@ -106,7 +114,10 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     let y = tableTop + 26;
     lineItems.forEach((line, i) => {
       x = 40;
-      const cells = [String(i + 1), line.description, String(line.qty), `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`];
+      const qtyWithUnit = line.unit ? `${line.qty} ${line.unit}` : String(line.qty);
+      const cells = showHsn
+        ? [String(i + 1), line.description, line.hsn_sac_code || "", qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`]
+        : [String(i + 1), line.description, qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`];
       cells.forEach((c, ci) => { doc.fontSize(9).text(c, x, y, { width: cols[ci] }); x += cols[ci]; });
       y += 18;
     });

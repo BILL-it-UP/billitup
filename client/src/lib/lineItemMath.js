@@ -6,7 +6,7 @@
 // item_name is the item-picker's own display text (client-side only — the
 // server only ever stores `description`, so this never gets sent as a
 // separate column, it just keeps the picker's search box in sync with the line).
-export const emptyLine = () => ({ item_id: "", item_name: "", description: "", qty: 1, rate: 0, discount: 0, tax_rate: 0 });
+export const emptyLine = () => ({ item_id: "", item_name: "", description: "", qty: 1, rate: 0, discount: 0, tax_rate: 0, unit: "", hsn_sac_code: "" });
 
 export function lineAmount(line) {
   const base = Number(line.qty) * Number(line.rate) - Number(line.discount || 0);
