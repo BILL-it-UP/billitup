@@ -57,21 +57,25 @@ export default function ItemPicker({
   // that still catches a scroll happening on any element underneath it.
   //
   // The dropdown's own width is deliberately NOT tied to the search box's
-  // width. The search box itself is a narrow table cell, but the item name
-  // and rate shown per suggestion need real room, so the dropdown is made
-  // wider than its anchor and left free to spill out over whatever sits
-  // below/beside that cell (it's on <body>, above everything else, so
-  // nothing beneath it is disturbed). It's kept at least as wide as the
-  // input, at least 360px wide, and clamped so it never runs past the right
-  // edge of the viewport.
+  // width. Per Zoho's own item picker (Naveen's reference screenshot,
+  // 2026-09-17), the dropdown always extends a good bit past the right edge
+  // of its search box, not just matches it — the item name and rate shown
+  // per suggestion need more room than a single narrow table cell. So this
+  // always adds extra width on top of the box's own width (not just a floor
+  // that a wide-enough box would already clear on its own), floors that at
+  // a reasonable minimum for a very narrow box, and clamps the result so it
+  // never runs past the right edge of the viewport. It's left free to spill
+  // out over whatever sits below/beside the search cell (it's on <body>,
+  // above everything else, so nothing beneath it is disturbed).
   useEffect(() => {
     if (!open) return;
+    const EXTRA_WIDTH = 160;
     const MIN_DROPDOWN_WIDTH = 360;
     const VIEWPORT_MARGIN = 16;
     const updatePosition = () => {
       if (!wrapRef.current) return;
       const rect = wrapRef.current.getBoundingClientRect();
-      const desiredWidth = Math.max(rect.width, MIN_DROPDOWN_WIDTH);
+      const desiredWidth = Math.max(rect.width + EXTRA_WIDTH, MIN_DROPDOWN_WIDTH);
       const maxWidth = window.innerWidth - rect.left - VIEWPORT_MARGIN;
       const width = Math.min(desiredWidth, maxWidth);
       setDropdownRect({ top: rect.bottom, left: rect.left, width });
