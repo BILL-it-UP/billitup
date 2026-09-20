@@ -143,6 +143,9 @@ export const api = {
   getBackupStatus: () => request("/api/business/backup-status"),
   backupNow: () => request("/api/business/backup-now", { method: "POST" }),
   deleteBusiness: (payload) => request("/api/business/delete", { method: "POST", body: payload }),
+  // This business's own copy of its technical error log, including resolved
+  // status. See Support.jsx's "System Health" panel (2026-09-20).
+  getMyErrors: () => request("/api/business/errors"),
 
   listCustomers: () => request("/api/customers"),
   createCustomer: (payload) => request("/api/customers", { method: "POST", body: payload }),
@@ -164,8 +167,13 @@ export const api = {
 
   listInvoices: () => request("/api/invoices"),
   getInvoice: (id) => request(`/api/invoices/${id}`),
+  // A preview of what the NEXT invoice's number would be, without reserving
+  // it. Used to show "Invoice# INV-000215" on New Invoice before Create is
+  // clicked (2026-09-20).
+  getNextInvoiceNumber: () => request("/api/invoices/next-number"),
   createInvoice: (payload) => request("/api/invoices", { method: "POST", body: payload }),
   updateInvoice: (id, payload) => request(`/api/invoices/${id}`, { method: "PUT", body: payload }),
+  deleteInvoice: (id) => request(`/api/invoices/${id}`, { method: "DELETE" }),
   getInvoiceHistory: (id) => request(`/api/invoices/${id}/history`),
   setInvoiceStatus: (id, status) => request(`/api/invoices/${id}/status`, { method: "PUT", body: { status } }),
   recordPayment: (id, payload) => request(`/api/invoices/${id}/payments`, { method: "POST", body: payload }),

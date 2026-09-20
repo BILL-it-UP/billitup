@@ -22,6 +22,21 @@ router.get("/me", (req, res) => {
   res.json(business);
 });
 
+// This business's own view of its technical error log, the same rows
+// Master Admin's per-business "Errors" section reads (see routes/admin.js),
+// including whether each one has since been marked resolved and the note on
+// how, so a business can actually find out that something they hit got
+// fixed rather than that only ever showing up on Naveen's side (2026-09-20).
+// Any logged-in role can read it (same tier as the plain status field on an
+// invoice). It never reads any request body, query params, or client data,
+// same privacy guarantee as lib/errorLog.js.
+router.get("/errors", (req, res) => {
+  const rows = db
+    .prepare("SELECT * FROM error_log WHERE business_id = ? ORDER BY created_at DESC LIMIT 50")
+    .all(req.auth.businessId);
+  res.json(rows);
+});
+
 // Settings update: profile, tax, numbering prefixes, SMTP, and invoice branding.
 router.put("/me", requireRole("owner", "admin"), (req, res) => {
   const {
@@ -36,7 +51,12 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     email_subject_receipt, email_body_receipt,
     reminders_enabled, reminder_days_before_due, reminder_overdue_repeat_days,
     require_invoice_approval, rbi_bank_rate, annual_turnover,
+    invoice_number_mode, next_invoice_number,
   } = req.body;
+
+  if (invoice_number_mode && !["auto", "manual"].includes(invoice_number_mode)) {
+    return res.status(400).json({ error: "Invalid invoice_number_mode" });
+  }
 
   db.prepare(
     `UPDATE businesses SET
@@ -86,7 +106,9 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       reminder_overdue_repeat_days = COALESCE(?, reminder_overdue_repeat_days),
       require_invoice_approval = COALESCE(?, require_invoice_approval),
       rbi_bank_rate = COALESCE(?, rbi_bank_rate),
-      annual_turnover = COALESCE(?, annual_turnover)
+      annual_turnover = COALESCE(?, annual_turnover),
+      invoice_number_mode = COALESCE(?, invoice_number_mode),
+      next_invoice_number = COALESCE(?, next_invoice_number)
     WHERE id = ?`
   ).run(
     name, address, pincode, country, phone, email, website, gstin, state,
@@ -121,6 +143,17 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     // zero it out (caught while building the e-invoice banner, 2026-09-16).
     rbi_bank_rate === undefined || rbi_bank_rate === null || rbi_bank_rate === "" ? undefined : Number(rbi_bank_rate),
     annual_turnover === undefined || annual_turnover === null || annual_turnover === "" ? undefined : Number(annual_turnover),
+    // Invoice Number Preferences (the gear icon on New Invoice, matching
+    // Zoho's own modal, 2026-09-20). invoice_number_mode is a plain
+    // "auto"/"manual" string. next_invoice_number moves the counter that
+    // drives auto-numbering. This is also how a business starts numbering
+    // at any chosen number without needing to import anything (the original
+    // ask this round's Import from Zoho feature only solved indirectly).
+    // 0 isn't a meaningful invoice number, so it's treated the same as a
+    // blank/missing value rather than actually being saved as 0.
+    invoice_number_mode === undefined || invoice_number_mode === null || invoice_number_mode === "" ? undefined : invoice_number_mode,
+    next_invoice_number === undefined || next_invoice_number === null || next_invoice_number === "" || Number(next_invoice_number) <= 0
+      ? undefined : Number(next_invoice_number),
     req.auth.businessId
   );
 

@@ -159,6 +159,12 @@ button:disabled { opacity: 0.6; cursor: default; }
 .icon-btn:hover { background: var(--bg); color: var(--ink); }
 .item-row-actions { display: flex; gap: 4px; align-items: center; }
 
+/* Invoice# preview on New Invoice, plus the gear icon that opens Invoice
+   Number Preferences (2026-09-20). The input and the gear sit on one row,
+   the input taking whatever room is left. */
+.invoice-number-field { display: flex; align-items: center; gap: 6px; }
+.invoice-number-field input { flex: 1; min-width: 0; }
+
 .form-submit-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .form-submit-row .muted { font-size: 12px; width: 100%; margin-top: -2px; }
 

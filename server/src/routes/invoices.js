@@ -38,16 +38,37 @@ function computeLineTotals(lineItems) {
   return { computedLines, subTotal, discountTotal, taxTotal, total };
 }
 
+// Most-recently-dated invoice first, not most-recently-created. The two
+// usually agree for an invoice typed in normally (it's created right when
+// it's dated), but a batch of historical invoices brought in through Import
+// from Zoho all get roughly the same created_at (whenever the import ran),
+// which used to leave them sorted by whatever order they happened to import
+// in rather than by their own invoice date. Sorting by invoice_date first,
+// falling back to id for two invoices dated the same day, means the newest
+// invoice is always the one on top regardless of when or how it entered
+// BillItUp (2026-09-20).
 router.get("/", (req, res) => {
   const rows = db
     .prepare(
       `SELECT invoices.*, customers.name AS customer_name,
         (invoices.status <> 'cancelled' AND invoices.balance_due > 0 AND invoices.due_date IS NOT NULL AND invoices.due_date < date('now')) AS is_overdue
        FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
-       WHERE invoices.business_id = ? ORDER BY invoices.created_at DESC`
+       WHERE invoices.business_id = ? ORDER BY invoices.invoice_date DESC, invoices.id DESC`
     )
     .all(req.auth.businessId);
   res.json(rows);
+});
+
+// A pure preview of what the next invoice's number WOULD be, without
+// actually reserving it (nextInvoiceNumber() only mutates anything once its
+// own commit() is called, which this deliberately never does). This lets the
+// New Invoice page show "Invoice# INV-000215" before the invoice is saved,
+// the way Zoho does, rather than only finding out the number after Create
+// (2026-09-20).
+router.get("/next-number", (req, res) => {
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const { invoiceNumber } = nextInvoiceNumber(business);
+  res.json({ invoiceNumber, mode: business.invoice_number_mode || "auto" });
 });
 
 // Full invoice with line items + customer + business, shaped for the print/PDF view
@@ -79,7 +100,7 @@ router.post("/", (req, res) => {
     customer_id, invoice_date, due_date, terms, terms_and_conditions, reference, subject, gstin, notes, lineItems, gst_treatment,
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
     currency, project_name, milestone_label, project_total_amount,
-    retainer_applied, time_entry_ids, billable_purchase_ids,
+    retainer_applied, time_entry_ids, billable_purchase_ids, invoice_number,
   } = req.body;
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
@@ -93,7 +114,28 @@ router.post("/", (req, res) => {
   }
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
-  const { invoiceNumber, commit: commitInvoiceNumber } = nextInvoiceNumber(business);
+
+  // "Enter invoice numbers manually" (Settings > Invoice Number Preferences,
+  // matching Zoho's own gear-icon option, 2026-09-20). The client sends its
+  // own invoice_number instead of taking the next one off the counter. The
+  // counter itself is never touched in this mode, since it's not what's
+  // driving numbering any more; switching back to Auto later just resumes
+  // from wherever the counter last was. A blank number falls back to Auto
+  // for this one invoice rather than failing outright.
+  let invoiceNumber;
+  let commitInvoiceNumber = () => {};
+  const manualNumber = (invoice_number || "").trim();
+  if (business.invoice_number_mode === "manual" && manualNumber) {
+    const clash = db
+      .prepare("SELECT id FROM invoices WHERE business_id = ? AND invoice_number = ?")
+      .get(business.id, manualNumber);
+    if (clash) {
+      return res.status(409).json({ error: `Invoice number ${manualNumber} is already used by another invoice.` });
+    }
+    invoiceNumber = manualNumber;
+  } else {
+    ({ invoiceNumber, commit: commitInvoiceNumber } = nextInvoiceNumber(business));
+  }
 
   const customer = customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id) : null;
   const { computedLines: rawComputedLines, subTotal, discountTotal, taxTotal: rawTaxTotal } = computeLineTotals(lineItems);
@@ -303,6 +345,56 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
 
   const updated = db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoice.id);
   res.json(updated);
+});
+
+// A real, permanent delete, separate from Cancel (see PUT /:id/status),
+// which only ever changes an invoice's status and always keeps it around
+// for the financial trail. Cancel is right for a real invoice that's been
+// superseded; Delete is for cleaning up a mistake, a duplicate, or (the
+// case this was actually built for, 2026-09-20) test/sample invoices from
+// before a business's real Zoho Books history was imported, which can be
+// in any status, including Paid, so this deliberately doesn't restrict by
+// status the way Cancel does.
+//
+// Blocked only when a credit note was issued against this invoice. That's
+// real financial adjustment history pointing at this document, and letting
+// the invoice vanish out from under it would leave the credit note
+// referencing nothing. Everything else that can reference an invoice
+// (a quote it was converted from, a recurring schedule's "last generated"
+// pointer, unbilled time entries/expenses that were billed to it, a
+// retainer debit applied to it) is safe to unwind automatically: a quote
+// or recurring schedule's pointer is just cleared, time entries and
+// billable expenses go back to being unbilled so they can be put on a
+// different invoice, and any retainer amount this invoice drew down is
+// refunded back to the customer's balance. Owner/Admin only, same tier as
+// editing an invoice.
+router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+
+  const creditNote = db.prepare("SELECT id FROM credit_notes WHERE invoice_id = ?").get(invoice.id);
+  if (creditNote) {
+    return res.status(409).json({
+      error: "This invoice has a credit note issued against it, so it can't be deleted. Credit notes preserve the financial trail. Delete the credit note first if you're sure you want to remove both.",
+    });
+  }
+
+  db.transaction(() => {
+    if (invoice.retainer_applied > 0) {
+      db.prepare("UPDATE customers SET retainer_balance = retainer_balance + ? WHERE id = ?")
+        .run(invoice.retainer_applied, invoice.customer_id);
+    }
+    db.prepare("DELETE FROM retainer_transactions WHERE invoice_id = ?").run(invoice.id);
+    db.prepare("UPDATE time_entries SET billed = 0, invoice_id = NULL WHERE invoice_id = ?").run(invoice.id);
+    db.prepare("UPDATE purchases SET billed_invoice_id = NULL WHERE billed_invoice_id = ?").run(invoice.id);
+    db.prepare("UPDATE quotes SET converted_invoice_id = NULL WHERE converted_invoice_id = ?").run(invoice.id);
+    db.prepare("UPDATE recurring_invoices SET last_generated_invoice_id = NULL WHERE last_generated_invoice_id = ?").run(invoice.id);
+    db.prepare("DELETE FROM payments WHERE invoice_id = ?").run(invoice.id);
+    // Cascades invoice_line_items, invoice_edit_history, invoice_comments.
+    db.prepare("DELETE FROM invoices WHERE id = ? AND business_id = ?").run(invoice.id, req.auth.businessId);
+  })();
+
+  res.status(204).end();
 });
 
 // Edit history — who changed this invoice, when, and what the totals were

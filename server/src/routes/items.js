@@ -75,7 +75,14 @@ router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
     if (result.changes === 0) return res.status(404).json({ error: "Item not found." });
     res.status(204).end();
   } catch (err) {
-    if (err.code === "SQLITE_CONSTRAINT_FOREIGN_KEY") {
+    // SQLite's real extended error code for this is "SQLITE_CONSTRAINT_FOREIGNKEY"
+    // (no underscore between FOREIGN and KEY). An earlier round checked for
+    // "SQLITE_CONSTRAINT_FOREIGN_KEY" instead, which never matched, so this
+    // catch silently never fired and the raw constraint error kept reaching
+    // the client (and the error log) as a generic 500. Fixed 2026-09-20,
+    // caught from Naveen's own Master Admin error feed still showing the raw
+    // message after this fix was supposedly already live.
+    if (err.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
       return res.status(409).json({
         error:
           "This item has already been used on an invoice, quote, or purchase, so it can't be deleted, that would break those existing documents. Rename it or change its price instead if something needs updating.",

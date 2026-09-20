@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { formatDateTime } from "../lib/format";
@@ -50,6 +50,62 @@ function NewTicketForm({ onCreated, onCancel }) {
         </button>
       </div>
     </form>
+  );
+}
+
+// This business's own read-only view of its technical error log, the same
+// rows Master Admin's per-business "Errors" section shows, including
+// whether each one has since been resolved and how, so a business can
+// actually find out a problem they hit got fixed instead of that only ever
+// being visible to Naveen (2026-09-20). No actions here: resolving stays a
+// Master Admin thing, just visibility.
+function SystemHealthPanel() {
+  const [errors, setErrors] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    api.getMyErrors().then(setErrors).catch(() => setErrors([]));
+  }, []);
+
+  if (!errors || errors.length === 0) return null;
+  const openCount = errors.filter((e) => e.status === "open").length;
+
+  return (
+    <div className="panel" style={{ marginBottom: 16 }}>
+      <button
+        type="button"
+        className="link-btn"
+        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "space-between" }}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span>
+          System Health {openCount > 0 && <span className="badge badge-attention">{openCount} open</span>}
+        </span>
+        <span className="muted">{expanded ? "Hide" : "Show"}</span>
+      </button>
+      {expanded && (
+        <table className="table" style={{ marginTop: 12 }}>
+          <thead><tr><th>When</th><th>Where</th><th>Message</th><th>Status</th></tr></thead>
+          <tbody>
+            {errors.map((e) => (
+              <Fragment key={e.id}>
+                <tr>
+                  <td>{formatDateTime(e.created_at)}</td>
+                  <td className="error-route-cell">{e.route || "General"}</td>
+                  <td style={{ whiteSpace: "pre-wrap" }}>{e.message}</td>
+                  <td><span className={`badge ${e.status === "open" ? "badge-attention" : "badge-resolved"}`}>{e.status === "open" ? "Open" : "Resolved"}</span></td>
+                </tr>
+                {e.status === "resolved" && e.resolution_notes && (
+                  <tr>
+                    <td colSpan={4}><span className="muted">Resolved {formatDateTime(e.resolved_at)}: {e.resolution_notes}</span></td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 
@@ -164,6 +220,8 @@ export default function Support() {
         Want a refresher on the basics instead? Use "Take a tour" above.
       </p>
       {error && <p className="error">{error}</p>}
+
+      <SystemHealthPanel />
 
       {showNewForm && (
         <NewTicketForm onCreated={handleCreated} onCancel={() => setShowNewForm(false)} />

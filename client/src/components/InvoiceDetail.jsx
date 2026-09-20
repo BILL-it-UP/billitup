@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
 import { buildWhatsappUrl } from "../lib/whatsapp";
@@ -23,6 +23,7 @@ const GST_IMS_STATUSES = [
 // standalone /invoices/:id page and embedded as the right-hand pane of the
 // master-detail Invoices list on the Dashboard, so the two never diverge.
 export default function InvoiceDetail({ invoiceId, onChanged, standalone = false }) {
+  const navigate = useNavigate();
   const canEdit = ["owner", "admin"].includes(getUser()?.role);
   const [invoice, setInvoice] = useState(null);
   const [error, setError] = useState("");
@@ -32,6 +33,8 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   const [statusBusy, setStatusBusy] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [confirmingMarkSent, setConfirmingMarkSent] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState("");
@@ -190,6 +193,34 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
       setError(err.message);
     } finally {
       setStatusBusy(false);
+    }
+  };
+
+  // A real, permanent delete, different from Cancel above, which only ever
+  // changes status and never removes anything. Meant for cleaning up a
+  // mistake, a duplicate, or test/sample invoices (any status, including
+  // Paid: Cancel already covers "this real invoice is no longer valid",
+  // this is for "this invoice shouldn't have existed at all"). Blocked
+  // server-side if a credit note was issued against it (see routes/invoices.js).
+  const deleteInvoice = async () => {
+    setError("");
+    setDeleteBusy(true);
+    try {
+      await api.deleteInvoice(invoiceId);
+      setConfirmingDelete(false);
+      if (standalone) {
+        navigate("/");
+        return;
+      }
+      // Embedded in the Dashboard's master-detail list. This same component
+      // instance sticks around and gets handed a different invoiceId once
+      // the parent's list reloads, so its own busy flag needs resetting here
+      // rather than relying on an unmount that won't happen.
+      onChanged?.();
+      setDeleteBusy(false);
+    } catch (err) {
+      setError(err.message);
+      setDeleteBusy(false);
     }
   };
 
@@ -366,6 +397,11 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         {canEdit && invoice.status === "cancelled" && (
           <button type="button" className="toolbar-btn" onClick={reopenInvoice} disabled={statusBusy}>{statusBusy ? "Reopening..." : "Reopen (mark as Draft)"}</button>
         )}
+        {canEdit && (
+          <button type="button" className="toolbar-btn toolbar-btn-danger" onClick={() => setConfirmingDelete(true)} title="Permanently delete this invoice">
+            Delete
+          </button>
+        )}
       </div>
       {invoice.approval_status === "pending" && (
         <div className="no-print banner banner-warning">
@@ -462,6 +498,18 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
           busy={statusBusy}
           onConfirm={markAsSent}
           onCancel={() => setConfirmingMarkSent(false)}
+        />
+      )}
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={`Delete invoice ${invoice.invoice_number}?`}
+          message="This cannot be undone. Any payments recorded against it are removed too, and it will no longer count toward your reports or totals. If you just want to void a real invoice, Cancel above keeps the record instead."
+          confirmLabel="Delete permanently"
+          danger
+          busy={deleteBusy}
+          onConfirm={deleteInvoice}
+          onCancel={() => setConfirmingDelete(false)}
         />
       )}
     </div>

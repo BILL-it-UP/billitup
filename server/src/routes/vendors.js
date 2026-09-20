@@ -65,7 +65,11 @@ router.delete("/:id", (req, res) => {
     if (result.changes === 0) return res.status(404).json({ error: "Vendor not found." });
     res.status(204).end();
   } catch (err) {
-    if (err.code === "SQLITE_CONSTRAINT_FOREIGN_KEY") {
+    // Same fix as items.js's DELETE route: the real SQLite extended code is
+    // "SQLITE_CONSTRAINT_FOREIGNKEY" (no underscore before KEY), not
+    // "SQLITE_CONSTRAINT_FOREIGN_KEY". This check never matched before, so
+    // the friendly message below never actually fired (2026-09-20).
+    if (err.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
       return res.status(409).json({
         error: "This vendor has purchase bills logged against them, so they can't be deleted, that would break those existing records. Edit their details instead if something needs correcting.",
       });

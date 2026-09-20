@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
@@ -8,6 +8,8 @@ import CustomerPicker from "../components/CustomerPicker";
 import TaxRateInput from "../components/TaxRateInput";
 import UnitSelect from "../components/UnitSelect";
 import CollapsibleSection from "../components/CollapsibleSection";
+import InvoiceNumberSettingsModal from "../components/InvoiceNumberSettingsModal";
+import { IconSettings } from "../components/Icons";
 import { GST_TREATMENTS } from "../lib/gst";
 import { CURRENCIES, currencySymbol } from "../lib/currencies";
 
@@ -54,6 +56,24 @@ export default function NewInvoice() {
   const [saving, setSaving] = useState(false);
   const [loadingInvoice, setLoadingInvoice] = useState(isEdit);
   const [loadingClone, setLoadingClone] = useState(Boolean(cloneFromId));
+  // Invoice# preview + "Configure Invoice Number Preferences" (the gear icon
+  // next to it, matching Zoho's own New Invoice screen, 2026-09-20). Only
+  // meaningful for a brand-new invoice, an edit keeps its already-assigned
+  // number, which is never shown as editable here.
+  const [nextNumberPreview, setNextNumberPreview] = useState(null);
+  const [invoiceNumberMode, setInvoiceNumberMode] = useState("auto");
+  const [manualInvoiceNumber, setManualInvoiceNumber] = useState("");
+  const [showNumberSettings, setShowNumberSettings] = useState(false);
+  // Items load asynchronously, same as the invoice/clone fetch below. A ref
+  // (rather than only the `items` state) lets whichever of those two finishes
+  // LAST still resolve each line's item name correctly. Using `items` state
+  // alone only worked when items happened to load after the invoice did; if
+  // items loaded first, the name-lookup effect further below had already run
+  // once (against the still-empty default line) and never fired again once
+  // the invoice's real lines arrived, leaving the item picker showing an
+  // empty search box even though qty/rate/amount were all correct. That's
+  // exactly what showed up on Clone right after it shipped (2026-09-20).
+  const itemsRef = useRef([]);
 
   // Unbilled hours / billable expenses / retainer draw-down — only offered
   // when creating a brand new invoice, not when editing one, so a later edit
@@ -66,7 +86,10 @@ export default function NewInvoice() {
 
   useEffect(() => {
     api.listCustomers().then(setCustomers);
-    api.listItems().then(setItems);
+    api.listItems().then((list) => {
+      itemsRef.current = list;
+      setItems(list);
+    });
     // A brand new invoice defaults to the business's own default currency —
     // an edit in progress below overwrites this with the invoice's actual
     // currency once it loads, so this only matters for a genuinely new
@@ -75,6 +98,15 @@ export default function NewInvoice() {
       setBusiness(b);
       if (!isEdit) setCurrency(b.default_currency || "INR");
     });
+    // What the next invoice's number would be if saved right now. Not
+    // meaningful for an edit, which already has its own number.
+    if (!isEdit) {
+      api.getNextInvoiceNumber().then(({ invoiceNumber, mode }) => {
+        setNextNumberPreview(invoiceNumber);
+        setInvoiceNumberMode(mode);
+        if (mode === "manual") setManualInvoiceNumber(invoiceNumber);
+      }).catch(() => {});
+    }
     // A brand new invoice starts on whichever saved Terms & Conditions
     // template is marked default (if any) — same "an edit overwrites this
     // once it loads" reasoning as currency above (2026-09-16).
@@ -120,17 +152,23 @@ export default function NewInvoice() {
       setMilestoneLabel(inv.milestone_label || "");
       setProjectTotalAmount(inv.project_total_amount || "");
       setLines(
-        (inv.lineItems || []).map((li) => ({
-          item_id: li.item_id || "",
-          item_name: "", // resolved once the item catalog loads, see below
-          description: li.description || "",
-          qty: li.qty,
-          rate: li.rate,
-          discount: li.discount,
-          tax_rate: li.tax_rate,
-          unit: li.unit || "",
-          hsn_sac_code: li.hsn_sac_code || "",
-        }))
+        (inv.lineItems || []).map((li) => {
+          const match = li.item_id ? itemsRef.current.find((it) => String(it.id) === String(li.item_id)) : null;
+          return {
+            item_id: li.item_id || "",
+            // Resolved right now from whatever's already in itemsRef. If the
+            // item catalog hasn't loaded yet, the effect below (keyed on
+            // `items`) backfills it once it does.
+            item_name: match ? match.name : "",
+            description: li.description || "",
+            qty: li.qty,
+            rate: li.rate,
+            discount: li.discount,
+            tax_rate: li.tax_rate,
+            unit: li.unit || "",
+            hsn_sac_code: li.hsn_sac_code || "",
+          };
+        })
       );
       setLoadingInvoice(false);
     });
@@ -162,17 +200,24 @@ export default function NewInvoice() {
       setMilestoneLabel(inv.milestone_label || "");
       setProjectTotalAmount(inv.project_total_amount || "");
       setLines(
-        (inv.lineItems || []).map((li) => ({
-          item_id: li.item_id || "",
-          item_name: "", // resolved once the item catalog loads, see below
-          description: li.description || "",
-          qty: li.qty,
-          rate: li.rate,
-          discount: li.discount,
-          tax_rate: li.tax_rate,
-          unit: li.unit || "",
-          hsn_sac_code: li.hsn_sac_code || "",
-        }))
+        (inv.lineItems || []).map((li) => {
+          const match = li.item_id ? itemsRef.current.find((it) => String(it.id) === String(li.item_id)) : null;
+          return {
+            item_id: li.item_id || "",
+            // See the matching comment in the edit-mode effect above. This
+            // is what was missing before, leaving a cloned line's item
+            // picker showing an empty search box even though its qty/rate/
+            // amount were all correctly copied (2026-09-20).
+            item_name: match ? match.name : "",
+            description: li.description || "",
+            qty: li.qty,
+            rate: li.rate,
+            discount: li.discount,
+            tax_rate: li.tax_rate,
+            unit: li.unit || "",
+            hsn_sac_code: li.hsn_sac_code || "",
+          };
+        })
       );
       setLoadingClone(false);
     });
@@ -324,6 +369,11 @@ export default function NewInvoice() {
       retainer_applied: retainerApplied || null,
       time_entry_ids: selectedTimeEntryIds,
       billable_purchase_ids: selectedPurchaseIds,
+      // Only reaches the server as a real number when Settings > Invoice
+      // Number Preferences is set to manual. The server ignores this
+      // entirely in auto mode, always deriving the real number from its own
+      // counter regardless of what's sent here (2026-09-20).
+      ...(invoiceNumberMode === "manual" && { invoice_number: manualInvoiceNumber || null }),
     }),
   });
 
@@ -419,6 +469,31 @@ export default function NewInvoice() {
                     onCreated={handleCustomerCreated}
                   />
                 </label>
+                {!isEdit && (
+                  <label className="block">Invoice#
+                    <div className="invoice-number-field">
+                      {invoiceNumberMode === "manual" ? (
+                        <input
+                          value={manualInvoiceNumber}
+                          onChange={(e) => setManualInvoiceNumber(e.target.value)}
+                          placeholder={nextNumberPreview || "Invoice number"}
+                        />
+                      ) : (
+                        <input value={nextNumberPreview || "..."} disabled title="Assigned automatically when this invoice is saved" />
+                      )}
+                      {canManageItems && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Configure Invoice Number Preferences"
+                          onClick={() => setShowNumberSettings(true)}
+                        >
+                          <IconSettings size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                )}
                 <label className="block">Invoice date
                   <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                 </label>
@@ -656,6 +731,25 @@ export default function NewInvoice() {
           </div>
         )}
       </form>
+
+      {showNumberSettings && business && (
+        <InvoiceNumberSettingsModal
+          business={business}
+          onClose={() => setShowNumberSettings(false)}
+          onSaved={(updated) => {
+            setBusiness(updated);
+            setInvoiceNumberMode(updated.invoice_number_mode || "auto");
+            setShowNumberSettings(false);
+            // The prefix/next-number/mode may have just changed. Refetch the
+            // preview rather than trying to recompute it by hand here.
+            api.getNextInvoiceNumber().then(({ invoiceNumber, mode }) => {
+              setNextNumberPreview(invoiceNumber);
+              setInvoiceNumberMode(mode);
+              if (mode === "manual") setManualInvoiceNumber(invoiceNumber);
+            }).catch(() => {});
+          }}
+        />
+      )}
     </div>
   );
 }

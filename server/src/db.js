@@ -664,6 +664,14 @@ ensureColumn("businesses", "rbi_bank_rate", "rbi_bank_rate REAL DEFAULT 6.5");
 // integration" philosophy (2026-09-16).
 ensureColumn("businesses", "annual_turnover", "annual_turnover REAL");
 
+// "auto" (default) keeps the existing invoice_prefix + next_invoice_number
+// counter working exactly as before. "manual" is Zoho's other mode. The
+// New Invoice page shows an editable Invoice# field instead of a read-only
+// preview, and the counter is never advanced, so someone can hand-type
+// whatever number they like on that one invoice (2026-09-20, see
+// routes/invoices.js POST / and client's InvoiceNumberSettingsModal).
+ensureColumn("businesses", "invoice_number_mode", "invoice_number_mode TEXT DEFAULT 'auto'");
+
 // items
 ensureColumn("items", "low_stock_threshold", "low_stock_threshold REAL");
 
