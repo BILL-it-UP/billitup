@@ -222,6 +222,12 @@ export const api = {
 
   listPayments: () => request("/api/payments"),
 
+  // "Import from Zoho" (Settings > Import Data). Sends the raw CSV text of
+  // whichever of Items/Contacts/Invoices exports were chosen, see
+  // server/src/routes/zohoImport.js for what each does and how duplicates
+  // are handled on a second run.
+  importZoho: (payload) => request("/api/zoho-import", { method: "POST", body: payload }),
+
   // A business's own connection to Dropbox/Google Drive/OneDrive for
   // backups — see server/src/routes/cloudBackup.js and
   // lib/cloudBackupExport.js for what actually gets uploaded and why it's

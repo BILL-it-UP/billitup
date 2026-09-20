@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
@@ -14,7 +14,14 @@ import { CURRENCIES, currencySymbol } from "../lib/currencies";
 export default function NewInvoice() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  // Clone: "Clone" on an existing invoice lands here with ?cloneFrom=<id>,
+  // a brand new, unnumbered invoice pre-filled from that one (like Zoho's
+  // own Clone), not an edit of it. Ignored once already editing a real
+  // invoice, since the two modes don't make sense together.
+  const cloneFromId = !isEdit ? searchParams.get("cloneFrom") : null;
+  const [clonedFromNumber, setClonedFromNumber] = useState("");
   const canManageItems = ["owner", "admin"].includes(getUser()?.role);
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
@@ -46,6 +53,7 @@ export default function NewInvoice() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingInvoice, setLoadingInvoice] = useState(isEdit);
+  const [loadingClone, setLoadingClone] = useState(Boolean(cloneFromId));
 
   // Unbilled hours / billable expenses / retainer draw-down — only offered
   // when creating a brand new invoice, not when editing one, so a later edit
@@ -128,6 +136,48 @@ export default function NewInvoice() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Clone: same prefill as edit mode above, except the date is today's (not
+  // the original invoice's), due date and e-way bill details start blank
+  // (both are specific to that one shipment/timing, not something worth
+  // repeating), and this never becomes an edit of the original. Saving
+  // always creates a brand new invoice with its own fresh number.
+  useEffect(() => {
+    if (!cloneFromId) return;
+    setLoadingClone(true);
+    api.getInvoice(cloneFromId).then((inv) => {
+      setCustomerId(inv.customer_id || "");
+      setCustomerName(inv.customer?.name || "");
+      setClonedFromNumber(inv.invoice_number || "");
+      setReference(inv.reference || "");
+      setSubject(inv.subject || "");
+      setGstin(inv.gstin || "");
+      setGstTreatment(inv.gst_treatment || "gst");
+      setTerms(inv.terms || "");
+      setTermsAndConditions(inv.terms_and_conditions || "");
+      setTermsTemplateId("custom");
+      setNotes(inv.notes || "");
+      setCurrency(inv.currency || "INR");
+      setProjectName(inv.project_name || "");
+      setMilestoneLabel(inv.milestone_label || "");
+      setProjectTotalAmount(inv.project_total_amount || "");
+      setLines(
+        (inv.lineItems || []).map((li) => ({
+          item_id: li.item_id || "",
+          item_name: "", // resolved once the item catalog loads, see below
+          description: li.description || "",
+          qty: li.qty,
+          rate: li.rate,
+          discount: li.discount,
+          tax_rate: li.tax_rate,
+          unit: li.unit || "",
+          hsn_sac_code: li.hsn_sac_code || "",
+        }))
+      );
+      setLoadingClone(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloneFromId]);
 
   // An invoice line only stores item_id + description, never the item's own
   // name — so once the catalog is loaded, look up each locked line's name by
@@ -331,7 +381,7 @@ export default function NewInvoice() {
   const willNeedApproval = Boolean(!isEdit && business?.require_invoice_approval && !["owner", "admin"].includes(userRole));
   const retainerBalance = Number(selectedCustomer?.retainer_balance) || 0;
 
-  if (loadingInvoice) return <p className="muted">Loading...</p>;
+  if (loadingInvoice || loadingClone) return <p className="muted">Loading...</p>;
 
   const hasMilestoneData = !!(projectName || milestoneLabel || projectTotalAmount);
   const hasEwayData = !!(ewayBillNumber || ewayVehicleNumber || ewayTransporterName || ewayTransporterId || ewayDistanceKm);
@@ -347,6 +397,12 @@ export default function NewInvoice() {
       )}
       {willNeedApproval && (
         <p className="muted">This invoice will need Owner/Admin approval before it can be sent.</p>
+      )}
+      {clonedFromNumber && (
+        <p className="muted">
+          Pre-filled from invoice {clonedFromNumber}. Review the customer, lines, and dates below. Saving this
+          creates a brand new invoice with its own number.
+        </p>
       )}
       <form onSubmit={(e) => e.preventDefault()}>
         <div className="invoice-form-grid">

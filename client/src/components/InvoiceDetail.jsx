@@ -317,6 +317,7 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
           <Link className="toolbar-btn" to={`/invoices/${invoiceId}`} title="Open in its own page">↗ Open</Link>
         )}
         {canEdit && <Link className="toolbar-btn" to={`/invoices/${invoiceId}/edit`}>Edit</Link>}
+        <Link className="toolbar-btn" to={`/invoices/new?cloneFrom=${invoiceId}`} title="Start a new invoice pre-filled from this one">Clone</Link>
         <button type="button" className="toolbar-btn" onClick={() => window.print()}>Print / Save PDF</button>
         {invoice.approval_status !== "pending" && (
           <button type="button" className={toolbarBtnClass("Email to Customer")} onClick={() => setShowSendModal(true)}>

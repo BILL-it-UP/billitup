@@ -27,6 +27,7 @@ import cloudBackupRouter from "./routes/cloudBackup.js";
 import clientErrorsRouter from "./routes/clientErrors.js";
 import supportRouter from "./routes/support.js";
 import announcementsRouter from "./routes/announcements.js";
+import zohoImportRouter from "./routes/zohoImport.js";
 import { startBackupSchedule } from "./lib/backup.js";
 import { logError } from "./lib/errorLog.js";
 
@@ -96,6 +97,7 @@ app.use("/api/cloud-backup", cloudBackupRouter);
 app.use("/api/client-errors", clientErrorsRouter);
 app.use("/api/support", supportRouter);
 app.use("/api/announcements", announcementsRouter);
+app.use("/api/zoho-import", zohoImportRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {

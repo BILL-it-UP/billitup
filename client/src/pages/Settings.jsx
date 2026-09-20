@@ -3,12 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, getUser, setSession, clearSession } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import {
-  IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash, IconAlert, IconInvoice,
+  IconBuilding, IconImage, IconMail, IconBriefcase, IconTeam, IconCloud, IconTrash, IconAlert, IconInvoice, IconImport,
 } from "../components/Icons";
 import { INDIAN_STATES } from "../lib/gst";
 import { CURRENCIES } from "../lib/currencies";
 import { DEFAULT_TEMPLATES as DEFAULT_EMAIL_TEMPLATES } from "../lib/emailTemplates";
 import InsertFieldSelect from "../components/InsertFieldSelect";
+import ZohoImportCard from "../components/ZohoImportCard";
 
 // A ready-to-send starting point for Terms & Conditions, shown as the
 // field's real value (not grey hint text) whenever a business hasn't
@@ -80,6 +81,7 @@ const SETTINGS_TABS = [
   { key: "email", label: "Email", icon: IconMail },
   { key: "firms", label: "Firms & Staff", icon: IconTeam, ownerOnly: true },
   { key: "backups", label: "Backups", icon: IconCloud, ownerOnly: true },
+  { key: "import", label: "Import Data", icon: IconImport, ownerOnly: true },
   { key: "danger", label: "Danger Zone", icon: IconTrash, ownerOnly: true },
 ];
 
@@ -291,6 +293,8 @@ export default function Settings() {
             <CloudBackupSettings />
           </>
         )}
+
+        {activeTab === "import" && isOwner && <ZohoImportCard />}
 
         {activeTab === "danger" && isOwner && <DangerZone business={business} />}
       </div>

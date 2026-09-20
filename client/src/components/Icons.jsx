@@ -307,3 +307,14 @@ export function IconClock({ size = 18 }) {
     </svg>
   );
 }
+
+// Settings > Import Data (2026-09-20). An arrow into a tray, the usual
+// "bring data in" signifier, same shared stroke weight as the rest of this set.
+export function IconImport({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M12 4v10.5M8 11l4 4 4-4" strokeLinejoin="round" />
+      <path d="M4 16.5v2a1.5 1.5 0 0 0 1.5 1.5h13a1.5 1.5 0 0 0 1.5-1.5v-2" />
+    </svg>
+  );
+}
