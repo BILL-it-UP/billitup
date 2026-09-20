@@ -66,7 +66,7 @@ export default function Items() {
             </button>
           )}
           {canManage && (
-            <button type="button" onClick={openAdd}>+ Add Item</button>
+            <button type="button" onClick={openAdd} data-tour="items-add-button">+ Add Item</button>
           )}
         </div>
       </div>

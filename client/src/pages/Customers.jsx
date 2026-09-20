@@ -171,7 +171,7 @@ export default function Customers() {
         <h1>Customers</h1>
         <div className="form-row" style={{ gap: 12 }}>
           {canManage && (
-            <button type="button" onClick={openAddModal}>+ Add Customer</button>
+            <button type="button" onClick={openAddModal} data-tour="customers-add-button">+ Add Customer</button>
           )}
           {customers.length > 0 && (
             <button type="button" className="link-btn" onClick={() => exportCustomersToExcel(customers)}>

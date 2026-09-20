@@ -1375,3 +1375,26 @@ textarea { resize: vertical; }
 .invoice-comment-form { display: flex; gap: 8px; align-items: flex-end; }
 .invoice-comment-form textarea { flex: 1; resize: vertical; margin-top: 0; }
 .landing-page footer .links a:hover { color: var(--l-ink); }
+
+/* ---- First-time product tour (driver.js spotlight walkthrough, 2026-09-20) ----
+   Recolors driver.js's own popover to match BillItUp's own panel look
+   (border, radius, shadow, and the app's own type) instead of driver.js's
+   default black-and-white styling. Purely cosmetic, the tour still works
+   fine without any of this if a driver.js class name ever changes upstream. */
+.driver-popover.billitup-tour-popover {
+  background: white; color: var(--ink); border: 1px solid var(--border);
+  border-radius: 12px; font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18); max-width: 340px;
+}
+.billitup-tour-popover .driver-popover-title { color: var(--ink); font-size: 16px; font-weight: 700; }
+.billitup-tour-popover .driver-popover-description { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.billitup-tour-popover .driver-popover-progress-text { color: var(--muted); font-size: 12px; }
+.billitup-tour-popover .driver-popover-footer button {
+  font-family: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 7px 14px;
+  border: 1px solid var(--border); background: white; color: var(--ink); box-shadow: none;
+}
+.billitup-tour-popover .driver-popover-next-btn,
+.billitup-tour-popover .driver-popover-done-btn {
+  background: var(--accent); border-color: var(--accent); color: white;
+}
+.billitup-tour-popover .driver-popover-close-btn { color: var(--muted); }

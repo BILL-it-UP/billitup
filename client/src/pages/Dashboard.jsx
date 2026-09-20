@@ -95,7 +95,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" data-tour="dashboard-welcome">
         <h1>Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}</h1>
         <Link className="btn" to="/invoices/new">+ New Invoice</Link>
       </div>

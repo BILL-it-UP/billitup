@@ -354,7 +354,7 @@ export default function NewInvoice() {
             <section className="form-card">
               <h2>Invoice Details</h2>
               <div className="form-row">
-                <label className="block">Customer
+                <label className="block" data-tour="invoice-customer-picker">Customer
                   <CustomerPicker
                     customers={customers}
                     customerId={customerId}

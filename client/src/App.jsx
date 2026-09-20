@@ -43,6 +43,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
 import BusinessHealth from "./pages/BusinessHealth";
 import { api, getUser, clearSession, setSession } from "./lib/api";
+import { startTour, hasTourBeenSeen } from "./lib/tour";
 
 function RequireAuth({ children }) {
   const user = getUser();
@@ -135,6 +136,17 @@ function Shell({ children }) {
   };
 
   const initials = (user?.name || "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
+
+  // First-time product tour, pops up once, automatically, for a brand-new
+  // login landing on the Dashboard (see lib/tour.js for the full step list,
+  // why it's scoped to "/" specifically, and why it's skipped once seen). A
+  // short delay lets the Dashboard settle before the spotlight appears
+  // (2026-09-20).
+  useEffect(() => {
+    if (!user || window.location.pathname !== "/" || hasTourBeenSeen(user.id)) return;
+    const timer = setTimeout(() => startTour(navigate, user), 700);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className={`app-shell${collapsed ? " sidebar-collapsed" : ""}`}>

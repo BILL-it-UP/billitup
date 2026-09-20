@@ -134,7 +134,7 @@ export default function Settings() {
         </div>
 
         {activeTab === "business" && (
-        <div className="settings-card">
+        <div className="settings-card" data-tour="settings-business-tab">
           <CardHeader
             icon={IconBuilding}
             title="Business Details"

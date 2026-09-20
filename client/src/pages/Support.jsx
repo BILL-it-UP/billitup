@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { startTour } from "../lib/tour";
 
 // Any logged-in role can raise a problem and chat with Naveen about it here
 // (2026-09-15) — same audience as the Suggestions sidebar box, but this is
@@ -120,6 +122,7 @@ function TicketThread({ ticket, onUpdated }) {
 }
 
 export default function Support() {
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [showNewForm, setShowNewForm] = useState(false);
@@ -151,10 +154,14 @@ export default function Support() {
     <div>
       <div className="page-header">
         <h1>Support</h1>
-        <button type="button" className="btn" onClick={() => setShowNewForm(true)}>+ Raise a problem</button>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button type="button" className="link-btn" onClick={() => startTour(navigate, getUser())}>Take a tour</button>
+          <button type="button" className="btn" onClick={() => setShowNewForm(true)}>+ Raise a problem</button>
+        </div>
       </div>
       <p className="muted" style={{ marginTop: 0 }}>
         Run into something that isn't working right? Raise it here and chat with us directly until it's sorted.
+        Want a refresher on the basics instead? Use "Take a tour" above.
       </p>
       {error && <p className="error">{error}</p>}
 
