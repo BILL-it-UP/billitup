@@ -72,25 +72,50 @@ export default function FullInvoice({ invoice }) {
         // column only shows up once there's actually something to put in it,
         // so a pre-existing invoice's printed layout never changes.
         const showHsn = lineItems.some((l) => l.hsn_sac_code);
+        // Zoho's own printed invoices leave the Discount column off entirely
+        // once a business never uses it, rather than showing a column of
+        // "0.00"s on every line, a real gap Naveen flagged after comparing
+        // a live Zoho invoice against ours side by side (2026-09-21). Same
+        // treatment here: the column only earns its place once a line
+        // actually has a discount on it.
+        const showDiscount = lineItems.some((l) => Number(l.discount) > 0);
         return (
           <table className="table doc-line-items">
             <thead>
               <tr>
                 <th>#</th><th>Item &amp; Description</th>
                 {showHsn && <th>HSN/SAC</th>}
-                <th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th>
+                <th>Qty</th><th>Rate</th>{showDiscount && <th>Discount</th>}<th>Amount</th>
               </tr>
             </thead>
             <tbody>
-              {lineItems.map((line, i) => (
-                <tr key={line.id}>
-                  <td>{i + 1}</td><td>{line.description}</td>
-                  {showHsn && <td>{line.hsn_sac_code || ""}</td>}
-                  <td>{formatQty(line.qty)}{line.unit ? ` ${line.unit}` : ""}</td>
-                  <td>{symbol}{formatMoney(line.rate)}</td><td>{symbol}{formatMoney(line.discount)}</td>
-                  <td>{symbol}{formatMoney(line.amount)}</td>
-                </tr>
-              ))}
+              {lineItems.map((line, i) => {
+                // A description can be more than one line: the item's own
+                // name on top, further detail (part numbers, a bundle's
+                // contents) below it, the same shape Zoho prints, with the
+                // first line carrying the weight. Rendered as real block
+                // elements rather than relying on a literal "\n" and
+                // white-space CSS, so it reads the same on screen, in the
+                // printed PDF, and in the emailed copy (2026-09-21).
+                const descLines = String(line.description || "").split("\n").filter(Boolean);
+                return (
+                  <tr key={line.id}>
+                    <td>{i + 1}</td>
+                    <td>
+                      {descLines.map((part, idx) => (
+                        <div key={idx} className={idx === 0 ? "doc-line-desc-title" : "doc-line-desc-detail"}>
+                          {part}
+                        </div>
+                      ))}
+                    </td>
+                    {showHsn && <td>{line.hsn_sac_code || ""}</td>}
+                    <td>{formatQty(line.qty)}{line.unit ? ` ${line.unit}` : ""}</td>
+                    <td>{symbol}{formatMoney(line.rate)}</td>
+                    {showDiscount && <td>{symbol}{formatMoney(line.discount)}</td>}
+                    <td>{symbol}{formatMoney(line.amount)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         );

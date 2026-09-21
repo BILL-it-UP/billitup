@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 import FullInvoice from "../components/FullInvoice";
 
 // Reached with no login — the destination of an invoice's "Copy shareable
@@ -15,6 +16,7 @@ export default function PublicInvoiceView() {
   useEffect(() => {
     api.getPublicInvoice(token).then(setInvoice).catch((err) => setError(err.message));
   }, [token]);
+  useDocumentTitle(invoice?.invoice_number);
 
   if (error) return <div className="public-invoice-page"><p className="error" style={{ textAlign: "center" }}>{error}</p></div>;
   if (!invoice) return <div className="public-invoice-page"><p className="muted" style={{ textAlign: "center" }}>Loading...</p></div>;

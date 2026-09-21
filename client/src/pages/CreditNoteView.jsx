@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 import SendDocumentModal from "../components/SendDocumentModal";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
@@ -20,6 +21,7 @@ export default function CreditNoteView() {
 
   const load = () => api.getCreditNote(id).then(setCreditNote);
   useEffect(() => { load(); }, [id]);
+  useDocumentTitle(creditNote?.credit_note_number);
 
   if (!creditNote) return <p className="muted">Loading...</p>;
 
@@ -41,6 +43,11 @@ export default function CreditNoteView() {
   };
 
   const { business, customer, invoice, lineItems } = creditNote;
+  // Same two fixes as the Invoice document (FullInvoice.jsx): don't show a
+  // Discount column full of "0.00"s when nothing on the credit note uses it,
+  // and render a multi-line description as real stacked lines rather than
+  // one flat run of text (2026-09-21).
+  const showDiscount = lineItems.some((l) => Number(l.discount) > 0);
 
   const sendTemplate = getTemplate(business, "credit_note");
   const sendVars = {
@@ -98,15 +105,32 @@ export default function CreditNoteView() {
         </div>
 
         <table className="table doc-line-items">
-          <thead><tr><th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr></thead>
+          <thead>
+            <tr>
+              <th>#</th><th>Item &amp; Description</th><th>Qty</th><th>Rate</th>
+              {showDiscount && <th>Discount</th>}<th>Amount</th>
+            </tr>
+          </thead>
           <tbody>
-            {lineItems.map((line, i) => (
-              <tr key={line.id}>
-                <td>{i + 1}</td><td>{line.description}</td><td>{formatQty(line.qty)}</td>
-                <td>₹{formatMoney(line.rate)}</td><td>₹{formatMoney(line.discount)}</td>
-                <td>₹{formatMoney(line.amount)}</td>
-              </tr>
-            ))}
+            {lineItems.map((line, i) => {
+              const descLines = String(line.description || "").split("\n").filter(Boolean);
+              return (
+                <tr key={line.id}>
+                  <td>{i + 1}</td>
+                  <td>
+                    {descLines.map((part, idx) => (
+                      <div key={idx} className={idx === 0 ? "doc-line-desc-title" : "doc-line-desc-detail"}>
+                        {part}
+                      </div>
+                    ))}
+                  </td>
+                  <td>{formatQty(line.qty)}</td>
+                  <td>₹{formatMoney(line.rate)}</td>
+                  {showDiscount && <td>₹{formatMoney(line.discount)}</td>}
+                  <td>₹{formatMoney(line.amount)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 

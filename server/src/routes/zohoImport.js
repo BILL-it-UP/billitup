@@ -214,15 +214,32 @@ function importInvoices(business, user, csvText, { byZohoId, itemsByName, recrea
       continue;
     }
 
-    const lineItems = lines.map((row) => ({
-      item_id: itemsByName.get(matchKey(row["Item Name"])) || null,
-      description: cleanText(row["Item Desc"]) || cleanText(row["Item Name"]) || "Item",
-      qty: parseZohoAmount(row["Quantity"]) || 1,
-      rate: parseZohoAmount(row["Item Price"]),
-      discount: parseZohoAmount(row["Discount Amount"]),
-      tax_rate: Number(row["Item Tax %"]) || 0,
-      unit: cleanText(row["Usage unit"]),
-    }));
+    const lineItems = lines.map((row) => {
+      // Zoho's own CSV export carries "Item Name" and "Item Desc" as two
+      // separate columns, its own printed invoice shows Item Name as the
+      // line's bold title with Item Desc as further detail underneath. This
+      // used to keep only Item Desc, discarding Item Name outright whenever
+      // both were present, silently dropping the actual title of every line
+      // on an imported invoice (found 2026-09-21, comparing an imported
+      // invoice's printed PDF against the real one from Zoho it came from).
+      // Both are now kept, Name on its own leading line, so nothing from the
+      // original invoice is lost, joined with "\n" for FullInvoice.jsx /
+      // QuoteView.jsx / CreditNoteView.jsx to render as separate lines.
+      const itemName = cleanText(row["Item Name"]);
+      const itemDesc = cleanText(row["Item Desc"]);
+      const description = itemDesc && itemDesc !== itemName
+        ? [itemName, itemDesc].filter(Boolean).join("\n")
+        : (itemName || itemDesc || "Item");
+      return {
+        item_id: itemsByName.get(matchKey(row["Item Name"])) || null,
+        description,
+        qty: parseZohoAmount(row["Quantity"]) || 1,
+        rate: parseZohoAmount(row["Item Price"]),
+        discount: parseZohoAmount(row["Discount Amount"]),
+        tax_rate: Number(row["Item Tax %"]) || 0,
+        unit: cleanText(row["Usage unit"]),
+      };
+    });
 
     // A nonzero "Adjustment" (rounding, a manual correction) on the invoice
     // header doesn't have anywhere else to go, so it's rolled in as its own

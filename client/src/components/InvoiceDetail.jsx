@@ -4,6 +4,7 @@ import { api, getUser } from "../lib/api";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
 import { buildWhatsappUrl } from "../lib/whatsapp";
 import { currencySymbol } from "../lib/currencies";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 import SendDocumentModal from "./SendDocumentModal";
 import ConfirmDialog from "./ConfirmDialog";
 import RecordPaymentForm from "./RecordPaymentForm";
@@ -58,6 +59,11 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId]);
+
+  // Only for the standalone /invoices/:id page, not the embedded pane in the
+  // Dashboard's master-detail list, the tab there is the Dashboard's own,
+  // and shouldn't change just because a different row is selected.
+  useDocumentTitle(standalone && invoice ? invoice.invoice_number : null);
 
   // "Create and Send" on the New Invoice page creates the invoice, then
   // lands here with ?send=1 so the send popup opens immediately instead of

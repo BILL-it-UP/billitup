@@ -623,10 +623,15 @@ textarea { resize: vertical; }
 
 .doc-line-items thead tr { background: #2b2f38; }
 .doc-line-items thead th { color: white; font-weight: 600; padding: 10px 8px; border-bottom: none; }
-/* Item & Description column — preserve line breaks so a multi-line item
-   breakdown (e.g. several SKUs bundled under one line) prints the way it
-   was typed, instead of collapsing onto a single line. */
-.doc-line-items td:nth-child(2) { white-space: pre-line; }
+/* Item & Description column: a multi-line description (an item's own name
+   on top, further detail below, the same shape Zoho prints) is rendered as
+   real stacked block elements by FullInvoice.jsx/QuoteView.jsx/
+   CreditNoteView.jsx, not a literal "\n" in one text node, so the name
+   reads as its own bold line and the detail underneath as smaller, muted
+   text, instead of the flat single run of text this used to print as
+   (2026-09-21). */
+.doc-line-desc-title { font-weight: 600; }
+.doc-line-desc-detail { color: var(--muted); font-size: 0.93em; margin-top: 1px; }
 .totals-box .doc-balance-due-row { background: #f3f4f6; font-weight: 700; margin: 4px -8px 0; padding: 8px; }
 
 .doc-amount-words { font-size: 13px; margin: 20px 0 0; }
@@ -699,6 +704,15 @@ textarea { resize: vertical; }
    regardless of where it's embedded, hide everything on the page and then
    re-reveal just the .invoice-doc subtree, pulled out to the page origin. */
 @media print {
+  /* Chrome (and most browsers) drop CSS background colors from a print or
+     "Save as PDF" by default, the "Background graphics" print option is off
+     unless the person turns it on themselves. The invoice document leans on
+     background color for real structure, not decoration: the dark header
+     row on the line item table and the shaded Balance Due band both vanish
+     without this, which is a big part of why a printed invoice read as
+     plain and flat next to a real Zoho invoice side by side (2026-09-21).
+     This forces backgrounds to print regardless of that toggle. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .no-print { display: none !important; }
   body { background: white; }
   main { max-width: none; padding: 0; margin: 0; }
