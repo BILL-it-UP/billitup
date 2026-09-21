@@ -318,3 +318,29 @@ export function IconImport({ size = 18 }) {
     </svg>
   );
 }
+
+// Line item drag handle (2026-09-21), a plain six-dot grip, the standard
+// signifier for "drag this to reorder it", matching Zoho's own line item
+// table. Drawn as filled circles rather than strokes, since a grip reads
+// better as small solid dots than as outlined ones.
+export function IconDragHandle({ size = 18 }) {
+  const dot = (cx, cy) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.4" fill="currentColor" stroke="none" />;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      {[9, 15].flatMap((cx) => [6, 12, 18].map((cy) => dot(cx, cy)))}
+    </svg>
+  );
+}
+
+// A per-line "more actions" menu (2026-09-21), three plain dots, opening
+// Clone / Insert Row / Insert Items in Bulk / Insert Header on a line item,
+// matching Zoho's own line item row menu.
+export function IconMoreVertical({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <circle cx="12" cy="5.5" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="18.5" r="1.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
-import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
+import { emptyLine, computeTotals, isHeaderLine } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
-import ItemPicker from "../components/ItemPicker";
-import TaxRateInput from "../components/TaxRateInput";
+import LineItemsTable from "../components/LineItemsTable";
 import { GST_TREATMENTS } from "../lib/gst";
 
 export default function NewQuote() {
@@ -46,6 +45,7 @@ export default function NewQuote() {
         (q.lineItems || []).map((li) => {
           const match = li.item_id ? items.find((it) => String(it.id) === String(li.item_id)) : null;
           return {
+            line_type: li.line_type || "item",
             item_id: li.item_id || "",
             item_name: match ? match.name : "",
             description: li.description || "",
@@ -72,32 +72,13 @@ export default function NewQuote() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
-  const updateLine = (index, patch) => {
-    setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
-  };
-  const pickItem = (index, item) => {
-    setLines((prev) =>
-      prev.map((line, i) => {
-        if (i !== index) return line;
-        if (!item) return { ...line, item_id: "", item_name: "" };
-        return {
-          ...line,
-          item_id: item.id,
-          item_name: item.name,
-          rate: item.rate,
-          tax_rate: item.tax_rate,
-          description: line.description || item.description || item.name,
-        };
-      })
-    );
-  };
-
-  const handleItemCreated = (index, item) => {
+  // Adds a freshly created item ("+ Add New Item" from inside the line item
+  // table's own item picker) to the catalog this page already has loaded, so
+  // it shows up as a match on every other line's search too, the same
+  // pattern as NewInvoice.jsx's own addCatalogItem (2026-09-21).
+  const addCatalogItem = (item) => {
     setItems((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
-    pickItem(index, item);
   };
-  const addLine = () => setLines((prev) => [...prev, emptyLine()]);
-  const removeLine = (index) => setLines((prev) => prev.filter((_, i) => i !== index));
   const rawTotals = computeTotals(lines);
   const { subTotal, discountTotal, taxTotal } = rawTotals;
   const total = gstTreatment === "gst" ? rawTotals.total : subTotal - discountTotal;
@@ -105,6 +86,10 @@ export default function NewQuote() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
+      setError("Add at least one line item (a header alone is not enough).");
+      return;
+    }
     setSaving(true);
     const payload = {
       customer_id: customerId || null,
@@ -166,37 +151,14 @@ export default function NewQuote() {
         )}
         {gstTreatment === "none" && <p className="muted">No GST will be added to this quote.</p>}
 
-        <table className="table line-item-table">
-          <thead>
-            <tr><th>Item &amp; Description</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
-          </thead>
-          <tbody>
-            {lines.map((line, i) => (
-              <tr key={i}>
-                <td className="line-item-details">
-                  <ItemPicker
-                    items={items}
-                    itemId={line.item_id}
-                    itemName={line.item_name}
-                    description={line.description}
-                    canManage={canManageItems}
-                    onSelect={(item) => pickItem(i, item)}
-                    onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
-                    onDescriptionChange={(text) => updateLine(i, { description: text })}
-                    onItemCreated={(item) => handleItemCreated(i, item)}
-                  />
-                </td>
-                <td><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
-                <td><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
-                <td><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
-                <td><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
-                <td className="num">₹{formatMoney(lineAmount(line))}</td>
-                <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button type="button" className="link-btn" onClick={addLine}>+ Add line</button>
+        <LineItemsTable
+          lines={lines}
+          setLines={setLines}
+          items={items}
+          canManageItems={canManageItems}
+          onItemCreated={addCatalogItem}
+          symbol="₹"
+        />
 
         <div className="totals-box">
           <div><span>Sub Total</span><span>₹{formatMoney(subTotal)}</span></div>

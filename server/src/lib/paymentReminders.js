@@ -31,7 +31,7 @@ async function sendReminderForInvoice(business, invoice) {
   const customer = invoice.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null;
   if (!customer?.email) return false;
 
-  const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
+  const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY id ASC").all(invoice.id);
   const progress = computeProjectProgress(invoice);
   const templateVars = {
     business_name: business.name || "",

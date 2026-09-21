@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
-import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
+import { emptyLine, computeTotals, isHeaderLine } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
-import ItemPicker from "../components/ItemPicker";
 import CustomerPicker from "../components/CustomerPicker";
-import TaxRateInput from "../components/TaxRateInput";
-import UnitSelect from "../components/UnitSelect";
+import LineItemsTable from "../components/LineItemsTable";
 import CollapsibleSection from "../components/CollapsibleSection";
 import InvoiceNumberSettingsModal from "../components/InvoiceNumberSettingsModal";
 import { IconSettings } from "../components/Icons";
@@ -155,6 +153,7 @@ export default function NewInvoice() {
         (inv.lineItems || []).map((li) => {
           const match = li.item_id ? itemsRef.current.find((it) => String(it.id) === String(li.item_id)) : null;
           return {
+            line_type: li.line_type || "item",
             item_id: li.item_id || "",
             // Resolved right now from whatever's already in itemsRef. If the
             // item catalog hasn't loaded yet, the effect below (keyed on
@@ -203,6 +202,7 @@ export default function NewInvoice() {
         (inv.lineItems || []).map((li) => {
           const match = li.item_id ? itemsRef.current.find((it) => String(it.id) === String(li.item_id)) : null;
           return {
+            line_type: li.line_type || "item",
             item_id: li.item_id || "",
             // See the matching comment in the edit-mode effect above. This
             // is what was missing before, leaving a cloned line's item
@@ -300,39 +300,15 @@ export default function NewInvoice() {
     pickCustomer(customer);
   };
 
-  const updateLine = (index, patch) => {
-    setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
-  };
-
-  // Selecting an item from the picker fills in its rate/tax and — only if the
-  // description is still blank — its description too, so re-picking an item
-  // never clobbers text the user already typed for this line.
-  const pickItem = (index, item) => {
-    setLines((prev) =>
-      prev.map((line, i) => {
-        if (i !== index) return line;
-        if (!item) return { ...line, item_id: "", item_name: "" };
-        return {
-          ...line,
-          item_id: item.id,
-          item_name: item.name,
-          rate: item.rate,
-          tax_rate: item.tax_rate,
-          unit: item.unit || "",
-          hsn_sac_code: item.hsn_sac_code || "",
-          description: line.description || item.description || item.name,
-        };
-      })
-    );
-  };
-
-  const handleItemCreated = (index, item) => {
+  // Adds a freshly created item ("+ Add New Item" from inside the line item
+  // table's own item picker) to the catalog this page already has loaded,
+  // so it shows up as a match on every other line's search too — the actual
+  // picking of it onto the line that created it happens inside
+  // LineItemsTable itself.
+  const addCatalogItem = (item) => {
     setItems((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
-    pickItem(index, item);
   };
 
-  const addLine = () => setLines((prev) => [...prev, emptyLine()]);
-  const removeLine = (index) => setLines((prev) => prev.filter((_, i) => i !== index));
   const rawTotals = computeTotals(lines);
   const { subTotal, discountTotal, taxTotal } = rawTotals;
   // Mirrors server/src/lib/gst.js: RCM and "no GST" don't add the tax to the
@@ -399,6 +375,10 @@ export default function NewInvoice() {
     }
     if (mode === "send" && !customerHasEmail) {
       setError("This customer has no email on file — add one to their record, or use Create instead and send the invoice another way.");
+      return;
+    }
+    if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
+      setError("Add at least one line item (a header alone is not enough).");
       return;
     }
     setSaving(mode);
@@ -511,44 +491,15 @@ export default function NewInvoice() {
 
             <section className="form-card">
               <h2>Line Items</h2>
-              <div className="line-item-table-wrap">
-                <table className="table line-item-table">
-                  <thead>
-                    <tr><th>Item &amp; Description</th><th>HSN/SAC</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Discount</th><th>Tax %</th><th>Amount</th><th /></tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((line, i) => {
-                      const lineItemType = items.find((it) => String(it.id) === String(line.item_id))?.type || "goods";
-                      return (
-                        <tr key={i}>
-                          <td className="line-item-details">
-                            <ItemPicker
-                              items={items}
-                              itemId={line.item_id}
-                              itemName={line.item_name}
-                              description={line.description}
-                              canManage={canManageItems}
-                              onSelect={(item) => pickItem(i, item)}
-                              onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
-                              onDescriptionChange={(text) => updateLine(i, { description: text })}
-                              onItemCreated={(item) => handleItemCreated(i, item)}
-                            />
-                          </td>
-                          <td style={{ width: 90 }}><input className="num" value={line.hsn_sac_code || ""} onChange={(e) => updateLine(i, { hsn_sac_code: e.target.value })} /></td>
-                          <td style={{ width: 64 }}><input type="number" step="0.01" className="num" value={line.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} /></td>
-                          <td style={{ width: 140 }}><UnitSelect type={lineItemType} value={line.unit} onChange={(v) => updateLine(i, { unit: v })} /></td>
-                          <td style={{ width: 90 }}><input type="number" step="0.01" className="num" value={line.rate} onChange={(e) => updateLine(i, { rate: e.target.value })} /></td>
-                          <td style={{ width: 90 }}><input type="number" step="0.01" className="num" value={line.discount} onChange={(e) => updateLine(i, { discount: e.target.value })} /></td>
-                          <td style={{ width: 90 }}><TaxRateInput className="num" value={line.tax_rate} onChange={(v) => updateLine(i, { tax_rate: v })} /></td>
-                          <td className="num">{symbol}{formatMoney(lineAmount(line))}</td>
-                          <td>{lines.length > 1 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Remove</button>}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <button type="button" className="link-btn" onClick={addLine}>+ Add line</button>
+              <LineItemsTable
+                lines={lines}
+                setLines={setLines}
+                items={items}
+                canManageItems={canManageItems}
+                onItemCreated={addCatalogItem}
+                showHsnUnit
+                symbol={symbol}
+              />
 
               {gstTreatment === "rcm" && (
                 <p className="muted">

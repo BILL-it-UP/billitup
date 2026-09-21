@@ -632,6 +632,10 @@ textarea { resize: vertical; }
    (2026-09-21). */
 .doc-line-desc-title { font-weight: 600; }
 .doc-line-desc-detail { color: var(--muted); font-size: 0.93em; margin-top: 1px; }
+/* A section header row on the printed/emailed document (see db.js's
+   line_type comment): a plain shaded divider carrying only its own label,
+   matching how mailer.js's PDF renders the same row (2026-09-21). */
+.doc-line-header-row td { background: #f3f4f6; font-weight: 600; }
 .totals-box .doc-balance-due-row { background: #f3f4f6; font-weight: 700; margin: 4px -8px 0; padding: 8px; }
 
 .doc-amount-words { font-size: 13px; margin: 20px 0 0; }
@@ -694,6 +698,58 @@ textarea { resize: vertical; }
    (2026-09-17) — wide enough on a small screen that it needs to scroll
    sideways in its own box rather than pushing the whole page wider. */
 .line-item-table-wrap { overflow-x: auto; }
+
+/* Line item table: drag to reorder, a hover highlight, a per-line "..."
+   menu, and section headers (2026-09-21), matching the reference behavior
+   Naveen sent from Zoho's own line item table. All four land the same way
+   on Invoices, Quotes, and Credit Notes through the one shared
+   LineItemsTable component. */
+.line-item-table .line-item-drag { width: 22px; padding-left: 6px; padding-right: 0; }
+.line-drag-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); cursor: grab; padding: 2px;
+}
+.line-drag-handle:active { cursor: grabbing; }
+.line-item-row:hover .line-drag-handle, .line-item-header-row:hover .line-drag-handle { color: var(--ink); }
+/* The hover/focus blue box from Naveen's reference screenshots: the whole
+   item picker cell gets a visible outline once the pointer is over the row
+   or a field inside it has focus, instead of staying flat at all times. */
+.line-item-details-inner { border-radius: 6px; padding: 2px; border: 1px solid transparent; transition: border-color 0.1s ease; }
+.line-item-row:hover .line-item-details-inner,
+.line-item-details-inner:focus-within { border-color: #93c5fd; background: #eff6ff; }
+.line-item-actions { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+.line-item-remove { color: var(--muted); font-size: 16px; line-height: 1; }
+.line-item-remove:hover { color: #b3261e; background: var(--bg); }
+/* The portaled "..." dropdown (see LineItemMenu.jsx's own comment on why it
+   has to escape the table's scrolling wrapper), styled like the item
+   picker's own dropdown so the two portaled menus in this table read as one
+   family. */
+.line-item-menu {
+  position: fixed; z-index: 1000; width: 210px;
+  background: white; border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18); overflow: hidden;
+}
+.line-item-menu button {
+  display: block; width: 100%; text-align: left; padding: 9px 14px; border: none;
+  border-bottom: 1px solid var(--border); background: white; cursor: pointer;
+  font-size: 13px; font-weight: 500; font: inherit; color: var(--ink);
+}
+.line-item-menu button:last-child { border-bottom: none; }
+.line-item-menu button:hover { background: var(--bg); }
+/* A section header row (see db.js's line_type comment): a shaded divider
+   across the row rather than another line of qty/rate/amount fields with
+   nothing to put in them. */
+.line-item-header-row { background: #f3f4f6; }
+.line-item-header-input {
+  width: 100%; background: none; border: none; border-bottom: 1px dashed var(--border);
+  font-weight: 600; font-size: 13px; color: var(--ink); padding: 6px 2px; margin-top: 0; border-radius: 0;
+}
+.line-item-header-input:focus { outline: none; border-bottom-color: var(--accent); }
+.line-item-header-input::placeholder { font-weight: 500; color: var(--muted); }
+.line-item-add-row { display: flex; align-items: center; gap: 18px; margin-top: 4px; }
+/* "Insert Items in Bulk" modal's scrollable checkbox list. */
+.bulk-item-list { max-height: 260px; overflow-y: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+.bulk-item-list .muted { padding: 8px 4px; }
 
 /* ---- Print ----
    Printing an invoice/quote/credit note can happen from a standalone page

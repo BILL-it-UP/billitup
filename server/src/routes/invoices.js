@@ -22,6 +22,13 @@ function computeLineTotals(lineItems) {
   let taxTotal = 0;
   let discountTotal = 0;
   const computedLines = lineItems.map((line) => {
+    // A section header (Zoho's own "Insert New Header", 2026-09-21) is a
+    // plain text divider, never a billable line. Every numeric field is
+    // forced to 0 here regardless of whatever a client sends, so a stray or
+    // tampered value on a header row can never sneak into the real totals.
+    if (line.line_type === "header") {
+      return { ...line, line_type: "header", item_id: null, qty: 0, rate: 0, discount: 0, tax_rate: 0, amount: 0 };
+    }
     const qty = Number(line.qty) || 0;
     const rate = Number(line.rate) || 0;
     const discount = Number(line.discount) || 0;
@@ -32,7 +39,7 @@ function computeLineTotals(lineItems) {
     subTotal += qty * rate;
     discountTotal += discount;
     taxTotal += lineTax;
-    return { ...line, qty, rate, discount, tax_rate: taxRate, amount };
+    return { ...line, line_type: "item", qty, rate, discount, tax_rate: taxRate, amount };
   });
   const total = subTotal - discountTotal + taxTotal;
   return { computedLines, subTotal, discountTotal, taxTotal, total };
@@ -94,7 +101,7 @@ router.get("/:id", async (req, res) => {
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   const lineItems = db
-    .prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?")
+    .prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY id ASC")
     .all(invoice.id);
   const customer = invoice.customer_id
     ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id)
@@ -117,7 +124,10 @@ router.post("/", (req, res) => {
     currency, project_name, milestone_label, project_total_amount,
     retainer_applied, time_entry_ids, billable_purchase_ids, invoice_number,
   } = req.body;
-  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+  // A section header alone doesn't count as a line item. It carries no
+  // quantity or rate, so an invoice made up of nothing but headers would
+  // have nothing billable on it at all (2026-09-21).
+  if (!Array.isArray(lineItems) || lineItems.filter((l) => l.line_type !== "header").length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
   // A "walk-in / no customer" invoice made no sense for BillItUp's actual
@@ -200,8 +210,8 @@ router.post("/", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code, line_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const invoiceId = db.transaction(() => {
@@ -218,7 +228,7 @@ router.post("/", (req, res) => {
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
-      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null);
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null, line.line_type || "item");
     }
     commitInvoiceNumber();
 
@@ -268,7 +278,10 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
     currency, project_name, milestone_label, project_total_amount,
   } = req.body;
-  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+  // A section header alone doesn't count as a line item. It carries no
+  // quantity or rate, so an invoice made up of nothing but headers would
+  // have nothing billable on it at all (2026-09-21).
+  if (!Array.isArray(lineItems) || lineItems.filter((l) => l.line_type !== "header").length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
   if (!customer_id) {
@@ -277,7 +290,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   const customer = customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id) : null;
-  const existingLineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
+  const existingLineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY id ASC").all(invoice.id);
   const { computedLines: rawComputedLines, subTotal, discountTotal, taxTotal: rawTaxTotal } = computeLineTotals(lineItems);
   const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
     subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: gst_treatment || invoice.gst_treatment,
@@ -310,8 +323,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const editorUser = db.prepare("SELECT name FROM users WHERE id = ?").get(req.auth.userId);
 
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code, line_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   db.transaction(() => {
@@ -354,7 +367,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
 
     db.prepare("DELETE FROM invoice_line_items WHERE invoice_id = ?").run(invoice.id);
     for (const line of computedLines) {
-      insertLine.run(invoice.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null);
+      insertLine.run(invoice.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null, line.line_type || "item");
     }
   })();
 
@@ -604,7 +617,7 @@ router.post("/bulk-send", requireRole("owner", "admin"), async (req, res) => {
     if (!customer?.email) { skipped.push({ id, reason: "No customer email on file" }); continue; }
 
     try {
-      const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
+      const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY id ASC").all(invoice.id);
       const prefix = printPrefix(invoice.currency);
       const template = getTemplate(business, "invoice");
       const templateVars = {
@@ -651,7 +664,7 @@ router.post("/:id/send", async (req, res) => {
     return res.status(400).json({ error: "This invoice needs Owner/Admin approval before it can be sent." });
   }
 
-  const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
+  const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY id ASC").all(invoice.id);
   const customer = invoice.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
 

@@ -14,6 +14,12 @@ router.use(requireAuth);
 function computeLineTotals(lineItems) {
   let subTotal = 0, rawTaxTotal = 0, discountTotal = 0;
   const computedLines = lineItems.map((line) => {
+    // A section header (Zoho's own "Insert New Header", 2026-09-21) is a
+    // plain text divider, never a billable line. Every numeric field is
+    // forced to 0 here regardless of whatever a client sends.
+    if (line.line_type === "header") {
+      return { ...line, line_type: "header", item_id: null, qty: 0, rate: 0, discount: 0, tax_rate: 0, amount: 0 };
+    }
     const qty = Number(line.qty) || 0;
     const rate = Number(line.rate) || 0;
     const discount = Number(line.discount) || 0;
@@ -23,7 +29,7 @@ function computeLineTotals(lineItems) {
     subTotal += qty * rate;
     discountTotal += discount;
     rawTaxTotal += lineTax;
-    return { ...line, qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
+    return { ...line, line_type: "item", qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
   });
   return { computedLines, subTotal, discountTotal, taxTotal: rawTaxTotal };
 }
@@ -94,7 +100,7 @@ router.get("/:id", (req, res) => {
   const creditNote = db.prepare("SELECT * FROM credit_notes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!creditNote) return res.status(404).json({ error: "Not found" });
 
-  const lineItems = db.prepare("SELECT * FROM credit_note_line_items WHERE credit_note_id = ?").all(creditNote.id);
+  const lineItems = db.prepare("SELECT * FROM credit_note_line_items WHERE credit_note_id = ? ORDER BY id ASC").all(creditNote.id);
   const customer = creditNote.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(creditNote.customer_id) : null;
   const invoice = creditNote.invoice_id ? db.prepare("SELECT * FROM invoices WHERE id = ?").get(creditNote.invoice_id) : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
@@ -107,7 +113,9 @@ router.get("/:id", (req, res) => {
 // clamped at zero, and the invoice is marked paid once fully credited.
 router.post("/", (req, res) => {
   const { customer_id, invoice_id, credit_note_date, reason, notes, lineItems, gst_treatment } = req.body;
-  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+  // A section header alone doesn't count as a line item (2026-09-21). See
+  // the matching comment on the invoices route.
+  if (!Array.isArray(lineItems) || lineItems.filter((l) => l.line_type !== "header").length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
 
@@ -137,8 +145,8 @@ router.post("/", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const bumpCreditNoteNumber = db.prepare("UPDATE businesses SET next_credit_note_number = next_credit_note_number + 1 WHERE id = ?");
 
@@ -151,7 +159,7 @@ router.post("/", (req, res) => {
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
-      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
     }
     bumpCreditNoteNumber.run(req.auth.businessId);
     if (invoice) applyCreditNoteEffect(invoice.id, total);
@@ -172,7 +180,9 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   if (!creditNote) return res.status(404).json({ error: "Not found" });
 
   const { customer_id, invoice_id, credit_note_date, reason, notes, lineItems, gst_treatment } = req.body;
-  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+  // A section header alone doesn't count as a line item (2026-09-21). See
+  // the matching comment on the invoices route.
+  if (!Array.isArray(lineItems) || lineItems.filter((l) => l.line_type !== "header").length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
 
@@ -195,8 +205,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertLine = db.prepare(
-    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   db.transaction(() => {
@@ -217,7 +227,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
     );
     db.prepare("DELETE FROM credit_note_line_items WHERE credit_note_id = ?").run(creditNote.id);
     for (const line of computedLines) {
-      insertLine.run(creditNote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      insertLine.run(creditNote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
     }
 
     if (invoice) applyCreditNoteEffect(invoice.id, total);
@@ -258,7 +268,7 @@ router.post("/:id/send", async (req, res) => {
   const creditNote = db.prepare("SELECT * FROM credit_notes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!creditNote) return res.status(404).json({ error: "Not found" });
 
-  const lineItems = db.prepare("SELECT * FROM credit_note_line_items WHERE credit_note_id = ?").all(creditNote.id);
+  const lineItems = db.prepare("SELECT * FROM credit_note_line_items WHERE credit_note_id = ? ORDER BY id ASC").all(creditNote.id);
   const customer = creditNote.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(creditNote.customer_id) : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
 

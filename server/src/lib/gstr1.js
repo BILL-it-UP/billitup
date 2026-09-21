@@ -56,7 +56,7 @@ export function buildGstr1Report(businessId, month) {
     }
 
     const sameState = !!business.state && !!inv.customer_state && business.state === inv.customer_state;
-    const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(inv.id);
+    const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY id ASC").all(inv.id);
 
     // GSTR-1 reports at invoice+rate granularity — an invoice with two
     // different tax rates on its lines becomes two rows, one per rate.

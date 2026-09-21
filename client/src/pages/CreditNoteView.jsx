@@ -112,25 +112,39 @@ export default function CreditNoteView() {
             </tr>
           </thead>
           <tbody>
-            {lineItems.map((line, i) => {
-              const descLines = String(line.description || "").split("\n").filter(Boolean);
-              return (
-                <tr key={line.id}>
-                  <td>{i + 1}</td>
-                  <td>
-                    {descLines.map((part, idx) => (
-                      <div key={idx} className={idx === 0 ? "doc-line-desc-title" : "doc-line-desc-detail"}>
-                        {part}
-                      </div>
-                    ))}
-                  </td>
-                  <td>{formatQty(line.qty)}</td>
-                  <td>₹{formatMoney(line.rate)}</td>
-                  {showDiscount && <td>₹{formatMoney(line.discount)}</td>}
-                  <td>₹{formatMoney(line.amount)}</td>
-                </tr>
-              );
-            })}
+            {(() => {
+              const colCount = 5 + (showDiscount ? 1 : 0);
+              // Skips section headers (see db.js's line_type comment) when
+              // numbering, the same as FullInvoice.jsx (2026-09-21).
+              let itemNumber = 0;
+              return lineItems.map((line) => {
+                if (line.line_type === "header") {
+                  return (
+                    <tr key={line.id} className="doc-line-header-row">
+                      <td colSpan={colCount}>{line.description}</td>
+                    </tr>
+                  );
+                }
+                itemNumber += 1;
+                const descLines = String(line.description || "").split("\n").filter(Boolean);
+                return (
+                  <tr key={line.id}>
+                    <td>{itemNumber}</td>
+                    <td>
+                      {descLines.map((part, idx) => (
+                        <div key={idx} className={idx === 0 ? "doc-line-desc-title" : "doc-line-desc-detail"}>
+                          {part}
+                        </div>
+                      ))}
+                    </td>
+                    <td>{formatQty(line.qty)}</td>
+                    <td>₹{formatMoney(line.rate)}</td>
+                    {showDiscount && <td>₹{formatMoney(line.discount)}</td>}
+                    <td>₹{formatMoney(line.amount)}</td>
+                  </tr>
+                );
+              });
+            })()}
           </tbody>
         </table>
 

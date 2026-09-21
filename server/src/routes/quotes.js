@@ -17,6 +17,12 @@ router.use(requireAuth);
 function computeLineTotals(lineItems) {
   let subTotal = 0, rawTaxTotal = 0, discountTotal = 0;
   const computedLines = lineItems.map((line) => {
+    // A section header (Zoho's own "Insert New Header", 2026-09-21) is a
+    // plain text divider, never a billable line. Every numeric field is
+    // forced to 0 here regardless of whatever a client sends.
+    if (line.line_type === "header") {
+      return { ...line, line_type: "header", item_id: null, qty: 0, rate: 0, discount: 0, tax_rate: 0, amount: 0 };
+    }
     const qty = Number(line.qty) || 0;
     const rate = Number(line.rate) || 0;
     const discount = Number(line.discount) || 0;
@@ -26,7 +32,7 @@ function computeLineTotals(lineItems) {
     subTotal += qty * rate;
     discountTotal += discount;
     rawTaxTotal += lineTax;
-    return { ...line, qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
+    return { ...line, line_type: "item", qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
   });
   return { computedLines, subTotal, discountTotal, taxTotal: rawTaxTotal };
 }
@@ -62,7 +68,7 @@ router.get("/:id", (req, res) => {
   const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!quote) return res.status(404).json({ error: "Not found" });
 
-  const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ?").all(quote.id);
+  const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY id ASC").all(quote.id);
   const customer = quote.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(quote.customer_id) : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
 
@@ -71,7 +77,9 @@ router.get("/:id", (req, res) => {
 
 router.post("/", (req, res) => {
   const { customer_id, quote_date, expiry_date, reference, notes, lineItems, gst_treatment } = req.body;
-  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+  // A section header alone doesn't count as a line item (2026-09-21). See
+  // the matching comment on the invoices route.
+  if (!Array.isArray(lineItems) || lineItems.filter((l) => l.line_type !== "header").length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
 
@@ -93,8 +101,8 @@ router.post("/", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const bumpQuoteNumber = db.prepare("UPDATE businesses SET next_quote_number = next_quote_number + 1 WHERE id = ?");
 
@@ -107,7 +115,7 @@ router.post("/", (req, res) => {
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
-      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
     }
     bumpQuoteNumber.run(req.auth.businessId);
     return id;
@@ -125,7 +133,9 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   if (!quote) return res.status(404).json({ error: "Not found" });
 
   const { customer_id, quote_date, expiry_date, reference, notes, lineItems, gst_treatment } = req.body;
-  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+  // A section header alone doesn't count as a line item (2026-09-21). See
+  // the matching comment on the invoices route.
+  if (!Array.isArray(lineItems) || lineItems.filter((l) => l.line_type !== "header").length === 0) {
     return res.status(400).json({ error: "At least one line item is required" });
   }
 
@@ -139,8 +149,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertLine = db.prepare(
-    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   db.transaction(() => {
@@ -156,7 +166,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
     );
     db.prepare("DELETE FROM quote_line_items WHERE quote_id = ?").run(quote.id);
     for (const line of computedLines) {
-      insertLine.run(quote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      insertLine.run(quote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
     }
   })();
 
@@ -204,7 +214,7 @@ router.post("/:id/convert", (req, res) => {
   if (!quote) return res.status(404).json({ error: "Not found" });
   if (quote.converted_invoice_id) return res.status(400).json({ error: "This quote was already converted to an invoice" });
 
-  const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ?").all(quote.id);
+  const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY id ASC").all(quote.id);
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
   const invoiceNumber = `${business.invoice_prefix || "INV-"}${String(business.next_invoice_number).padStart(6, "0")}`;
 
@@ -215,8 +225,8 @@ router.post("/:id/convert", (req, res) => {
      VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const bumpInvoiceNumber = db.prepare("UPDATE businesses SET next_invoice_number = next_invoice_number + 1 WHERE id = ?");
   const markConverted = db.prepare("UPDATE quotes SET status = 'converted', converted_invoice_id = ? WHERE id = ?");
@@ -229,8 +239,12 @@ router.post("/:id/convert", (req, res) => {
       randomUUID().replace(/-/g, ""), quote.gst_treatment || "gst", quote.cgst || 0, quote.sgst || 0, quote.igst || 0
     );
     const id = result.lastInsertRowid;
+    // Carries a quote's own section headers (see db.js's line_type comment)
+    // across into the new invoice unchanged, so a converted quote's grouping
+    // survives the conversion instead of flattening back into one plain list
+    // (2026-09-21).
     for (const line of lineItems) {
-      insertLine.run(id, line.item_id, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+      insertLine.run(id, line.item_id, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
     }
     bumpInvoiceNumber.run(req.auth.businessId);
     markConverted.run(id, quote.id);
@@ -245,7 +259,7 @@ router.post("/:id/send", async (req, res) => {
   const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!quote) return res.status(404).json({ error: "Not found" });
 
-  const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ?").all(quote.id);
+  const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY id ASC").all(quote.id);
   const customer = quote.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(quote.customer_id) : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
 

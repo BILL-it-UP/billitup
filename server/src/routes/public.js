@@ -33,7 +33,7 @@ function publicBusinessFields(business) {
 function loadInvoiceByToken(token) {
   const invoice = db.prepare("SELECT * FROM invoices WHERE public_token = ? AND deleted_at IS NULL").get(token);
   if (!invoice) return null;
-  const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ?").all(invoice.id);
+  const lineItems = db.prepare("SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY id ASC").all(invoice.id);
   const customer = invoice.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null;
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(invoice.business_id);
   return { invoice, lineItems, customer, business };

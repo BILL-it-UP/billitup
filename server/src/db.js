@@ -870,6 +870,16 @@ ensureColumn("items", "purchase_description", "purchase_description TEXT");
 ensureColumn("invoice_line_items", "unit", "unit TEXT");
 ensureColumn("invoice_line_items", "hsn_sac_code", "hsn_sac_code TEXT");
 
+// A section header, Zoho's own "Insert New Header" (2026-09-21). A plain
+// text divider a business can drop between groups of lines (e.g. splitting
+// "Design Applications" from "Filing Fees"), carrying only its own text in
+// description, never a real quantity or rate. Every numeric column on a
+// header row is always stored as 0. Every existing row already defaults to
+// 'item', so nothing already saved changes meaning.
+ensureColumn("invoice_line_items", "line_type", "line_type TEXT DEFAULT 'item'");
+ensureColumn("quote_line_items", "line_type", "line_type TEXT DEFAULT 'item'");
+ensureColumn("credit_note_line_items", "line_type", "line_type TEXT DEFAULT 'item'");
+
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the
 // "Copy shareable link" button always has something to share, not just

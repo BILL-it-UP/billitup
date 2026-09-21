@@ -112,12 +112,28 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     doc.fillColor("#000");
 
     let y = tableTop + 26;
-    lineItems.forEach((line, i) => {
+    // A running count of real, billable lines only. A section header (see
+    // db.js's line_type comment) never gets its own number, the same way
+    // Zoho's own printed documents leave a header row out of the numbering
+    // (2026-09-21).
+    let itemNumber = 0;
+    lineItems.forEach((line) => {
+      if (line.line_type === "header") {
+        // Printed as a plain shaded band across the full table width, with
+        // just its own label, rather than another row of columns with
+        // nothing in most of them.
+        doc.rect(40, y, 520, 18).fill("#eef0f3");
+        doc.fillColor("#000").font("Helvetica-Bold").fontSize(9).text(line.description || "", 44, y + 5, { width: 512 });
+        doc.font("Helvetica");
+        y += 20;
+        return;
+      }
+      itemNumber += 1;
       x = 40;
       const qtyWithUnit = line.unit ? `${line.qty} ${line.unit}` : String(line.qty);
       const cells = showHsn
-        ? [String(i + 1), line.description, line.hsn_sac_code || "", qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`]
-        : [String(i + 1), line.description, qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`];
+        ? [String(itemNumber), line.description, line.hsn_sac_code || "", qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`]
+        : [String(itemNumber), line.description, qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`];
       cells.forEach((c, ci) => { doc.fontSize(9).text(c, x, y, { width: cols[ci] }); x += cols[ci]; });
       y += 18;
     });

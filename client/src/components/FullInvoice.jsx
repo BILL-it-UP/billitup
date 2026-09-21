@@ -79,6 +79,12 @@ export default function FullInvoice({ invoice }) {
         // treatment here: the column only earns its place once a line
         // actually has a discount on it.
         const showDiscount = lineItems.some((l) => Number(l.discount) > 0);
+        const colCount = 5 + (showHsn ? 1 : 0) + (showDiscount ? 1 : 0);
+        // A running count of real, billable lines only, skipping section
+        // headers (see db.js's line_type comment) so a header never takes a
+        // number of its own, the same way Zoho's own printed documents leave
+        // a header row out of the numbering (2026-09-21).
+        let itemNumber = 0;
         return (
           <table className="table doc-line-items">
             <thead>
@@ -89,7 +95,15 @@ export default function FullInvoice({ invoice }) {
               </tr>
             </thead>
             <tbody>
-              {lineItems.map((line, i) => {
+              {lineItems.map((line) => {
+                if (line.line_type === "header") {
+                  return (
+                    <tr key={line.id} className="doc-line-header-row">
+                      <td colSpan={colCount}>{line.description}</td>
+                    </tr>
+                  );
+                }
+                itemNumber += 1;
                 // A description can be more than one line: the item's own
                 // name on top, further detail (part numbers, a bundle's
                 // contents) below it, the same shape Zoho prints, with the
@@ -100,7 +114,7 @@ export default function FullInvoice({ invoice }) {
                 const descLines = String(line.description || "").split("\n").filter(Boolean);
                 return (
                   <tr key={line.id}>
-                    <td>{i + 1}</td>
+                    <td>{itemNumber}</td>
                     <td>
                       {descLines.map((part, idx) => (
                         <div key={idx} className={idx === 0 ? "doc-line-desc-title" : "doc-line-desc-detail"}>
