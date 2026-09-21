@@ -709,6 +709,17 @@ textarea { resize: vertical; }
     max-width: none !important; border: none; margin: 0; box-shadow: none;
   }
   .invoice-doc.invoice-full { padding: 0; }
+  /* Blank-page bug, found 2026-09-21: .invoice-doc-wrap (added later, for
+     the status ribbon) is "position: relative; overflow: hidden", sized to
+     fit its only in-flow child. Pulling .invoice-doc out to
+     "position: absolute" above removes it from that flow, so the wrap
+     collapses to zero height, and its own overflow: hidden then clips the
+     absolutely positioned invoice to nothing, an entirely blank printed
+     page. Neutralizing the wrap here, and the master-detail pane's own
+     scroll box above it, restores the "pulled out to the page origin"
+     behavior this block was written for. */
+  .invoice-doc-wrap { position: static !important; overflow: visible !important; height: auto !important; }
+  .invoice-detail-pane { overflow: visible !important; height: auto !important; }
 }
 
 /* ---- Public (no-login) invoice view ---- */
