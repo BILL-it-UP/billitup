@@ -190,18 +190,18 @@ export default function Trash() {
 
       {!loading && (
         <>
-          <div className="list-toolbar" style={{ flexWrap: "wrap" }}>
+          <div className="tab-bar">
             {TABS.map((t) => {
               const count = rowsByTab[t.key]?.length || 0;
               return (
                 <button
                   key={t.key}
                   type="button"
-                  className={`link-btn${activeKey === t.key ? " active" : ""}`}
-                  style={activeKey === t.key ? { fontWeight: 600, textDecoration: "underline" } : undefined}
+                  className={`tab-btn${activeKey === t.key ? " active" : ""}`}
                   onClick={() => setActiveKey(t.key)}
                 >
-                  {t.label}{count > 0 ? ` (${count})` : ""}
+                  {t.label}
+                  {count > 0 && <span className="tab-btn-badge">{count}</span>}
                 </button>
               );
             })}

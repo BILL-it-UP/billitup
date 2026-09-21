@@ -227,9 +227,18 @@ router.get("/errors", (req, res) => {
 // Marking an error resolved (with an optional note on how) is the "history
 // of problem, status, and how we solved it" Naveen asked for — the row
 // itself becomes that history entry rather than needing a separate log.
+// Resolving used to be silent: the business had no way to know unless they
+// happened to open Support and check the System Health panel themselves. An
+// optional notify_message now posts straight into a new support ticket for
+// that business, the same channel they already use to talk to Naveen, so it
+// shows up in their Support inbox with the usual unread dot the moment it's
+// sent (2026-09-21). business_last_seen_at is set to NULL rather than left
+// at its default (which stamps "now"), otherwise the unread-count query
+// would treat this very first message as already seen and the "notification"
+// would never show as unread.
 router.put("/errors/:id", (req, res) => {
   if (!checkAdminSecret(req, res)) return;
-  const { status, resolution_notes } = req.body || {};
+  const { status, resolution_notes, notify_message } = req.body || {};
   if (!["open", "resolved"].includes(status)) return res.status(400).json({ error: "Invalid status" });
   db.prepare(
     `UPDATE error_log SET status = ?, resolution_notes = ?, resolved_at = CASE WHEN ? = 'resolved' THEN datetime('now') ELSE NULL END
@@ -237,6 +246,17 @@ router.put("/errors/:id", (req, res) => {
   ).run(status, resolution_notes || null, status, req.params.id);
   const updated = db.prepare("SELECT * FROM error_log WHERE id = ?").get(req.params.id);
   if (!updated) return res.status(404).json({ error: "Not found" });
+
+  if (status === "resolved" && notify_message && notify_message.trim() && updated.business_id) {
+    const ticketId = db
+      .prepare(
+        `INSERT INTO support_tickets (business_id, subject, status, business_last_seen_at) VALUES (?, ?, 'resolved', NULL)`
+      )
+      .run(updated.business_id, "An issue you reported has been fixed").lastInsertRowid;
+    db.prepare(`INSERT INTO support_messages (ticket_id, sender, sender_name, message) VALUES (?, 'admin', 'Naveen', ?)`)
+      .run(ticketId, notify_message.trim());
+  }
+
   res.json(updated);
 });
 

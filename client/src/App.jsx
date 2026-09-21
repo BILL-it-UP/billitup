@@ -128,6 +128,19 @@ function Shell({ children }) {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("billitup_sidebar_collapsed") === "1"; } catch { return false; }
   });
+  const [unreadSupportCount, setUnreadSupportCount] = useState(0);
+
+  // A one-time check (not polling) for unread replies on this business's own
+  // Support conversations, including the notice a Master Admin resolve now
+  // posts there, so a dot on the sidebar link actually catches someone's eye
+  // instead of the reply only surfacing once they happen to open Support on
+  // their own (2026-09-21).
+  useEffect(() => {
+    if (!user) return;
+    api.listMySupportTickets()
+      .then((tickets) => setUnreadSupportCount(tickets.reduce((sum, t) => sum + (t.unread_count || 0), 0)))
+      .catch(() => {});
+  }, []);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -169,6 +182,9 @@ function Shell({ children }) {
             >
               <Icon />
               <span className="sidebar-link-label">{label}</span>
+              {to === "/support" && unreadSupportCount > 0 && (
+                <span className="support-unread-dot" style={{ marginLeft: "auto" }} title={`${unreadSupportCount} new reply`} />
+              )}
             </NavLink>
           ))}
         </nav>

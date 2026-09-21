@@ -57,8 +57,11 @@ export const adminApi = {
   // out on purpose.
   getBusinessErrors: (businessId) => adminRequest(`/api/admin/businesses/${businessId}/errors`),
   listAllErrors: () => adminRequest("/api/admin/errors"),
-  setErrorStatus: (errorId, status, resolutionNotes) =>
-    adminRequest(`/api/admin/errors/${errorId}`, { method: "PUT", body: { status, resolution_notes: resolutionNotes } }),
+  setErrorStatus: (errorId, status, resolutionNotes, notifyMessage) =>
+    adminRequest(`/api/admin/errors/${errorId}`, {
+      method: "PUT",
+      body: { status, resolution_notes: resolutionNotes, notify_message: notifyMessage },
+    }),
 
   // Support chat — one business's threads (for their Business Health page)
   // and the cross-business inbox (for the main Master Admin screen).

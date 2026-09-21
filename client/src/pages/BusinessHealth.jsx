@@ -17,16 +17,42 @@ const STATUS_LABELS = { open: "Open", in_progress: "In progress", resolved: "Res
 // main Master Admin screen can show the exact same row, with one addition —
 // a Business column, since that feed isn't already scoped to one business
 // the way this page's own Errors section is (2026-09-16).
+// A ready-to-send starting point for the "your issue is fixed" notice, so
+// Naveen isn't staring at a blank box every time — it's built from whatever
+// he's already typed into "How was this fixed?", and stays editable before
+// it actually sends (2026-09-21).
+function suggestNotifyMessage(notes) {
+  const base = "Hi, the issue you reported has been fixed and is live now.";
+  const trimmedNotes = (notes || "").trim();
+  return trimmedNotes ? `${base} ${trimmedNotes}` : `${base} Please let us know if you run into it again.`;
+}
+
 export function ErrorRow({ error, onUpdated, showBusiness }) {
   const [resolving, setResolving] = useState(false);
   const [notes, setNotes] = useState(error.resolution_notes || "");
+  const [notify, setNotify] = useState(Boolean(error.business_id));
+  const [notifyMessage, setNotifyMessage] = useState(suggestNotifyMessage(error.resolution_notes));
+  const [notifyEdited, setNotifyEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const totalCols = showBusiness ? 7 : 6;
+
+  // Keeps the suggested text in sync with "How was this fixed?" as Naveen
+  // types it, right up until he actually edits the notification text itself
+  // — once he's touched it, his own wording wins and stops being overwritten.
+  const handleNotesChange = (value) => {
+    setNotes(value);
+    if (!notifyEdited) setNotifyMessage(suggestNotifyMessage(value));
+  };
 
   const save = async (status) => {
     setBusy(true);
     try {
-      const updated = await adminApi.setErrorStatus(error.id, status, notes);
+      const updated = await adminApi.setErrorStatus(
+        error.id,
+        status,
+        notes,
+        status === "resolved" && notify ? notifyMessage : null
+      );
       onUpdated(updated);
       setResolving(false);
     } finally {
@@ -64,12 +90,31 @@ export function ErrorRow({ error, onUpdated, showBusiness }) {
       {resolving && (
         <tr className="admin-detail-row">
           <td colSpan={totalCols}>
-            <div className="admin-detail-panel">
-              <label style={{ flex: 1 }}>How was this fixed?
-                <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Restarted the mail queue, was a stuck SMTP connection" />
+            <div className="admin-detail-panel" style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <label>How was this fixed?
+                <textarea rows={2} value={notes} onChange={(e) => handleNotesChange(e.target.value)} placeholder="e.g. Restarted the mail queue, was a stuck SMTP connection" />
               </label>
-              <button type="button" className="btn admin-copy-btn" onClick={() => save("resolved")} disabled={busy}>
-                {busy ? "Saving..." : "Mark resolved"}
+              {error.business_id ? (
+                <>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+                    {" "}Also notify the business
+                  </label>
+                  {notify && (
+                    <label>Message to send them (posted to their Support inbox)
+                      <textarea
+                        rows={2}
+                        value={notifyMessage}
+                        onChange={(e) => { setNotifyMessage(e.target.value); setNotifyEdited(true); }}
+                      />
+                    </label>
+                  )}
+                </>
+              ) : (
+                <p className="muted" style={{ margin: 0 }}>No business tied to this error, so there's nobody to notify.</p>
+              )}
+              <button type="button" className="btn admin-copy-btn" style={{ alignSelf: "flex-start" }} onClick={() => save("resolved")} disabled={busy}>
+                {busy ? "Saving..." : notify && error.business_id ? "Mark Resolved & Notify" : "Mark resolved"}
               </button>
             </div>
           </td>
