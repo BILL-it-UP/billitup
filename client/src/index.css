@@ -121,7 +121,13 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 .topbar-logout { display: flex; padding: 6px; color: var(--muted); background: transparent; }
 .topbar-logout:hover { color: var(--accent); }
 
-main { max-width: 1120px; margin: 0 auto; padding: 28px 24px 60px; width: 100%; box-sizing: border-box; }
+/* Widened from 1120px (2026-09-21): Naveen flagged the empty gutters this
+   left on either side of the actual page content, sidebar, then a wide gap,
+   then the page, then another gap out to the topbar's own full-width edge.
+   1440px keeps a sensible reading width on the narrower pages (forms,
+   settings) while giving wide ones (the line item table especially) real
+   room before they need their own horizontal scroll. */
+main { max-width: 1440px; margin: 0 auto; padding: 28px 24px 60px; width: 100%; box-sizing: border-box; }
 
 @media (max-width: 720px) {
   :root { --sidebar-width: 72px; }
@@ -747,6 +753,10 @@ textarea { resize: vertical; }
 .line-item-header-input:focus { outline: none; border-bottom-color: var(--accent); }
 .line-item-header-input::placeholder { font-weight: 500; color: var(--muted); }
 .line-item-add-row { display: flex; align-items: center; gap: 18px; margin-top: 4px; }
+/* The HSN/SAC show/hide toggle (2026-09-21), Invoice only. Sits above the
+   table rather than crowding the header row itself. */
+.line-item-table-toolbar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.line-item-table-toolbar .checkbox-label { font-size: 13px; color: var(--muted); }
 /* "Insert Items in Bulk" modal's scrollable checkbox list. */
 .bulk-item-list { max-height: 260px; overflow-y: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
 .bulk-item-list .muted { padding: 8px 4px; }

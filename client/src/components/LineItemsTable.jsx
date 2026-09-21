@@ -37,6 +37,25 @@ export default function LineItemsTable({
   // drop time, so re-rendering on every dragover would just be wasted work.
   const dragIndexRef = useRef(null);
 
+  // Whether the HSN/SAC column is shown at all (2026-09-21). Most lines on
+  // most invoices never carry an HSN/SAC code, so showing an almost always
+  // empty column by default just crowds the table, Naveen's own complaint
+  // comparing it against Zoho's tighter layout. A toggle instead of always
+  // rendering it, remembered per browser the same way the sidebar's own
+  // collapsed state already is, so a business that does use HSN/SAC only
+  // has to turn it on once.
+  const [showHsnColumn, setShowHsnColumn] = useState(() => {
+    try { return localStorage.getItem("billitup_show_hsn_column") === "1"; } catch { return false; }
+  });
+  const toggleHsnColumn = () => {
+    setShowHsnColumn((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("billitup_show_hsn_column", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
+  const showHsn = showHsnUnit && showHsnColumn;
+
   const updateLine = (index, patch) => {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   };
@@ -120,17 +139,25 @@ export default function LineItemsTable({
     });
   };
 
-  const colSpan = showHsnUnit ? 10 : 8;
+  const colSpan = 8 + (showHsnUnit ? 1 : 0) + (showHsn ? 1 : 0);
 
   return (
     <>
+      {showHsnUnit && (
+        <div className="line-item-table-toolbar">
+          <label className="checkbox-label">
+            <input type="checkbox" checked={showHsnColumn} onChange={toggleHsnColumn} />
+            Show HSN/SAC column
+          </label>
+        </div>
+      )}
       <div className="line-item-table-wrap">
         <table className="table line-item-table">
           <thead>
             <tr>
               <th />
               <th>Item &amp; Description</th>
-              {showHsnUnit && <th>HSN/SAC</th>}
+              {showHsn && <th>HSN/SAC</th>}
               <th>Qty</th>
               {showHsnUnit && <th>Unit</th>}
               <th>Rate</th>
@@ -218,7 +245,7 @@ export default function LineItemsTable({
                       />
                     </div>
                   </td>
-                  {showHsnUnit && (
+                  {showHsn && (
                     <td style={{ width: 90 }}>
                       <input className="num" value={line.hsn_sac_code || ""} onChange={(e) => updateLine(i, { hsn_sac_code: e.target.value })} />
                     </td>
