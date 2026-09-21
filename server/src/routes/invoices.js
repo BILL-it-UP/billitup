@@ -53,7 +53,7 @@ router.get("/", (req, res) => {
       `SELECT invoices.*, customers.name AS customer_name,
         (invoices.status <> 'cancelled' AND invoices.balance_due > 0 AND invoices.due_date IS NOT NULL AND invoices.due_date < date('now')) AS is_overdue
        FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
-       WHERE invoices.business_id = ? ORDER BY invoices.invoice_date DESC, invoices.id DESC`
+       WHERE invoices.business_id = ? AND invoices.deleted_at IS NULL ORDER BY invoices.invoice_date DESC, invoices.id DESC`
     )
     .all(req.auth.businessId);
   res.json(rows);
@@ -71,10 +71,25 @@ router.get("/next-number", (req, res) => {
   res.json({ invoiceNumber, mode: business.invoice_number_mode || "auto" });
 });
 
+// Trash — see items.js and db.js's deleted_at comment for the shared
+// pattern. Registered before GET /:id so the literal path "/trash" isn't
+// swallowed by the :id wildcard.
+router.get("/trash", requireRole("owner", "admin"), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT invoices.*, customers.name AS customer_name
+       FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
+       WHERE invoices.business_id = ? AND invoices.deleted_at IS NOT NULL
+       ORDER BY invoices.deleted_at DESC`
+    )
+    .all(req.auth.businessId);
+  res.json(rows);
+});
+
 // Full invoice with line items + customer + business, shaped for the print/PDF view
 router.get("/:id", async (req, res) => {
   const invoice = db
-    .prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?")
+    .prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL")
     .get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
@@ -245,7 +260,7 @@ router.post("/", (req, res) => {
 // is snapshotted into invoice_edit_history first, so a previous version can
 // always be looked back at later, however the numbers changed.
 router.put("/:id", requireRole("owner", "admin"), (req, res) => {
-  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   const {
@@ -347,14 +362,36 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   res.json(updated);
 });
 
-// A real, permanent delete, separate from Cancel (see PUT /:id/status),
-// which only ever changes an invoice's status and always keeps it around
-// for the financial trail. Cancel is right for a real invoice that's been
-// superseded; Delete is for cleaning up a mistake, a duplicate, or (the
-// case this was actually built for, 2026-09-20) test/sample invoices from
-// before a business's real Zoho Books history was imported, which can be
-// in any status, including Paid, so this deliberately doesn't restrict by
-// status the way Cancel does.
+// A plain, reversible delete — the invoice just moves to the Trash (see
+// items.js and db.js's deleted_at comment for the same pattern repeated
+// across every deletable resource, 2026-09-20). Nothing else is touched:
+// whatever this invoice references, or whatever references it, stays
+// exactly as it was, since the row hasn't actually gone anywhere. Only the
+// real, unrecoverable delete below (DELETE /:id/permanent) needs to unwind
+// any of that.
+router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
+  const result = db
+    .prepare("UPDATE invoices SET deleted_at = datetime('now') WHERE id = ? AND business_id = ? AND deleted_at IS NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Invoice not found." });
+  res.status(204).end();
+});
+
+router.post("/:id/restore", requireRole("owner", "admin"), (req, res) => {
+  const result = db
+    .prepare("UPDATE invoices SET deleted_at = NULL WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
+  res.json(db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.id));
+});
+
+// A real, permanent delete — only ever reachable from the Trash page, on an
+// invoice that's already been soft deleted above. Separate from Cancel (see
+// PUT /:id/status), which only ever changes an invoice's status and always
+// keeps it around for the financial trail. Cancel is right for a real
+// invoice that's been superseded; this is for actually removing a mistake,
+// a duplicate, or test/sample invoices from before a business's real Zoho
+// Books history was imported.
 //
 // Blocked only when a credit note was issued against this invoice. That's
 // real financial adjustment history pointing at this document, and letting
@@ -367,15 +404,16 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
 // billable expenses go back to being unbilled so they can be put on a
 // different invoice, and any retainer amount this invoice drew down is
 // refunded back to the customer's balance. Owner/Admin only, same tier as
-// editing an invoice.
-router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
-  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
-  if (!invoice) return res.status(404).json({ error: "Not found" });
+// editing an invoice (2026-09-20: moved here from the plain DELETE route
+// now that a plain delete just trashes the invoice instead).
+router.delete("/:id/permanent", requireRole("owner", "admin"), (req, res) => {
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL").get(req.params.id, req.auth.businessId);
+  if (!invoice) return res.status(404).json({ error: "Not found in trash" });
 
   const creditNote = db.prepare("SELECT id FROM credit_notes WHERE invoice_id = ?").get(invoice.id);
   if (creditNote) {
     return res.status(409).json({
-      error: "This invoice has a credit note issued against it, so it can't be deleted. Credit notes preserve the financial trail. Delete the credit note first if you're sure you want to remove both.",
+      error: "This invoice has a credit note issued against it, so it can't be permanently deleted. Credit notes preserve the financial trail. Delete the credit note first if you're sure you want to remove both.",
     });
   }
 
@@ -402,7 +440,7 @@ router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
 // exactly what an earlier version said. Owner/Admin only, same sensitivity
 // level as Staff Logins' login-activity list.
 router.get("/:id/history", requireRole("owner", "admin"), (req, res) => {
-  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   const rows = db
@@ -412,7 +450,7 @@ router.get("/:id/history", requireRole("owner", "admin"), (req, res) => {
 });
 
 router.post("/:id/payments", (req, res) => {
-  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   const { amount, mode, notes, paid_at, tds_amount } = req.body;
@@ -447,7 +485,7 @@ router.put("/:id/status", (req, res) => {
   if (!["draft", "sent", "paid", "partially_paid", "overdue", "cancelled"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
-  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   // Cancelling only makes sense for an invoice nobody has paid against yet —
@@ -473,7 +511,7 @@ router.put("/:id/status", (req, res) => {
 // require_invoice_approval is on (see db.js) — the only way an invoice ever
 // leaves 'pending', since editing or re-saving it doesn't touch this field.
 router.put("/:id/approve", requireRole("owner", "admin"), (req, res) => {
-  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
   db.prepare("UPDATE invoices SET approval_status = 'approved' WHERE id = ?").run(invoice.id);
   res.json(db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoice.id));
@@ -487,7 +525,7 @@ router.put("/:id/gst-ims-status", (req, res) => {
   if (status && !["pending", "accepted", "rejected"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
-  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
   db.prepare("UPDATE invoices SET gst_ims_status = ? WHERE id = ?").run(status || null, invoice.id);
   res.json(db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoice.id));
@@ -498,14 +536,14 @@ router.put("/:id/gst-ims-status", (req, res) => {
 // logged-in role can read/post (same tier as the plain status field), since
 // this is meant to capture whoever on the team is actually handling it.
 router.get("/:id/comments", (req, res) => {
-  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
   const rows = db.prepare("SELECT * FROM invoice_comments WHERE invoice_id = ? ORDER BY created_at ASC").all(invoice.id);
   res.json(rows);
 });
 
 router.post("/:id/comments", (req, res) => {
-  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
   const message = (req.body?.message || "").trim();
   if (!message) return res.status(400).json({ error: "message is required" });
@@ -530,7 +568,7 @@ router.post("/bulk-status", requireRole("owner", "admin"), (req, res) => {
   const updated = [];
   const skipped = [];
   for (const id of ids) {
-    const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(id, req.auth.businessId);
+    const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(id, req.auth.businessId);
     if (!invoice) { skipped.push({ id, reason: "Not found" }); continue; }
     if (status === "cancelled") {
       const amountPaid = invoice.total - invoice.balance_due;
@@ -559,7 +597,7 @@ router.post("/bulk-send", requireRole("owner", "admin"), async (req, res) => {
   const sent = [];
   const skipped = [];
   for (const id of ids) {
-    const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(id, req.auth.businessId);
+    const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(id, req.auth.businessId);
     if (!invoice) { skipped.push({ id, reason: "Not found" }); continue; }
     if (invoice.approval_status === "pending") { skipped.push({ id, reason: "Needs approval first" }); continue; }
     const customer = invoice.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(invoice.customer_id) : null;
@@ -607,7 +645,7 @@ router.post("/bulk-send", requireRole("owner", "admin"), async (req, res) => {
 
 // Email the invoice to the customer (or an override address) as a PDF attachment.
 router.post("/:id/send", async (req, res) => {
-  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const invoice = db.prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!invoice) return res.status(404).json({ error: "Not found" });
   if (invoice.approval_status === "pending") {
     return res.status(400).json({ error: "This invoice needs Owner/Admin approval before it can be sent." });

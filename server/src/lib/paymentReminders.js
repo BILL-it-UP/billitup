@@ -90,7 +90,7 @@ export async function runDueReminders() {
       .prepare(
         `SELECT * FROM invoices
          WHERE business_id = ? AND status NOT IN ('draft', 'paid', 'cancelled')
-           AND balance_due > 0 AND due_date IS NOT NULL`
+           AND balance_due > 0 AND due_date IS NOT NULL AND deleted_at IS NULL`
       )
       .all(business.id);
 

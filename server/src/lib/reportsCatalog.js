@@ -60,7 +60,7 @@ function date(key, label) { return { key, label, type: "date" }; }
 // --- Sales -------------------------------------------------------------
 
 function salesByCustomer(businessId, { from, to, customerId }) {
-  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'"];
+  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'", "invoices.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("invoices.invoice_date", from, to, clauses, params);
   if (customerId) { clauses.push("invoices.customer_id = ?"); params.push(customerId); }
@@ -81,7 +81,7 @@ function salesByCustomer(businessId, { from, to, customerId }) {
 }
 
 function salesByItem(businessId, { from, to, customerId }) {
-  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'"];
+  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'", "invoices.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("invoices.invoice_date", from, to, clauses, params);
   if (customerId) { clauses.push("invoices.customer_id = ?"); params.push(customerId); }
@@ -97,7 +97,7 @@ function salesByItem(businessId, { from, to, customerId }) {
 }
 
 function salesSummary(businessId, { from, to, customerId }) {
-  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'"];
+  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'", "invoices.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("invoices.invoice_date", from, to, clauses, params);
   if (customerId) { clauses.push("invoices.customer_id = ?"); params.push(customerId); }
@@ -126,7 +126,7 @@ function salesSummary(businessId, { from, to, customerId }) {
 // --- Receivables ---------------------------------------------------------
 
 function invoiceDetails(businessId, { from, to, customerId, status }) {
-  const clauses = ["invoices.business_id = ?"];
+  const clauses = ["invoices.business_id = ?", "invoices.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("invoices.invoice_date", from, to, clauses, params);
   if (customerId) { clauses.push("invoices.customer_id = ?"); params.push(customerId); }
@@ -148,7 +148,7 @@ function invoiceDetails(businessId, { from, to, customerId, status }) {
 }
 
 function quoteDetails(businessId, { from, to, customerId, status }) {
-  const clauses = ["quotes.business_id = ?"];
+  const clauses = ["quotes.business_id = ?", "quotes.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("quotes.quote_date", from, to, clauses, params);
   if (customerId) { clauses.push("quotes.customer_id = ?"); params.push(customerId); }
@@ -169,7 +169,7 @@ function quoteDetails(businessId, { from, to, customerId, status }) {
 }
 
 function customerBalanceSummary(businessId, { from, to, customerId }) {
-  const onClauses = ["invoices.customer_id = customers.id", "invoices.business_id = customers.business_id", "invoices.status <> 'cancelled'"];
+  const onClauses = ["invoices.customer_id = customers.id", "invoices.business_id = customers.business_id", "invoices.status <> 'cancelled'", "invoices.deleted_at IS NULL"];
   const onParams = [];
   pushDateRange("invoices.invoice_date", from, to, onClauses, onParams);
   const whereClauses = ["customers.business_id = ?"];
@@ -194,7 +194,7 @@ function customerBalanceSummary(businessId, { from, to, customerId }) {
 }
 
 function receivableSummary(businessId, { from, to, customerId }) {
-  const clauses = ["business_id = ?", "status <> 'cancelled'"];
+  const clauses = ["business_id = ?", "status <> 'cancelled'", "deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("invoice_date", from, to, clauses, params);
   if (customerId) { clauses.push("customer_id = ?"); params.push(customerId); }
@@ -212,7 +212,7 @@ function receivableSummary(businessId, { from, to, customerId }) {
 }
 
 function receivableDetails(businessId, { from, to, customerId }) {
-  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'", "invoices.balance_due > 0"];
+  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'", "invoices.balance_due > 0", "invoices.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("invoices.invoice_date", from, to, clauses, params);
   if (customerId) { clauses.push("invoices.customer_id = ?"); params.push(customerId); }
@@ -232,7 +232,7 @@ function receivableDetails(businessId, { from, to, customerId }) {
 }
 
 function arAgingSummary(businessId, { customerId }) {
-  const clauses = ["business_id = ?", "status <> 'cancelled'", "balance_due > 0"];
+  const clauses = ["business_id = ?", "status <> 'cancelled'", "balance_due > 0", "deleted_at IS NULL"];
   const params = [businessId];
   if (customerId) { clauses.push("customer_id = ?"); params.push(customerId); }
   const invoiceRows = db
@@ -259,7 +259,7 @@ function arAgingSummary(businessId, { customerId }) {
 }
 
 function arAgingDetails(businessId, { customerId }) {
-  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'", "invoices.balance_due > 0"];
+  const clauses = ["invoices.business_id = ?", "invoices.status <> 'cancelled'", "invoices.balance_due > 0", "invoices.deleted_at IS NULL"];
   const params = [businessId];
   if (customerId) { clauses.push("invoices.customer_id = ?"); params.push(customerId); }
   const rows = db
@@ -283,7 +283,7 @@ function arAgingDetails(businessId, { customerId }) {
 // --- Payments Received -----------------------------------------------------
 
 function paymentsReceived(businessId, { from, to, customerId }) {
-  const clauses = ["invoices.business_id = ?"];
+  const clauses = ["invoices.business_id = ?", "invoices.deleted_at IS NULL"];
   const params = [businessId];
   pushDatetimeRange("payments.paid_at", from, to, clauses, params);
   if (customerId) { clauses.push("invoices.customer_id = ?"); params.push(customerId); }
@@ -304,7 +304,7 @@ function paymentsReceived(businessId, { from, to, customerId }) {
 }
 
 function creditNoteDetails(businessId, { from, to, customerId }) {
-  const clauses = ["credit_notes.business_id = ?"];
+  const clauses = ["credit_notes.business_id = ?", "credit_notes.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("credit_notes.credit_note_date", from, to, clauses, params);
   if (customerId) { clauses.push("credit_notes.customer_id = ?"); params.push(customerId); }
@@ -326,7 +326,7 @@ function creditNoteDetails(businessId, { from, to, customerId }) {
 // --- Purchases and Expenses ------------------------------------------------
 
 function purchasesByVendor(businessId, { from, to, vendorId }) {
-  const clauses = ["purchases.business_id = ?"];
+  const clauses = ["purchases.business_id = ?", "purchases.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("purchases.purchase_date", from, to, clauses, params);
   if (vendorId) { clauses.push("purchases.vendor_id = ?"); params.push(vendorId); }
@@ -346,7 +346,7 @@ function purchasesByVendor(businessId, { from, to, vendorId }) {
 }
 
 function billDetails(businessId, { from, to, vendorId }) {
-  const clauses = ["purchases.business_id = ?"];
+  const clauses = ["purchases.business_id = ?", "purchases.deleted_at IS NULL"];
   const params = [businessId];
   pushDateRange("purchases.purchase_date", from, to, clauses, params);
   if (vendorId) { clauses.push("purchases.vendor_id = ?"); params.push(vendorId); }

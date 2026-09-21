@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
 import SendDocumentModal from "../components/SendDocumentModal";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { GstBreakdown, GstNote } from "../components/GstBreakdown";
 import { formatMoney, formatQty, formatDate } from "../lib/format";
 
@@ -15,6 +16,8 @@ export default function QuoteView() {
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = () => api.getQuote(id).then(setQuote);
   useEffect(() => { load(); }, [id]);
@@ -50,6 +53,22 @@ export default function QuoteView() {
 
   const { business, customer, lineItems } = quote;
 
+  // A soft delete — the quote moves to Trash rather than vanishing outright,
+  // so a misclick can always be undone (2026-09-20).
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      await api.deleteQuote(id);
+      navigate("/quotes");
+    } catch (err) {
+      setError(err.message);
+      setConfirmingDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div>
       <div className="no-print toolbar">
@@ -61,8 +80,22 @@ export default function QuoteView() {
           </button>
         )}
         {quote.status === "converted" && <span className="muted">Already converted to an invoice.</span>}
+        <Link className="link-btn" to={`/quotes/${id}/edit`}>Edit</Link>
+        <button type="button" className="link-btn" onClick={() => setConfirmingDelete(true)}>Delete</button>
         {error && <p className="error">{error}</p>}
       </div>
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete this quote?"
+          message={`Quote ${quote.quote_number} moves to Trash and disappears from your Quotes list. Restore it from Trash any time, or delete it permanently from there once you're sure.`}
+          confirmLabel="Delete Quote"
+          danger
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
 
       <div className="invoice-doc invoice-full" style={{ width: "210mm" }}>
         <DocumentBrandHeader

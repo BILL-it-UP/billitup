@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
@@ -16,6 +16,8 @@ const FREQUENCIES = [
 
 export default function NewRecurringInvoice() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
   const canManageItems = ["owner", "admin"].includes(getUser()?.role);
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
@@ -32,11 +34,60 @@ export default function NewRecurringInvoice() {
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loadingRecurring, setLoadingRecurring] = useState(isEdit);
+  const [status, setStatus] = useState("active");
 
   useEffect(() => {
     api.listCustomers().then(setCustomers);
     api.listItems().then(setItems);
   }, []);
+
+  // Edit mode: load the existing profile and prefill every field, same
+  // pattern as NewQuote.jsx's own edit mode (2026-09-20).
+  useEffect(() => {
+    if (!isEdit) return;
+    setLoadingRecurring(true);
+    api.getRecurringInvoice(id).then((r) => {
+      setCustomerId(r.customer_id || "");
+      setFrequency(r.frequency || "monthly");
+      setIntervalCount(r.interval_count || 1);
+      setStartDate(r.start_date || "");
+      setEndDate(r.end_date || "");
+      setDueInDays(r.due_in_days == null ? "" : String(r.due_in_days));
+      setReference(r.reference || "");
+      setGstTreatment(r.gst_treatment || "gst");
+      setTerms(r.terms || "");
+      setNotes(r.notes || "");
+      setStatus(r.status || "active");
+      setLines(
+        (r.lineItems || []).map((li) => {
+          const match = li.item_id ? items.find((it) => String(it.id) === String(li.item_id)) : null;
+          return {
+            item_id: li.item_id || "",
+            item_name: match ? match.name : "",
+            description: li.description || "",
+            qty: li.qty, rate: li.rate, discount: li.discount, tax_rate: li.tax_rate,
+          };
+        })
+      );
+      setLoadingRecurring(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Once the item catalog itself loads, backfill any line's item_name that
+  // couldn't be resolved yet above.
+  useEffect(() => {
+    if (!isEdit || items.length === 0) return;
+    setLines((prev) =>
+      prev.map((line) => {
+        if (!line.item_id || line.item_name) return line;
+        const match = items.find((it) => String(it.id) === String(line.item_id));
+        return match ? { ...line, item_name: match.name } : line;
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   const updateLine = (index, patch) => {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
@@ -72,16 +123,21 @@ export default function NewRecurringInvoice() {
     e.preventDefault();
     setError("");
     setSaving(true);
+    const payload = {
+      customer_id: customerId || null,
+      frequency, interval_count: Number(intervalCount) || 1,
+      start_date: startDate, end_date: endDate || null,
+      due_in_days: dueInDays === "" ? null : Number(dueInDays),
+      reference: reference || null, terms: terms || null, notes: notes || null,
+      gst_treatment: gstTreatment,
+      lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
+    };
     try {
-      await api.createRecurringInvoice({
-        customer_id: customerId || null,
-        frequency, interval_count: Number(intervalCount) || 1,
-        start_date: startDate, end_date: endDate || null,
-        due_in_days: dueInDays === "" ? null : Number(dueInDays),
-        reference: reference || null, terms: terms || null, notes: notes || null,
-        gst_treatment: gstTreatment,
-        lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
-      });
+      if (isEdit) {
+        await api.updateRecurringInvoice(id, payload);
+      } else {
+        await api.createRecurringInvoice(payload);
+      }
       navigate("/recurring-invoices");
     } catch (err) {
       setError(err.message);
@@ -90,9 +146,18 @@ export default function NewRecurringInvoice() {
     }
   };
 
+  if (loadingRecurring) return <p className="muted">Loading...</p>;
+
   return (
     <div>
-      <h1>New Recurring Invoice</h1>
+      <h1>{isEdit ? "Edit Recurring Invoice" : "New Recurring Invoice"}</h1>
+      {isEdit && status !== "active" && (
+        <p className="muted">
+          This profile is currently {status === "paused" ? "paused" : "ended"}. Saving here only changes its
+          schedule and line items, not whether it's still generating invoices, that's done from the Recurring
+          Invoices list.
+        </p>
+      )}
       <form onSubmit={handleSubmit}>
         <label className="block">Customer
           <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
@@ -178,7 +243,7 @@ export default function NewRecurringInvoice() {
         </label>
 
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Recurring Invoice"}</button>
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : isEdit ? "Save Changes" : "Create Recurring Invoice"}</button>
       </form>
     </div>
   );

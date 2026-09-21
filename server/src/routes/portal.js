@@ -33,7 +33,7 @@ router.get("/me", async (req, res) => {
   const invoices = db
     .prepare(
       `SELECT id, invoice_number, invoice_date, due_date, status, total, balance_due, public_token
-       FROM invoices WHERE business_id = ? AND customer_id = ? AND status <> 'cancelled'
+       FROM invoices WHERE business_id = ? AND customer_id = ? AND status <> 'cancelled' AND deleted_at IS NULL
        ORDER BY invoice_date DESC, id DESC`
     )
     .all(customer.business_id, customer.id);
@@ -73,7 +73,7 @@ router.get("/payments", (req, res) => {
               invoices.invoice_number, invoices.public_token
        FROM payments
        JOIN invoices ON invoices.id = payments.invoice_id
-       WHERE invoices.business_id = ? AND invoices.customer_id = ?
+       WHERE invoices.business_id = ? AND invoices.customer_id = ? AND invoices.deleted_at IS NULL
        ORDER BY payments.paid_at DESC, payments.id DESC`
     )
     .all(customer.business_id, customer.id);
@@ -86,7 +86,7 @@ router.get("/payments", (req, res) => {
 // route (2026-09-16).
 router.get("/invoices/:invoiceId/comments", (req, res) => {
   const customer = req.customer;
-  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND customer_id = ? AND business_id = ?")
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND customer_id = ? AND business_id = ? AND deleted_at IS NULL")
     .get(req.params.invoiceId, customer.id, customer.business_id);
   if (!invoice) return res.status(404).json({ error: "Not found" });
   const rows = db.prepare("SELECT * FROM invoice_comments WHERE invoice_id = ? ORDER BY created_at ASC").all(invoice.id);
@@ -95,7 +95,7 @@ router.get("/invoices/:invoiceId/comments", (req, res) => {
 
 router.post("/invoices/:invoiceId/comments", (req, res) => {
   const customer = req.customer;
-  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND customer_id = ? AND business_id = ?")
+  const invoice = db.prepare("SELECT id FROM invoices WHERE id = ? AND customer_id = ? AND business_id = ? AND deleted_at IS NULL")
     .get(req.params.invoiceId, customer.id, customer.business_id);
   if (!invoice) return res.status(404).json({ error: "Not found" });
   const message = (req.body?.message || "").trim();

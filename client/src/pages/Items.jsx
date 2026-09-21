@@ -36,10 +36,8 @@ export default function Items() {
     load();
   };
 
-  // Deleting is blocked server-side (with a clear message) for any item
-  // already used on an invoice, quote, or purchase — see the comment on the
-  // DELETE route in server/src/routes/items.js. That error surfaces here the
-  // same way any other save error does.
+  // A soft delete — the item moves to Trash rather than vanishing outright,
+  // so a misclick can always be undone (2026-09-20).
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -126,7 +124,7 @@ export default function Items() {
       {deleteTarget && (
         <ConfirmDialog
           title="Delete this item?"
-          message={`This removes "${deleteTarget.name}" from your item catalog. It can't be undone. If it's already been used on an invoice, quote, or purchase, deleting it won't be allowed, you'll see a message explaining why instead.`}
+          message={`"${deleteTarget.name}" moves to Trash and disappears from your item catalog. Restore it from Trash any time, or delete it permanently from there once you're sure.`}
           confirmLabel="Delete Item"
           danger
           busy={deleting}

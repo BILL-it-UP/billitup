@@ -31,7 +31,7 @@ export function buildGstr1Report(businessId, month) {
     .prepare(
       `SELECT invoices.*, customers.name AS customer_name, customers.gstin AS customer_gstin, customers.state AS customer_state
        FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
-       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled'
+       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled' AND invoices.deleted_at IS NULL
          AND strftime('%Y-%m', invoices.invoice_date) = ?
        ORDER BY invoices.invoice_date, invoices.invoice_number`
     )

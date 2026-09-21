@@ -39,7 +39,7 @@ function addDays(dateStr, days) {
 // button and the background scheduler in index.js so both paths behave
 // identically.
 export function generateInvoiceFromRecurring(recurringId) {
-  const recurring = db.prepare("SELECT * FROM recurring_invoices WHERE id = ?").get(recurringId);
+  const recurring = db.prepare("SELECT * FROM recurring_invoices WHERE id = ? AND deleted_at IS NULL").get(recurringId);
   if (!recurring) throw new Error("Recurring invoice not found");
 
   const templateLines = db.prepare("SELECT * FROM recurring_invoice_line_items WHERE recurring_invoice_id = ?").all(recurring.id);
@@ -117,7 +117,7 @@ export function generateInvoiceFromRecurring(recurringId) {
 // forward, which generateInvoiceFromRecurring always does before returning.
 export function runDueRecurringInvoices() {
   const due = db
-    .prepare("SELECT id FROM recurring_invoices WHERE status = 'active' AND next_invoice_date <= date('now')")
+    .prepare("SELECT id FROM recurring_invoices WHERE status = 'active' AND deleted_at IS NULL AND next_invoice_date <= date('now')")
     .all();
   const generated = [];
   for (const row of due) {
@@ -135,14 +135,33 @@ router.get("/", (req, res) => {
     .prepare(
       `SELECT recurring_invoices.*, customers.name AS customer_name
        FROM recurring_invoices LEFT JOIN customers ON customers.id = recurring_invoices.customer_id
-       WHERE recurring_invoices.business_id = ? ORDER BY recurring_invoices.created_at DESC`
+       WHERE recurring_invoices.business_id = ? AND recurring_invoices.deleted_at IS NULL
+       ORDER BY recurring_invoices.created_at DESC`
+    )
+    .all(req.auth.businessId);
+  res.json(rows);
+});
+
+// Trash — see items.js and db.js's deleted_at comment for the shared
+// pattern. Registered before GET /:id so the literal path "/trash" isn't
+// swallowed by the :id wildcard. The background scheduler's own due-invoice
+// query already skips anything trashed (see runDueRecurringInvoices above),
+// so a trashed profile simply stops generating invoices without needing to
+// be paused first.
+router.get("/trash", requireRole("owner", "admin"), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT recurring_invoices.*, customers.name AS customer_name
+       FROM recurring_invoices LEFT JOIN customers ON customers.id = recurring_invoices.customer_id
+       WHERE recurring_invoices.business_id = ? AND recurring_invoices.deleted_at IS NOT NULL
+       ORDER BY recurring_invoices.deleted_at DESC`
     )
     .all(req.auth.businessId);
   res.json(rows);
 });
 
 router.get("/:id", (req, res) => {
-  const recurring = db.prepare("SELECT * FROM recurring_invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const recurring = db.prepare("SELECT * FROM recurring_invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!recurring) return res.status(404).json({ error: "Not found" });
   const lineItems = db.prepare("SELECT * FROM recurring_invoice_line_items WHERE recurring_invoice_id = ?").all(recurring.id);
   const customer = recurring.customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(recurring.customer_id) : null;
@@ -195,10 +214,70 @@ router.post("/", requireRole("owner", "admin"), (req, res) => {
   res.status(201).json(db.prepare("SELECT * FROM recurring_invoices WHERE id = ?").get(recurringId));
 });
 
+// Full edit — Owner/Admin only, same tier as create. Lets the customer,
+// schedule, and line items be corrected without ending the profile and
+// starting a new one; next_invoice_date is only touched if the new
+// start_date moves it forward or back, so an edit doesn't accidentally
+// re-date a schedule that's already generated invoices (2026-09-20).
+router.put("/:id", requireRole("owner", "admin"), (req, res) => {
+  const recurring = db.prepare("SELECT * FROM recurring_invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
+  if (!recurring) return res.status(404).json({ error: "Not found" });
+
+  const {
+    customer_id, frequency, interval_count, start_date, end_date,
+    due_in_days, reference, terms, notes, lineItems, gst_treatment,
+  } = req.body;
+
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    return res.status(400).json({ error: "At least one line item is required" });
+  }
+  if (!FREQUENCIES.includes(frequency)) {
+    return res.status(400).json({ error: `frequency must be one of: ${FREQUENCIES.join(", ")}` });
+  }
+
+  // Only re-anchor next_invoice_date when this profile hasn't generated
+  // anything yet (next_invoice_date still equals start_date) — otherwise an
+  // edit that just fixes a typo in the reference field would silently push
+  // an already-progressing schedule back to a brand new start_date.
+  const nextInvoiceDate = recurring.next_invoice_date === recurring.start_date && start_date
+    ? start_date
+    : recurring.next_invoice_date;
+
+  const insertLine = db.prepare(
+    `INSERT INTO recurring_invoice_line_items (recurring_invoice_id, item_id, description, qty, rate, discount, tax_rate)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE recurring_invoices SET
+        customer_id = ?, frequency = ?, interval_count = ?, start_date = ?, next_invoice_date = ?, end_date = ?,
+        due_in_days = ?, reference = ?, terms = ?, notes = ?, gst_treatment = ?
+       WHERE id = ?`
+    ).run(
+      customer_id || null, frequency, Number(interval_count) || 1,
+      start_date || recurring.start_date, nextInvoiceDate, end_date || null,
+      due_in_days === undefined || due_in_days === "" ? null : Number(due_in_days),
+      reference || null, terms || null, notes || null,
+      ["gst", "rcm", "none"].includes(gst_treatment) ? gst_treatment : "gst",
+      recurring.id
+    );
+    db.prepare("DELETE FROM recurring_invoice_line_items WHERE recurring_invoice_id = ?").run(recurring.id);
+    for (const line of lineItems) {
+      insertLine.run(
+        recurring.id, line.item_id || null, line.description,
+        Number(line.qty) || 0, Number(line.rate) || 0, Number(line.discount) || 0, Number(line.tax_rate) || 0
+      );
+    }
+  })();
+
+  res.json(db.prepare("SELECT * FROM recurring_invoices WHERE id = ?").get(recurring.id));
+});
+
 router.put("/:id/status", requireRole("owner", "admin"), (req, res) => {
   const { status } = req.body;
   if (!["active", "paused", "ended"].includes(status)) return res.status(400).json({ error: "Invalid status" });
-  db.prepare("UPDATE recurring_invoices SET status = ? WHERE id = ? AND business_id = ?").run(status, req.params.id, req.auth.businessId);
+  db.prepare("UPDATE recurring_invoices SET status = ? WHERE id = ? AND business_id = ? AND deleted_at IS NULL").run(status, req.params.id, req.auth.businessId);
   const updated = db.prepare("SELECT * FROM recurring_invoices WHERE id = ?").get(req.params.id);
   if (!updated) return res.status(404).json({ error: "Not found" });
   res.json(updated);
@@ -208,7 +287,7 @@ router.put("/:id/status", requireRole("owner", "admin"), (req, res) => {
 // useful right after creating a profile, or to catch up manually on a
 // self-hosted install where the server wasn't running when it came due.
 router.post("/:id/generate-now", requireRole("owner", "admin"), (req, res) => {
-  const recurring = db.prepare("SELECT * FROM recurring_invoices WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const recurring = db.prepare("SELECT * FROM recurring_invoices WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!recurring) return res.status(404).json({ error: "Not found" });
   try {
     const invoiceId = generateInvoiceFromRecurring(recurring.id);
@@ -219,7 +298,35 @@ router.post("/:id/generate-now", requireRole("owner", "admin"), (req, res) => {
 });
 
 router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
-  db.prepare("DELETE FROM recurring_invoices WHERE id = ? AND business_id = ?").run(req.params.id, req.auth.businessId);
+  const result = db
+    .prepare("UPDATE recurring_invoices SET deleted_at = datetime('now') WHERE id = ? AND business_id = ? AND deleted_at IS NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found" });
+  res.status(204).end();
+});
+
+router.post("/:id/restore", requireRole("owner", "admin"), (req, res) => {
+  const result = db
+    .prepare("UPDATE recurring_invoices SET deleted_at = NULL WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
+  res.json(db.prepare("SELECT * FROM recurring_invoices WHERE id = ?").get(req.params.id));
+});
+
+// The real, unrecoverable delete — only reachable from the Trash page.
+// invoices.recurring_invoice_id points at this row with no cascade, so every
+// invoice this profile ever generated has that reference cleared first —
+// the invoices themselves are untouched, they just stop pointing at a
+// schedule that no longer exists, same as invoices.js's own cascading
+// unwind does for the "last generated" pointer going the other direction.
+router.delete("/:id/permanent", requireRole("owner", "admin"), (req, res) => {
+  db.transaction(() => {
+    db.prepare("UPDATE invoices SET recurring_invoice_id = NULL WHERE recurring_invoice_id = ?").run(req.params.id);
+  })();
+  const result = db
+    .prepare("DELETE FROM recurring_invoices WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
   res.status(204).end();
 });
 

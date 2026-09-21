@@ -150,6 +150,10 @@ export const api = {
   listCustomers: () => request("/api/customers"),
   createCustomer: (payload) => request("/api/customers", { method: "POST", body: payload }),
   updateCustomer: (id, payload) => request(`/api/customers/${id}`, { method: "PUT", body: payload }),
+  deleteCustomer: (id) => request(`/api/customers/${id}`, { method: "DELETE" }),
+  listCustomerTrash: () => request("/api/customers/trash"),
+  restoreCustomer: (id) => request(`/api/customers/${id}/restore`, { method: "POST" }),
+  permanentlyDeleteCustomer: (id) => request(`/api/customers/${id}/permanent`, { method: "DELETE" }),
   setCustomerPortalEnabled: (id, enabled) => request(`/api/customers/${id}/portal`, { method: "PUT", body: { enabled } }),
   resendCustomerPortalInvite: (id) => request(`/api/customers/${id}/portal/resend-invite`, { method: "POST" }),
   addRetainerTransaction: (id, payload) => request(`/api/customers/${id}/retainer`, { method: "POST", body: payload }),
@@ -159,6 +163,15 @@ export const api = {
   createItem: (payload) => request("/api/items", { method: "POST", body: payload }),
   updateItem: (id, payload) => request(`/api/items/${id}`, { method: "PUT", body: payload }),
   deleteItem: (id) => request(`/api/items/${id}`, { method: "DELETE" }),
+
+  // Trash — every deletable resource below has the same four calls: the list
+  // (already wired to "delete" above, but now a soft delete server-side),
+  // plus a trash listing, a restore, and the real permanent delete. See
+  // client/src/pages/Trash.jsx and server/src/db.js's deleted_at comment
+  // (2026-09-20).
+  listItemTrash: () => request("/api/items/trash"),
+  restoreItem: (id) => request(`/api/items/${id}/restore`, { method: "POST" }),
+  permanentlyDeleteItem: (id) => request(`/api/items/${id}/permanent`, { method: "DELETE" }),
 
   listTermsTemplates: () => request("/api/terms-templates"),
   createTermsTemplate: (payload) => request("/api/terms-templates", { method: "POST", body: payload }),
@@ -174,6 +187,9 @@ export const api = {
   createInvoice: (payload) => request("/api/invoices", { method: "POST", body: payload }),
   updateInvoice: (id, payload) => request(`/api/invoices/${id}`, { method: "PUT", body: payload }),
   deleteInvoice: (id) => request(`/api/invoices/${id}`, { method: "DELETE" }),
+  listInvoiceTrash: () => request("/api/invoices/trash"),
+  restoreInvoice: (id) => request(`/api/invoices/${id}/restore`, { method: "POST" }),
+  permanentlyDeleteInvoice: (id) => request(`/api/invoices/${id}/permanent`, { method: "DELETE" }),
   getInvoiceHistory: (id) => request(`/api/invoices/${id}/history`),
   setInvoiceStatus: (id, status) => request(`/api/invoices/${id}/status`, { method: "PUT", body: { status } }),
   recordPayment: (id, payload) => request(`/api/invoices/${id}/payments`, { method: "POST", body: payload }),
@@ -193,6 +209,11 @@ export const api = {
   listQuotes: () => request("/api/quotes"),
   getQuote: (id) => request(`/api/quotes/${id}`),
   createQuote: (payload) => request("/api/quotes", { method: "POST", body: payload }),
+  updateQuote: (id, payload) => request(`/api/quotes/${id}`, { method: "PUT", body: payload }),
+  deleteQuote: (id) => request(`/api/quotes/${id}`, { method: "DELETE" }),
+  listQuoteTrash: () => request("/api/quotes/trash"),
+  restoreQuote: (id) => request(`/api/quotes/${id}/restore`, { method: "POST" }),
+  permanentlyDeleteQuote: (id) => request(`/api/quotes/${id}/permanent`, { method: "DELETE" }),
   setQuoteStatus: (id, status) => request(`/api/quotes/${id}/status`, { method: "PUT", body: { status } }),
   convertQuote: (id) => request(`/api/quotes/${id}/convert`, { method: "POST" }),
   sendQuoteEmail: (id, payload) => request(`/api/quotes/${id}/send`, { method: "POST", body: payload }),
@@ -200,6 +221,11 @@ export const api = {
   listCreditNotes: () => request("/api/credit-notes"),
   getCreditNote: (id) => request(`/api/credit-notes/${id}`),
   createCreditNote: (payload) => request("/api/credit-notes", { method: "POST", body: payload }),
+  updateCreditNote: (id, payload) => request(`/api/credit-notes/${id}`, { method: "PUT", body: payload }),
+  deleteCreditNote: (id) => request(`/api/credit-notes/${id}`, { method: "DELETE" }),
+  listCreditNoteTrash: () => request("/api/credit-notes/trash"),
+  restoreCreditNote: (id) => request(`/api/credit-notes/${id}/restore`, { method: "POST" }),
+  permanentlyDeleteCreditNote: (id) => request(`/api/credit-notes/${id}/permanent`, { method: "DELETE" }),
   sendCreditNoteEmail: (id, payload) => request(`/api/credit-notes/${id}/send`, { method: "POST", body: payload }),
 
   getReportsSummary: () => request("/api/reports/summary"),
@@ -248,11 +274,17 @@ export const api = {
   createVendor: (payload) => request("/api/vendors", { method: "POST", body: payload }),
   updateVendor: (id, payload) => request(`/api/vendors/${id}`, { method: "PUT", body: payload }),
   deleteVendor: (id) => request(`/api/vendors/${id}`, { method: "DELETE" }),
+  listVendorTrash: () => request("/api/vendors/trash"),
+  restoreVendor: (id) => request(`/api/vendors/${id}/restore`, { method: "POST" }),
+  permanentlyDeleteVendor: (id) => request(`/api/vendors/${id}/permanent`, { method: "DELETE" }),
 
   listPurchases: () => request("/api/purchases"),
   createPurchase: (payload) => request("/api/purchases", { method: "POST", body: payload }),
   updatePurchase: (id, payload) => request(`/api/purchases/${id}`, { method: "PUT", body: payload }),
   deletePurchase: (id) => request(`/api/purchases/${id}`, { method: "DELETE" }),
+  listPurchaseTrash: () => request("/api/purchases/trash"),
+  restorePurchase: (id) => request(`/api/purchases/${id}/restore`, { method: "POST" }),
+  permanentlyDeletePurchase: (id) => request(`/api/purchases/${id}/permanent`, { method: "DELETE" }),
   getBillablePurchases: (customerId) => request(`/api/purchases/billable?customer_id=${encodeURIComponent(customerId)}`),
 
   listTimeEntries: () => request("/api/time-entries"),
@@ -287,9 +319,13 @@ export const api = {
   listRecurringInvoices: () => request("/api/recurring-invoices"),
   getRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}`),
   createRecurringInvoice: (payload) => request("/api/recurring-invoices", { method: "POST", body: payload }),
+  updateRecurringInvoice: (id, payload) => request(`/api/recurring-invoices/${id}`, { method: "PUT", body: payload }),
   setRecurringInvoiceStatus: (id, status) => request(`/api/recurring-invoices/${id}/status`, { method: "PUT", body: { status } }),
   generateRecurringInvoiceNow: (id) => request(`/api/recurring-invoices/${id}/generate-now`, { method: "POST" }),
   deleteRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}`, { method: "DELETE" }),
+  listRecurringInvoiceTrash: () => request("/api/recurring-invoices/trash"),
+  restoreRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}/restore`, { method: "POST" }),
+  permanentlyDeleteRecurringInvoice: (id) => request(`/api/recurring-invoices/${id}/permanent`, { method: "DELETE" }),
 
   // Unauthenticated — no token attached, used by the public "view invoice
   // without logging in" page.

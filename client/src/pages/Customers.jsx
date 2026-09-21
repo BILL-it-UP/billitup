@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
 import { INDIAN_STATES } from "../lib/gst";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const BLANK_CUSTOMER_FORM = { name: "", phone: "", email: "", billing_address: "", pincode: "", country: "India", gstin: "", state: "" };
 
@@ -17,6 +18,8 @@ export default function Customers() {
   const [editForm, setEditForm] = useState(null);
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const canManage = ["owner", "admin"].includes(getUser()?.role);
 
   // Inline "Add Credit"/"Add Debit" against a customer's prepaid retainer
@@ -84,6 +87,24 @@ export default function Customers() {
       setEditError(err.message);
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  // A soft delete — the customer moves to Trash (see Support > ... no,
+  // Trash.jsx from the sidebar) rather than vanishing outright, so a
+  // misclick can always be undone (2026-09-20).
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.deleteCustomer(deleteTarget.id);
+      setCustomers((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      setError(err.message);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -316,6 +337,18 @@ export default function Customers() {
         </div>
       )}
 
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete this customer?"
+          message={`"${deleteTarget.name}" moves to Trash and disappears from this list. Restore it from Trash any time, or delete it permanently from there once you're sure.`}
+          confirmLabel="Delete Customer"
+          danger
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
       {customers.length > 0 && (
         <div className="list-toolbar">
           <input
@@ -416,6 +449,8 @@ export default function Customers() {
                 {canManage && (
                   <td>
                     <button type="button" className="link-btn" onClick={() => startEdit(c)}>Edit</button>
+                    {" · "}
+                    <button type="button" className="link-btn" onClick={() => setDeleteTarget(c)}>Delete</button>
                   </td>
                 )}
               </tr>

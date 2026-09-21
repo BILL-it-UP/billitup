@@ -30,7 +30,7 @@ function withPortalStatus(customer) {
 
 router.get("/", (req, res) => {
   const rows = db
-    .prepare("SELECT * FROM customers WHERE business_id = ? ORDER BY name")
+    .prepare("SELECT * FROM customers WHERE business_id = ? AND deleted_at IS NULL ORDER BY name")
     .all(req.auth.businessId);
   res.json(rows.map(withPortalStatus));
 });
@@ -65,16 +65,64 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
       billing_address = COALESCE(?, billing_address), shipping_address = COALESCE(?, shipping_address),
       pincode = COALESCE(?, pincode), country = COALESCE(?, country),
       gstin = COALESCE(?, gstin), state = COALESCE(?, state)
-     WHERE id = ? AND business_id = ?`
+     WHERE id = ? AND business_id = ? AND deleted_at IS NULL`
   ).run(name, phone, email, billing_address, shipping_address, pincode, country, gstin, state, req.params.id, req.auth.businessId);
   const updated = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!updated) return res.status(404).json({ error: "Not found" });
   res.json(withPortalStatus(updated));
 });
 
+// Trash — see items.js and db.js's deleted_at comment for the shared
+// pattern. A customer with existing invoices, quotes, credit notes, or
+// purchases can still be safely trashed (the row stays, so nothing else
+// breaks); those foreign keys only get checked for real on a permanent
+// delete below (2026-09-20).
+router.get("/trash", requireRole("owner", "admin"), (req, res) => {
+  const rows = db
+    .prepare("SELECT * FROM customers WHERE business_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    .all(req.auth.businessId);
+  res.json(rows.map(withPortalStatus));
+});
+
 router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
-  db.prepare("DELETE FROM customers WHERE id = ? AND business_id = ?").run(req.params.id, req.auth.businessId);
+  const result = db
+    .prepare("UPDATE customers SET deleted_at = datetime('now') WHERE id = ? AND business_id = ? AND deleted_at IS NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Customer not found." });
   res.status(204).end();
+});
+
+router.post("/:id/restore", requireRole("owner", "admin"), (req, res) => {
+  const result = db
+    .prepare("UPDATE customers SET deleted_at = NULL WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
+  res.json(withPortalStatus(db.prepare("SELECT * FROM customers WHERE id = ?").get(req.params.id)));
+});
+
+// The real, unrecoverable delete — only reachable from the Trash page, on a
+// customer already soft deleted above. Foreign keys are enforced (db.js
+// turns them on) and several tables reference customers(id) with no cascade
+// (invoices, quotes, credit_notes, purchases.billable_customer_id,
+// retainer_transactions, time_entries) — so a customer who's ever been
+// billed, quoted, or logged against can't actually be permanently deleted;
+// the query below throws instead. Caught here and turned into an honest
+// message rather than a generic 500 (2026-09-20).
+router.delete("/:id/permanent", requireRole("owner", "admin"), (req, res) => {
+  try {
+    const result = db
+      .prepare("DELETE FROM customers WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+      .run(req.params.id, req.auth.businessId);
+    if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+      return res.status(409).json({
+        error: "This customer has invoices, quotes, credit notes, or purchases on file, so they can't be permanently deleted, that would break those existing records. Edit their details instead if something needs correcting.",
+      });
+    }
+    throw err;
+  }
 });
 
 // Turn a customer's portal access on or off. Turning it on when they don't
@@ -86,7 +134,7 @@ router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
 // portal request, so an already-logged-in client is cut off right away.
 router.put("/:id/portal", requireRole("owner", "admin"), async (req, res) => {
   const { enabled } = req.body;
-  const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!customer) return res.status(404).json({ error: "Not found" });
 
   if (!enabled) {
@@ -131,7 +179,7 @@ router.put("/:id/portal", requireRole("owner", "admin"), async (req, res) => {
 // arrived, or as a "forgot password" reset for a customer who's already
 // active. Regenerates the token either way, invalidating any earlier link.
 router.post("/:id/portal/resend-invite", requireRole("owner", "admin"), async (req, res) => {
-  const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!customer) return res.status(404).json({ error: "Not found" });
   if (!customer.portal_enabled) return res.status(400).json({ error: "Turn portal access on first." });
   if (!customer.email) return res.status(400).json({ error: "This customer has no email address." });
@@ -162,7 +210,7 @@ router.post("/:id/portal/resend-invite", requireRole("owner", "admin"), async (r
 // this to a specific invoice's payment, since a retainer top-up doesn't
 // have to come from an invoice at all (2026-09-16).
 router.post("/:id/retainer", requireRole("owner", "admin"), (req, res) => {
-  const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!customer) return res.status(404).json({ error: "Not found" });
   const { amount, type, note } = req.body;
   const amt = Math.abs(Number(amount) || 0);

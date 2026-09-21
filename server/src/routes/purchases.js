@@ -28,7 +28,8 @@ router.get("/", (req, res) => {
        FROM purchases
        LEFT JOIN vendors ON vendors.id = purchases.vendor_id
        LEFT JOIN customers ON customers.id = purchases.billable_customer_id
-       WHERE purchases.business_id = ? ORDER BY purchases.purchase_date DESC, purchases.id DESC`
+       WHERE purchases.business_id = ? AND purchases.deleted_at IS NULL
+       ORDER BY purchases.purchase_date DESC, purchases.id DESC`
     )
     .all(req.auth.businessId);
   res.json(rows.map((r) => ({ ...r, vendor_is_msme: !!r.vendor_is_msme, vendor_has_written_agreement: !!r.vendor_has_written_agreement })));
@@ -42,10 +43,28 @@ router.get("/billable", (req, res) => {
   const rows = db
     .prepare(
       `SELECT * FROM purchases
-       WHERE business_id = ? AND billable_customer_id = ? AND billed_invoice_id IS NULL
+       WHERE business_id = ? AND billable_customer_id = ? AND billed_invoice_id IS NULL AND deleted_at IS NULL
        ORDER BY purchase_date DESC`
     )
     .all(req.auth.businessId, customer_id);
+  res.json(rows);
+});
+
+// Trash — see items.js and db.js's deleted_at comment for the shared
+// pattern. Nothing else references a purchase row by id, so a permanent
+// delete below never needs a foreign-key safety catch the way items/vendors/
+// customers do (2026-09-20).
+router.get("/trash", (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT purchases.*, vendors.name AS vendor_name, customers.name AS billable_customer_name
+       FROM purchases
+       LEFT JOIN vendors ON vendors.id = purchases.vendor_id
+       LEFT JOIN customers ON customers.id = purchases.billable_customer_id
+       WHERE purchases.business_id = ? AND purchases.deleted_at IS NOT NULL
+       ORDER BY purchases.deleted_at DESC`
+    )
+    .all(req.auth.businessId);
   res.json(rows);
 });
 
@@ -70,7 +89,7 @@ router.post("/", (req, res) => {
 });
 
 router.put("/:id", (req, res) => {
-  const existing = db.prepare("SELECT * FROM purchases WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const existing = db.prepare("SELECT * FROM purchases WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!existing) return res.status(404).json({ error: "Not found" });
 
   const { vendor_id, purchase_date, bill_number, description, amount, tax_rate, notes, paid_date, billable_customer_id } = req.body;
@@ -98,7 +117,26 @@ router.put("/:id", (req, res) => {
 });
 
 router.delete("/:id", (req, res) => {
-  db.prepare("DELETE FROM purchases WHERE id = ? AND business_id = ?").run(req.params.id, req.auth.businessId);
+  const result = db
+    .prepare("UPDATE purchases SET deleted_at = datetime('now') WHERE id = ? AND business_id = ? AND deleted_at IS NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Purchase not found." });
+  res.status(204).end();
+});
+
+router.post("/:id/restore", (req, res) => {
+  const result = db
+    .prepare("UPDATE purchases SET deleted_at = NULL WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
+  res.json(withVendorName(db.prepare("SELECT * FROM purchases WHERE id = ?").get(req.params.id)));
+});
+
+router.delete("/:id/permanent", (req, res) => {
+  const result = db
+    .prepare("DELETE FROM purchases WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
   res.status(204).end();
 });
 

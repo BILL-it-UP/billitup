@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { emptyLine, lineAmount, computeTotals } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
@@ -9,10 +9,13 @@ import { GST_TREATMENTS } from "../lib/gst";
 
 export default function NewQuote() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
   const canManageItems = ["owner", "admin"].includes(getUser()?.role);
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
   const [customerId, setCustomerId] = useState("");
+  const [quoteDate, setQuoteDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [expiryDate, setExpiryDate] = useState("");
   const [reference, setReference] = useState("");
   const [gstTreatment, setGstTreatment] = useState("gst");
@@ -20,11 +23,54 @@ export default function NewQuote() {
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loadingQuote, setLoadingQuote] = useState(isEdit);
 
   useEffect(() => {
     api.listCustomers().then(setCustomers);
     api.listItems().then(setItems);
   }, []);
+
+  // Edit mode: load the existing quote and prefill every field, same pattern
+  // as NewInvoice.jsx's own edit mode (2026-09-20).
+  useEffect(() => {
+    if (!isEdit) return;
+    setLoadingQuote(true);
+    api.getQuote(id).then((q) => {
+      setCustomerId(q.customer_id || "");
+      setQuoteDate(q.quote_date || "");
+      setExpiryDate(q.expiry_date || "");
+      setReference(q.reference || "");
+      setGstTreatment(q.gst_treatment || "gst");
+      setNotes(q.notes || "");
+      setLines(
+        (q.lineItems || []).map((li) => {
+          const match = li.item_id ? items.find((it) => String(it.id) === String(li.item_id)) : null;
+          return {
+            item_id: li.item_id || "",
+            item_name: match ? match.name : "",
+            description: li.description || "",
+            qty: li.qty, rate: li.rate, discount: li.discount, tax_rate: li.tax_rate,
+          };
+        })
+      );
+      setLoadingQuote(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Once the item catalog itself loads, backfill any line's item_name that
+  // couldn't be resolved yet above (items hadn't loaded at that point).
+  useEffect(() => {
+    if (!isEdit || items.length === 0) return;
+    setLines((prev) =>
+      prev.map((line) => {
+        if (!line.item_id || line.item_name) return line;
+        const match = items.find((it) => String(it.id) === String(line.item_id));
+        return match ? { ...line, item_name: match.name } : line;
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   const updateLine = (index, patch) => {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
@@ -60,16 +106,23 @@ export default function NewQuote() {
     e.preventDefault();
     setError("");
     setSaving(true);
+    const payload = {
+      customer_id: customerId || null,
+      quote_date: quoteDate || null,
+      expiry_date: expiryDate || null,
+      reference: reference || null,
+      gst_treatment: gstTreatment,
+      notes: notes || null,
+      lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
+    };
     try {
-      const quote = await api.createQuote({
-        customer_id: customerId || null,
-        expiry_date: expiryDate || null,
-        reference: reference || null,
-        gst_treatment: gstTreatment,
-        notes: notes || null,
-        lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
-      });
-      navigate(`/quotes/${quote.id}`);
+      if (isEdit) {
+        await api.updateQuote(id, payload);
+        navigate(`/quotes/${id}`);
+      } else {
+        const quote = await api.createQuote(payload);
+        navigate(`/quotes/${quote.id}`);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -77,9 +130,11 @@ export default function NewQuote() {
     }
   };
 
+  if (loadingQuote) return <p className="muted">Loading...</p>;
+
   return (
     <div>
-      <h1>New Quote</h1>
+      <h1>{isEdit ? "Edit Quote" : "New Quote"}</h1>
       <form onSubmit={handleSubmit}>
         <label className="block">Customer
           <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
@@ -88,6 +143,9 @@ export default function NewQuote() {
           </select>
         </label>
         <div className="form-row">
+          <label className="block">Quote date
+            <input type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} required />
+          </label>
           <label className="block">Valid until (optional)
             <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
           </label>
@@ -152,7 +210,7 @@ export default function NewQuote() {
         </label>
 
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Create Quote"}</button>
+        <button type="submit" disabled={saving}>{saving ? "Saving..." : isEdit ? "Save Changes" : "Create Quote"}</button>
       </form>
     </div>
   );

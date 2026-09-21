@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatDate } from "../lib/format";
 import { useDateFormat } from "../lib/useDateFormat";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const FREQUENCY_LABEL = { weekly: "Weekly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly" };
 const STATUS_LABEL = { active: "Active", paused: "Paused", ended: "Ended" };
@@ -12,6 +13,8 @@ export default function RecurringInvoices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const dateFormat = useDateFormat();
 
   const load = () => api.listRecurringInvoices().then(setRows).finally(() => setLoading(false));
@@ -43,16 +46,21 @@ export default function RecurringInvoices() {
     }
   };
 
-  const remove = async (row) => {
-    setBusyId(row.id);
+  // A soft delete — the recurring invoice profile moves to Trash rather than
+  // vanishing outright, so a misclick can always be undone (2026-09-20).
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     setError("");
     try {
-      await api.deleteRecurringInvoice(row.id);
+      await api.deleteRecurringInvoice(deleteTarget.id);
+      setDeleteTarget(null);
       load();
     } catch (err) {
       setError(err.message);
+      setDeleteTarget(null);
     } finally {
-      setBusyId(null);
+      setDeleting(false);
     }
   };
 
@@ -91,12 +99,26 @@ export default function RecurringInvoices() {
                       {" · "}
                     </>
                   )}
-                  <button type="button" className="link-btn" disabled={busyId === row.id} onClick={() => remove(row)}>Delete</button>
+                  <Link className="link-btn" to={`/recurring-invoices/${row.id}/edit`}>Edit</Link>
+                  {" · "}
+                  <button type="button" className="link-btn" disabled={busyId === row.id} onClick={() => setDeleteTarget(row)}>Delete</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete this recurring invoice?"
+          message={`This recurring profile for ${deleteTarget.customer_name || "this customer"} moves to Trash and stops generating new invoices. Restore it from Trash any time, or delete it permanently from there once you're sure. Invoices already generated from it are not affected.`}
+          confirmLabel="Delete Recurring Invoice"
+          danger
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );

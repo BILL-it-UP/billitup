@@ -908,3 +908,20 @@ const backfillMemberships = db.transaction(() => {
   }
 });
 backfillMemberships();
+
+// Trash / soft delete (2026-09-20) — a plain "Delete" used to be permanent
+// everywhere, which is unforgiving for a misclick. Every resource that can
+// be deleted from the app now gets a nullable deleted_at instead: the old
+// DELETE route just stamps this and the row stays exactly where it was, a
+// new GET /trash lists everything stamped this way, a new POST /:id/restore
+// clears it, and a new DELETE /:id/permanent is the one route that actually
+// removes the row (keeping whatever FK safety checks the old plain delete
+// already had). NULL means "not in the trash" everywhere below.
+ensureColumn("items", "deleted_at", "deleted_at TEXT");
+ensureColumn("vendors", "deleted_at", "deleted_at TEXT");
+ensureColumn("customers", "deleted_at", "deleted_at TEXT");
+ensureColumn("quotes", "deleted_at", "deleted_at TEXT");
+ensureColumn("credit_notes", "deleted_at", "deleted_at TEXT");
+ensureColumn("purchases", "deleted_at", "deleted_at TEXT");
+ensureColumn("invoices", "deleted_at", "deleted_at TEXT");
+ensureColumn("recurring_invoices", "deleted_at", "deleted_at TEXT");

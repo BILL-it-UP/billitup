@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, Link, NavLink, useNavigate } from "react-route
 import {
   IconDashboard, IconQuote, IconCreditNote, IconRecurring,
   IconCustomers, IconItems, IconReports, IconSettings, IconLogout, IconChevron,
-  IconVendors, IconPurchases, IconPayments, IconSuggestion, IconChat, IconClock,
+  IconVendors, IconPurchases, IconPayments, IconSuggestion, IconChat, IconClock, IconTrash,
 } from "./components/Icons";
 import SuggestionBox from "./components/SuggestionBox";
 import AnnouncementPopup from "./components/AnnouncementPopup";
@@ -27,6 +27,7 @@ import NewCreditNote from "./pages/NewCreditNote";
 import CreditNoteView from "./pages/CreditNoteView";
 import RecurringInvoices from "./pages/RecurringInvoices";
 import NewRecurringInvoice from "./pages/NewRecurringInvoice";
+import Trash from "./pages/Trash";
 import PublicInvoiceView from "./pages/PublicInvoiceView";
 import PortalLogin from "./pages/PortalLogin";
 import PortalSetPassword from "./pages/PortalSetPassword";
@@ -80,6 +81,7 @@ const NAV_ITEMS = [
   { to: "/reports", label: "Reports", icon: IconReports, ownerOnly: true },
   { to: "/support", label: "Support", icon: IconChat },
   { to: "/suggestions", label: "Suggestions", icon: IconSuggestion, ownerOnly: true },
+  { to: "/trash", label: "Trash", icon: IconTrash, ownerOnly: true },
   { to: "/settings", label: "Settings", icon: IconSettings, ownerOnly: true },
 ];
 
@@ -231,12 +233,16 @@ export default function App() {
       <Route path="/invoices/:id" element={<RequireAuth><Shell><InvoiceView /></Shell></RequireAuth>} />
       <Route path="/quotes" element={<RequireAuth><Shell><Quotes /></Shell></RequireAuth>} />
       <Route path="/quotes/new" element={<RequireAuth><Shell><NewQuote /></Shell></RequireAuth>} />
+      <Route path="/quotes/:id/edit" element={<RequireAuth><Shell><NewQuote /></Shell></RequireAuth>} />
       <Route path="/quotes/:id" element={<RequireAuth><Shell><QuoteView /></Shell></RequireAuth>} />
       <Route path="/credit-notes" element={<RequireAuth><Shell><CreditNotes /></Shell></RequireAuth>} />
       <Route path="/credit-notes/new" element={<RequireAuth><Shell><NewCreditNote /></Shell></RequireAuth>} />
+      <Route path="/credit-notes/:id/edit" element={<RequireAuth><Shell><NewCreditNote /></Shell></RequireAuth>} />
       <Route path="/credit-notes/:id" element={<RequireAuth><Shell><CreditNoteView /></Shell></RequireAuth>} />
       <Route path="/recurring-invoices" element={<RequireAuth><Shell><RecurringInvoices /></Shell></RequireAuth>} />
       <Route path="/recurring-invoices/new" element={<RequireAuth><Shell><NewRecurringInvoice /></Shell></RequireAuth>} />
+      <Route path="/recurring-invoices/:id/edit" element={<RequireAuth><Shell><NewRecurringInvoice /></Shell></RequireAuth>} />
+      <Route path="/trash" element={<RequireAuth><Shell><Trash /></Shell></RequireAuth>} />
       <Route path="/payments" element={<RequireAuth><Shell><PaymentsTimeline /></Shell></RequireAuth>} />
       <Route path="/vendors" element={<RequireAuth><Shell><Vendors /></Shell></RequireAuth>} />
       <Route path="/purchases" element={<RequireAuth><Shell><Purchases /></Shell></RequireAuth>} />

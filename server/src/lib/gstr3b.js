@@ -49,7 +49,7 @@ export function buildGstr3bSummary(businessId, month) {
     .prepare(
       `SELECT id, gst_treatment, cgst, sgst, igst
        FROM invoices
-       WHERE business_id = ? AND status <> 'cancelled' AND strftime('%Y-%m', invoice_date) = ?`
+       WHERE business_id = ? AND status <> 'cancelled' AND deleted_at IS NULL AND strftime('%Y-%m', invoice_date) = ?`
     )
     .all(businessId, month);
 
@@ -100,7 +100,7 @@ export function buildGstr3bSummary(businessId, month) {
   const purchasesRow = db
     .prepare(
       `SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS taxable_value, COALESCE(SUM(tax_amount), 0) AS tax_amount
-       FROM purchases WHERE business_id = ? AND strftime('%Y-%m', purchase_date) = ?`
+       FROM purchases WHERE business_id = ? AND deleted_at IS NULL AND strftime('%Y-%m', purchase_date) = ?`
     )
     .get(businessId, month);
 

@@ -1,22 +1,44 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { getTemplate, mergeTemplate } from "../lib/emailTemplates";
 import SendDocumentModal from "../components/SendDocumentModal";
 import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { GstBreakdown, GstNote } from "../components/GstBreakdown";
 import { formatMoney, formatQty, formatDate } from "../lib/format";
 
 export default function CreditNoteView() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [creditNote, setCreditNote] = useState(null);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = () => api.getCreditNote(id).then(setCreditNote);
   useEffect(() => { load(); }, [id]);
 
   if (!creditNote) return <p className="muted">Loading...</p>;
+
+  // A soft delete — the credit note moves to Trash rather than vanishing
+  // outright, and moves the credit it applied back onto its invoice's
+  // balance at the same time, so a misclick can always be undone (2026-09-20).
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      await api.deleteCreditNote(id);
+      navigate("/credit-notes");
+    } catch (err) {
+      setError(err.message);
+      setConfirmingDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const { business, customer, invoice, lineItems } = creditNote;
 
@@ -39,7 +61,22 @@ export default function CreditNoteView() {
       <div className="no-print toolbar">
         <button onClick={() => window.print()}>Print / Save PDF</button>
         <button type="button" onClick={() => setShowSendModal(true)}>Email to Customer</button>
+        <Link className="link-btn" to={`/credit-notes/${id}/edit`}>Edit</Link>
+        <button type="button" className="link-btn" onClick={() => setConfirmingDelete(true)}>Delete</button>
+        {error && <p className="error">{error}</p>}
       </div>
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete this credit note?"
+          message={`Credit Note ${creditNote.credit_note_number} moves to Trash and disappears from your Credit Notes list${invoice ? `, and ₹${formatMoney(creditNote.total)} moves back onto invoice ${invoice.invoice_number}'s balance due` : ""}. Restore it from Trash any time, or delete it permanently from there once you're sure.`}
+          confirmLabel="Delete Credit Note"
+          danger
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
 
       <div className="invoice-doc invoice-full" style={{ width: "210mm" }}>
         <DocumentBrandHeader

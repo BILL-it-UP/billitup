@@ -1,7 +1,7 @@
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 import { renderDocumentPdf, sendDocumentEmail, renderEmailHtml, SmtpNotConfiguredError } from "../lib/mailer.js";
 import { formatDate } from "../lib/formatDate.js";
 import { applyGstTreatment, adjustLineAmountsForTreatment } from "../lib/gst.js";
@@ -10,19 +10,56 @@ import { getTemplate, mergeTemplate } from "../lib/emailTemplates.js";
 const router = express.Router();
 router.use(requireAuth);
 
+// Shared by create (POST /) and edit (PUT /:id) so the two always compute
+// totals the same way — the server recomputes from qty/rate/discount/
+// tax_rate, never trusts a client-sent amount (2026-09-20, matching the same
+// pattern already used on invoices).
+function computeLineTotals(lineItems) {
+  let subTotal = 0, rawTaxTotal = 0, discountTotal = 0;
+  const computedLines = lineItems.map((line) => {
+    const qty = Number(line.qty) || 0;
+    const rate = Number(line.rate) || 0;
+    const discount = Number(line.discount) || 0;
+    const taxRate = Number(line.tax_rate) || 0;
+    const lineBase = qty * rate - discount;
+    const lineTax = lineBase * (taxRate / 100);
+    subTotal += qty * rate;
+    discountTotal += discount;
+    rawTaxTotal += lineTax;
+    return { ...line, qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
+  });
+  return { computedLines, subTotal, discountTotal, taxTotal: rawTaxTotal };
+}
+
 router.get("/", (req, res) => {
   const rows = db
     .prepare(
       `SELECT quotes.*, customers.name AS customer_name
        FROM quotes LEFT JOIN customers ON customers.id = quotes.customer_id
-       WHERE quotes.business_id = ? ORDER BY quotes.created_at DESC`
+       WHERE quotes.business_id = ? AND quotes.deleted_at IS NULL ORDER BY quotes.created_at DESC`
+    )
+    .all(req.auth.businessId);
+  res.json(rows);
+});
+
+// Trash — see items.js and db.js's deleted_at comment for the shared
+// pattern. Nothing else references a quote row by id, so a permanent delete
+// further down never needs a foreign-key safety catch (2026-09-20).
+// Registered before GET /:id so the literal path "/trash" isn't swallowed by
+// the :id wildcard.
+router.get("/trash", requireRole("owner", "admin"), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT quotes.*, customers.name AS customer_name
+       FROM quotes LEFT JOIN customers ON customers.id = quotes.customer_id
+       WHERE quotes.business_id = ? AND quotes.deleted_at IS NOT NULL ORDER BY quotes.deleted_at DESC`
     )
     .all(req.auth.businessId);
   res.json(rows);
 });
 
 router.get("/:id", (req, res) => {
-  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!quote) return res.status(404).json({ error: "Not found" });
 
   const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ?").all(quote.id);
@@ -42,19 +79,7 @@ router.post("/", (req, res) => {
   const customer = customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id) : null;
   const quoteNumber = `${business.quote_prefix || "QUO-"}${String(business.next_quote_number).padStart(6, "0")}`;
 
-  let subTotal = 0, rawTaxTotal = 0, discountTotal = 0;
-  const rawComputedLines = lineItems.map((line) => {
-    const qty = Number(line.qty) || 0;
-    const rate = Number(line.rate) || 0;
-    const discount = Number(line.discount) || 0;
-    const taxRate = Number(line.tax_rate) || 0;
-    const lineBase = qty * rate - discount;
-    const lineTax = lineBase * (taxRate / 100);
-    subTotal += qty * rate;
-    discountTotal += discount;
-    rawTaxTotal += lineTax;
-    return { ...line, qty, rate, discount, tax_rate: taxRate, amount: lineBase + lineTax };
-  });
+  const { computedLines: rawComputedLines, subTotal, discountTotal, taxTotal: rawTaxTotal } = computeLineTotals(lineItems);
   const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
     subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: gst_treatment,
     businessState: business.state, customerState: customer?.state,
@@ -91,20 +116,91 @@ router.post("/", (req, res) => {
   res.status(201).json(db.prepare("SELECT * FROM quotes WHERE id = ?").get(quoteId));
 });
 
+// Full edit — Owner/Admin only, matching the same tier as an invoice edit.
+// Recomputes totals exactly like create; never touches quote_number, status,
+// or converted_invoice_id, so editing a quote can't undo a conversion or
+// resurrect its numbering (2026-09-20).
+router.put("/:id", requireRole("owner", "admin"), (req, res) => {
+  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
+  if (!quote) return res.status(404).json({ error: "Not found" });
+
+  const { customer_id, quote_date, expiry_date, reference, notes, lineItems, gst_treatment } = req.body;
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    return res.status(400).json({ error: "At least one line item is required" });
+  }
+
+  const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
+  const customer = customer_id ? db.prepare("SELECT * FROM customers WHERE id = ?").get(customer_id) : null;
+  const { computedLines: rawComputedLines, subTotal, discountTotal, taxTotal: rawTaxTotal } = computeLineTotals(lineItems);
+  const { treatment, taxTotal, cgst, sgst, igst, total } = applyGstTreatment({
+    subTotal, discountTotal, taxTotal: rawTaxTotal, treatment: gst_treatment || quote.gst_treatment,
+    businessState: business.state, customerState: customer?.state,
+  });
+  const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
+
+  const insertLine = db.prepare(
+    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE quotes SET
+        customer_id = ?, quote_date = ?, expiry_date = ?, reference = ?, notes = ?,
+        sub_total = ?, discount = ?, tax_total = ?, total = ?, gst_treatment = ?, cgst = ?, sgst = ?, igst = ?
+       WHERE id = ?`
+    ).run(
+      customer_id || null, quote_date || quote.quote_date, expiry_date || null, reference || null, notes || null,
+      subTotal, discountTotal, taxTotal, total, treatment, cgst, sgst, igst,
+      quote.id
+    );
+    db.prepare("DELETE FROM quote_line_items WHERE quote_id = ?").run(quote.id);
+    for (const line of computedLines) {
+      insertLine.run(quote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount);
+    }
+  })();
+
+  res.json(db.prepare("SELECT * FROM quotes WHERE id = ?").get(quote.id));
+});
+
 router.put("/:id/status", (req, res) => {
   const { status } = req.body;
   if (!["draft", "sent", "accepted", "declined"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
-  db.prepare("UPDATE quotes SET status = ? WHERE id = ? AND business_id = ?").run(status, req.params.id, req.auth.businessId);
+  db.prepare("UPDATE quotes SET status = ? WHERE id = ? AND business_id = ? AND deleted_at IS NULL").run(status, req.params.id, req.auth.businessId);
   res.json(db.prepare("SELECT * FROM quotes WHERE id = ?").get(req.params.id));
+});
+
+router.delete("/:id", requireRole("owner", "admin"), (req, res) => {
+  const result = db
+    .prepare("UPDATE quotes SET deleted_at = datetime('now') WHERE id = ? AND business_id = ? AND deleted_at IS NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Quote not found." });
+  res.status(204).end();
+});
+
+router.post("/:id/restore", requireRole("owner", "admin"), (req, res) => {
+  const result = db
+    .prepare("UPDATE quotes SET deleted_at = NULL WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
+  res.json(db.prepare("SELECT * FROM quotes WHERE id = ?").get(req.params.id));
+});
+
+router.delete("/:id/permanent", requireRole("owner", "admin"), (req, res) => {
+  const result = db
+    .prepare("DELETE FROM quotes WHERE id = ? AND business_id = ? AND deleted_at IS NOT NULL")
+    .run(req.params.id, req.auth.businessId);
+  if (result.changes === 0) return res.status(404).json({ error: "Not found in trash" });
+  res.status(204).end();
 });
 
 // Convert an accepted quote into a real invoice — copies line items across,
 // re-numbers using the invoice sequence, and marks the quote as converted
 // so it can't be converted twice.
 router.post("/:id/convert", (req, res) => {
-  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!quote) return res.status(404).json({ error: "Not found" });
   if (quote.converted_invoice_id) return res.status(400).json({ error: "This quote was already converted to an invoice" });
 
@@ -146,7 +242,7 @@ router.post("/:id/convert", (req, res) => {
 
 // Email the quote to the customer (or an override address) as a PDF attachment.
 router.post("/:id/send", async (req, res) => {
-  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
+  const quote = db.prepare("SELECT * FROM quotes WHERE id = ? AND business_id = ? AND deleted_at IS NULL").get(req.params.id, req.auth.businessId);
   if (!quote) return res.status(404).json({ error: "Not found" });
 
   const lineItems = db.prepare("SELECT * FROM quote_line_items WHERE quote_id = ?").all(quote.id);

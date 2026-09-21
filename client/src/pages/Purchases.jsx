@@ -46,6 +46,10 @@ export default function Purchases() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const dateFormat = useDateFormat();
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [editError, setEditError] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   const load = () => api.listPurchases().then(setPurchases);
   useEffect(() => {
@@ -54,6 +58,48 @@ export default function Purchases() {
     api.listCustomers().then(setCustomers);
     api.getBusiness().then(setBusiness);
   }, []);
+
+  // A popup edit, same shape as the inline Add form above it — the backend
+  // route (PUT /api/purchases/:id) already existed for "Mark Paid Today",
+  // this just exposes the rest of it (vendor, bill number, description,
+  // amount, tax, billable customer) instead of only the paid date (2026-09-20).
+  const startEdit = (p) => {
+    setEditTarget(p);
+    setEditError("");
+    setEditForm({
+      vendor_id: p.vendor_id || "", purchase_date: p.purchase_date, bill_number: p.bill_number || "",
+      description: p.description || "", amount: p.amount, tax_rate: p.tax_rate || 0, notes: p.notes || "",
+      paid_date: p.paid_date || "", billable_customer_id: p.billable_customer_id || "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditTarget(null);
+    setEditForm(null);
+    setEditError("");
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    setEditSaving(true);
+    setEditError("");
+    try {
+      await api.updatePurchase(editTarget.id, {
+        ...editForm,
+        vendor_id: editForm.vendor_id || null,
+        amount: Number(editForm.amount),
+        tax_rate: Number(editForm.tax_rate),
+        paid_date: editForm.paid_date || null,
+        billable_customer_id: editForm.billable_customer_id || null,
+      });
+      cancelEdit();
+      load();
+    } catch (err) {
+      setEditError(err.message);
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const filteredPurchases = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -93,7 +139,7 @@ export default function Purchases() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this purchase record? This cannot be undone.")) return;
+    if (!window.confirm("Delete this purchase record? It moves to Trash and can be restored from there.")) return;
     await api.deletePurchase(id);
     load();
   };
@@ -146,6 +192,76 @@ export default function Purchases() {
         </label>
       </div>
       {error && <p className="error">{error}</p>}
+
+      {editTarget && (
+        <div className="modal-backdrop" onMouseDown={cancelEdit}>
+          <div className="modal-panel" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Purchase</h3>
+              <button type="button" className="modal-close" onClick={cancelEdit} aria-label="Close">
+                &times;
+              </button>
+            </div>
+            <form onSubmit={saveEdit}>
+              <div className="form-row">
+                <label className="block">
+                  Date
+                  <input type="date" value={editForm.purchase_date} onChange={(e) => setEditForm({ ...editForm, purchase_date: e.target.value })} required />
+                </label>
+                <label className="block">
+                  Vendor
+                  <select value={editForm.vendor_id} onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}>
+                    <option value="">Vendor (optional)</option>
+                    {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <label className="block">
+                  Bill/reference number
+                  <input value={editForm.bill_number} onChange={(e) => setEditForm({ ...editForm, bill_number: e.target.value })} />
+                </label>
+                <label className="block">
+                  Description
+                  <input value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+                </label>
+              </div>
+              <div className="form-row">
+                <label className="block">
+                  Amount (₹, before tax)
+                  <input type="number" step="0.01" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} required />
+                </label>
+                <label className="block">
+                  Tax %
+                  <TaxRateInput value={editForm.tax_rate} onChange={(v) => setEditForm({ ...editForm, tax_rate: v })} />
+                </label>
+              </div>
+              <div className="form-row">
+                <label className="block">
+                  Paid on (optional)
+                  <input type="date" value={editForm.paid_date} onChange={(e) => setEditForm({ ...editForm, paid_date: e.target.value })} />
+                </label>
+                <label className="block">
+                  Billable to a customer (optional)
+                  <select value={editForm.billable_customer_id} onChange={(e) => setEditForm({ ...editForm, billable_customer_id: e.target.value })}>
+                    <option value="">Not billable</option>
+                    {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label className="block">
+                Notes (optional)
+                <textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+              </label>
+              {editError && <p className="error">{editError}</p>}
+              <div className="modal-actions">
+                <button type="button" className="link-btn" onClick={cancelEdit}>Cancel</button>
+                <button type="submit" disabled={editSaving}>{editSaving ? "Saving..." : "Save Changes"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {purchases.length > 0 && (
         <>
@@ -211,7 +327,11 @@ export default function Purchases() {
                       ? <span className="error">₹{formatMoney(msme.interest)} ({msme.daysOverdue}d past {p.vendor_has_written_agreement ? "45" : "15"}-day deadline)</span>
                       : <span className="muted">Due by {formatDate(msme.deadline.toISOString().slice(0, 10), dateFormat)}</span>}
                   </td>
-                  <td><button type="button" className="link-btn" onClick={() => handleDelete(p.id)}>Delete</button></td>
+                  <td>
+                    <button type="button" className="link-btn" onClick={() => startEdit(p)}>Edit</button>
+                    {" · "}
+                    <button type="button" className="link-btn" onClick={() => handleDelete(p.id)}>Delete</button>
+                  </td>
                 </tr>
               );
             })}

@@ -17,7 +17,7 @@ router.get("/summary", (req, res) => {
         COALESCE(SUM(total), 0) AS total_invoiced,
         COALESCE(SUM(total - balance_due), 0) AS total_received,
         COALESCE(SUM(balance_due), 0) AS total_outstanding
-       FROM invoices WHERE business_id = ? AND status <> 'cancelled'`
+       FROM invoices WHERE business_id = ? AND status <> 'cancelled' AND deleted_at IS NULL`
     )
     .get(businessId);
 
@@ -25,7 +25,7 @@ router.get("/summary", (req, res) => {
     .prepare(
       `SELECT customers.name, SUM(invoices.total) AS total
        FROM invoices JOIN customers ON customers.id = invoices.customer_id
-       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled'
+       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled' AND invoices.deleted_at IS NULL
        GROUP BY invoices.customer_id ORDER BY total DESC LIMIT 5`
     )
     .all(businessId);
@@ -34,7 +34,7 @@ router.get("/summary", (req, res) => {
     .prepare(
       `SELECT invoice_line_items.description, SUM(invoice_line_items.qty) AS qty, SUM(invoice_line_items.amount) AS total
        FROM invoice_line_items JOIN invoices ON invoices.id = invoice_line_items.invoice_id
-       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled'
+       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled' AND invoices.deleted_at IS NULL
        GROUP BY invoice_line_items.description ORDER BY total DESC LIMIT 5`
     )
     .all(businessId);
@@ -45,7 +45,7 @@ router.get("/summary", (req, res) => {
     .prepare(
       `SELECT customers.name, SUM(invoices.total) AS total, COUNT(*) AS invoice_count
        FROM invoices JOIN customers ON customers.id = invoices.customer_id
-       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled'
+       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled' AND invoices.deleted_at IS NULL
        GROUP BY invoices.customer_id ORDER BY total DESC LIMIT 200`
     )
     .all(businessId);
@@ -54,7 +54,7 @@ router.get("/summary", (req, res) => {
     .prepare(
       `SELECT invoice_line_items.description, SUM(invoice_line_items.qty) AS qty, SUM(invoice_line_items.amount) AS total
        FROM invoice_line_items JOIN invoices ON invoices.id = invoice_line_items.invoice_id
-       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled'
+       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled' AND invoices.deleted_at IS NULL
        GROUP BY invoice_line_items.description ORDER BY total DESC LIMIT 200`
     )
     .all(businessId);
@@ -68,7 +68,7 @@ router.get("/summary", (req, res) => {
         COALESCE(SUM(invoices.total - invoices.balance_due), 0) AS total_received,
         COALESCE(SUM(invoices.balance_due), 0) AS balance_due
        FROM customers LEFT JOIN invoices
-         ON invoices.customer_id = customers.id AND invoices.business_id = customers.business_id AND invoices.status <> 'cancelled'
+         ON invoices.customer_id = customers.id AND invoices.business_id = customers.business_id AND invoices.status <> 'cancelled' AND invoices.deleted_at IS NULL
        WHERE customers.business_id = ?
        GROUP BY customers.id
        HAVING total_invoiced > 0
@@ -84,7 +84,7 @@ router.get("/summary", (req, res) => {
        FROM payments
        JOIN invoices ON invoices.id = payments.invoice_id
        LEFT JOIN customers ON customers.id = invoices.customer_id
-       WHERE invoices.business_id = ?
+       WHERE invoices.business_id = ? AND invoices.deleted_at IS NULL
        ORDER BY payments.paid_at DESC LIMIT 200`
     )
     .all(businessId);
@@ -100,7 +100,7 @@ router.get("/summary", (req, res) => {
     .prepare(
       `SELECT strftime('%Y-%m', payments.paid_at) AS month, SUM(payments.amount) AS total
        FROM payments JOIN invoices ON invoices.id = payments.invoice_id
-       WHERE invoices.business_id = ?
+       WHERE invoices.business_id = ? AND invoices.deleted_at IS NULL
        GROUP BY month`
     )
     .all(businessId);
@@ -120,11 +120,11 @@ router.get("/summary", (req, res) => {
   const unpaidWithDueDate = db
     .prepare(
       `SELECT balance_due, CAST(julianday('now') - julianday(due_date) AS INTEGER) AS days_overdue
-       FROM invoices WHERE business_id = ? AND status <> 'cancelled' AND balance_due > 0 AND due_date IS NOT NULL`
+       FROM invoices WHERE business_id = ? AND status <> 'cancelled' AND deleted_at IS NULL AND balance_due > 0 AND due_date IS NOT NULL`
     )
     .all(businessId);
   const unpaidNoDueDate = db
-    .prepare(`SELECT COALESCE(SUM(balance_due), 0) AS total FROM invoices WHERE business_id = ? AND status <> 'cancelled' AND balance_due > 0 AND due_date IS NULL`)
+    .prepare(`SELECT COALESCE(SUM(balance_due), 0) AS total FROM invoices WHERE business_id = ? AND status <> 'cancelled' AND deleted_at IS NULL AND balance_due > 0 AND due_date IS NULL`)
     .get(businessId).total;
   const arAging = { current: unpaidNoDueDate, days1to30: 0, days31to60: 0, days61to90: 0, days90plus: 0 };
   for (const row of unpaidWithDueDate) {
@@ -137,12 +137,12 @@ router.get("/summary", (req, res) => {
 
   const statusBreakdown = db
     .prepare(
-      `SELECT status, COUNT(*) AS count FROM invoices WHERE business_id = ? GROUP BY status`
+      `SELECT status, COUNT(*) AS count FROM invoices WHERE business_id = ? AND deleted_at IS NULL GROUP BY status`
     )
     .all(businessId);
 
   const totalCredited = db
-    .prepare(`SELECT COALESCE(SUM(total), 0) AS total FROM credit_notes WHERE business_id = ?`)
+    .prepare(`SELECT COALESCE(SUM(total), 0) AS total FROM credit_notes WHERE business_id = ? AND deleted_at IS NULL`)
     .get(businessId).total;
 
   // "Average No. of Days for Getting Paid" — same metric Zoho shows on its
@@ -155,7 +155,7 @@ router.get("/summary", (req, res) => {
       `SELECT AVG(days_to_pay) AS avg_days FROM (
          SELECT julianday(MAX(payments.paid_at)) - julianday(invoices.invoice_date) AS days_to_pay
          FROM invoices JOIN payments ON payments.invoice_id = invoices.id
-         WHERE invoices.business_id = ? AND invoices.status = 'paid'
+         WHERE invoices.business_id = ? AND invoices.status = 'paid' AND invoices.deleted_at IS NULL
          GROUP BY invoices.id
        )`
     )
@@ -169,7 +169,7 @@ router.get("/summary", (req, res) => {
     .prepare(
       `SELECT invoices.id, invoices.invoice_number, invoices.due_date, invoices.balance_due, customers.name AS customer_name
        FROM invoices LEFT JOIN customers ON customers.id = invoices.customer_id
-       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled' AND invoices.balance_due > 0
+       WHERE invoices.business_id = ? AND invoices.status <> 'cancelled' AND invoices.deleted_at IS NULL AND invoices.balance_due > 0
          AND invoices.due_date IS NOT NULL AND invoices.due_date < date('now')
        ORDER BY invoices.due_date ASC`
     )
