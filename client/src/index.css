@@ -212,7 +212,7 @@ textarea { resize: vertical; }
 .table th { color: var(--muted); font-weight: 600; }
 .table .num { text-align: right; }
 .line-item-table input, .line-item-table select, .line-item-table textarea { margin-top: 0; }
-.line-item-table td { padding: 4px; }
+.line-item-table td { padding: 4px; vertical-align: top; }
 .line-item-table textarea { resize: vertical; min-height: 38px; font-size: 14px; }
 /* The item picker is the WHOLE "Item & Description" cell — one combined
    widget (search box, or the confirmed name + its description), matching how
@@ -234,15 +234,23 @@ textarea { resize: vertical; }
    fixed label and a description box appears underneath it. */
 .item-picker { position: relative; }
 .item-picker input { font-size: 13px; padding: 6px 8px; }
+/* Once an item is picked, its name reads as plain text, not its own boxed
+   field: only the description below is meant to look boxed, matching
+   Naveen's Zoho reference (2026-09-21): "once we select from dropdown, the
+   heading will not be shown in box, only below description will be as box". */
 .item-picker-locked {
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
-  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; background: white;
+  padding: 4px 0;
 }
 .item-picker-locked-name {
   background: none; border: none; padding: 0; margin: 0; text-align: left; flex: 1;
   font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer;
 }
 .item-picker-locked-name:hover { text-decoration: underline; }
+/* Groups the new "Edit item" icon (Owner/Admin only, real catalog picks
+   only) with the existing clear "x", so they sit together at the row's end
+   instead of the clear button alone (2026-09-21). */
+.item-picker-locked-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .item-picker-locked-clear {
   background: none; border: none; padding: 0 2px; margin: 0; color: var(--muted);
   font-size: 16px; line-height: 1; cursor: pointer; flex-shrink: 0;
@@ -305,7 +313,7 @@ textarea { resize: vertical; }
   cursor: pointer; padding: 0 4px;
 }
 .modal-close:hover { color: var(--ink); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 
 .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
 .badge-draft { background: #eee; color: #555; }
@@ -629,6 +637,10 @@ textarea { resize: vertical; }
 
 .doc-line-items thead tr { background: #2b2f38; }
 .doc-line-items thead th { color: white; font-weight: 600; padding: 10px 8px; border-bottom: none; }
+/* Qty/Rate/Discount/Amount stay top aligned even when a line's description
+   runs to several lines, matching Zoho's own printed layout rather than the
+   browser's default middle alignment (2026-09-21). */
+.doc-line-items td { vertical-align: top; }
 /* Item & Description column: a multi-line description (an item's own name
    on top, further detail below, the same shape Zoho prints) is rendered as
    real stacked block elements by FullInvoice.jsx/QuoteView.jsx/

@@ -28,6 +28,7 @@ export default function LineItemsTable({
   items,
   canManageItems,
   onItemCreated,
+  onItemUpdated,
   showHsnUnit = false,
   symbol = "₹",
 }) {
@@ -242,6 +243,7 @@ export default function LineItemsTable({
                         onTextChange={(text) => updateLine(i, { item_id: "", item_name: text })}
                         onDescriptionChange={(text) => updateLine(i, { description: text })}
                         onItemCreated={(item) => handleItemCreated(i, item)}
+                        onItemUpdated={onItemUpdated}
                       />
                     </div>
                   </td>

@@ -4,6 +4,8 @@ import { api, getUser } from "../lib/api";
 import { emptyLine, computeTotals, isHeaderLine } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
 import LineItemsTable from "../components/LineItemsTable";
+import UnsavedChangesGuard from "../components/UnsavedChangesGuard";
+import { useDirtyGuard } from "../lib/useDirtyGuard";
 import { GST_TREATMENTS } from "../lib/gst";
 
 export default function NewCreditNote() {
@@ -100,41 +102,78 @@ export default function NewCreditNote() {
   const addCatalogItem = (item) => {
     setItems((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
   };
+  // See NewInvoice.jsx's matching comment: updates the shared catalog only,
+  // never this or any other line's own already-typed fields (2026-09-21).
+  const updateCatalogItem = (item) => {
+    setItems((prev) => prev.map((it) => (String(it.id) === String(item.id) ? item : it)).sort((a, b) => a.name.localeCompare(b.name)));
+  };
   const rawTotals = computeTotals(lines);
   const { subTotal, discountTotal, taxTotal } = rawTotals;
   const total = gstTreatment === "gst" ? rawTotals.total : subTotal - discountTotal;
 
+  const buildPayload = () => ({
+    customer_id: customerId || null,
+    invoice_id: invoiceId || null,
+    credit_note_date: creditNoteDate || null,
+    reason: reason || null,
+    // When credited against an invoice, leave this out so the server
+    // reuses that invoice's own GST treatment instead of overriding it.
+    gst_treatment: invoiceId ? undefined : gstTreatment,
+    lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
+  });
+
+  // buildPayload doubles as the unsaved-changes guard's own dirty-check
+  // snapshot, see useDirtyGuard's comment (2026-09-21).
+  const { isDirty, markClean } = useDirtyGuard(buildPayload, !loadingCreditNote);
+
+  const validate = () => {
+    if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
+      return "Add at least one line item (a header alone is not enough).";
+    }
+    return "";
+  };
+
+  const performSave = async () => {
+    if (isEdit) {
+      await api.updateCreditNote(id, buildPayload());
+      return null;
+    }
+    return api.createCreditNote(buildPayload());
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
-      setError("Add at least one line item (a header alone is not enough).");
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setSaving(true);
-    const payload = {
-      customer_id: customerId || null,
-      invoice_id: invoiceId || null,
-      credit_note_date: creditNoteDate || null,
-      reason: reason || null,
-      // When credited against an invoice, leave this out so the server
-      // reuses that invoice's own GST treatment instead of overriding it.
-      gst_treatment: invoiceId ? undefined : gstTreatment,
-      lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
-    };
     try {
-      if (isEdit) {
-        await api.updateCreditNote(id, payload);
-        navigate(`/credit-notes/${id}`);
-      } else {
-        const creditNote = await api.createCreditNote(payload);
-        navigate(`/credit-notes/${creditNote.id}`);
-      }
+      const creditNote = await performSave();
+      markClean();
+      navigate(isEdit ? `/credit-notes/${id}` : `/credit-notes/${creditNote.id}`);
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  // Used by the unsaved-changes prompt's "Save & Leave" button: the same
+  // save, but it never navigates to the credit note's own view page, since
+  // Save & Leave should land wherever the user was actually trying to go
+  // (2026-09-21).
+  const handleSaveAndLeave = async () => {
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      throw new Error(validationError);
+    }
+    setError("");
+    await performSave();
+    markClean();
   };
 
   if (loadingCreditNote) return <p className="muted">Loading...</p>;
@@ -180,6 +219,7 @@ export default function NewCreditNote() {
           items={items}
           canManageItems={canManageItems}
           onItemCreated={addCatalogItem}
+          onItemUpdated={updateCatalogItem}
           symbol="₹"
         />
 
@@ -200,6 +240,7 @@ export default function NewCreditNote() {
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : isEdit ? "Save Changes" : "Create Credit Note"}</button>
       </form>
+      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} />
     </div>
   );
 }

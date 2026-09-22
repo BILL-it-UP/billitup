@@ -4,6 +4,8 @@ import { api, getUser } from "../lib/api";
 import { emptyLine, computeTotals, isHeaderLine } from "../lib/lineItemMath";
 import { formatMoney } from "../lib/format";
 import LineItemsTable from "../components/LineItemsTable";
+import UnsavedChangesGuard from "../components/UnsavedChangesGuard";
+import { useDirtyGuard } from "../lib/useDirtyGuard";
 import { GST_TREATMENTS } from "../lib/gst";
 
 export default function NewQuote() {
@@ -79,40 +81,76 @@ export default function NewQuote() {
   const addCatalogItem = (item) => {
     setItems((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
   };
+  // See NewInvoice.jsx's matching comment: updates the shared catalog only,
+  // never this or any other line's own already-typed fields (2026-09-21).
+  const updateCatalogItem = (item) => {
+    setItems((prev) => prev.map((it) => (String(it.id) === String(item.id) ? item : it)).sort((a, b) => a.name.localeCompare(b.name)));
+  };
   const rawTotals = computeTotals(lines);
   const { subTotal, discountTotal, taxTotal } = rawTotals;
   const total = gstTreatment === "gst" ? rawTotals.total : subTotal - discountTotal;
 
+  const buildPayload = () => ({
+    customer_id: customerId || null,
+    quote_date: quoteDate || null,
+    expiry_date: expiryDate || null,
+    reference: reference || null,
+    gst_treatment: gstTreatment,
+    notes: notes || null,
+    lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
+  });
+
+  // buildPayload doubles as the unsaved-changes guard's own dirty-check
+  // snapshot, see useDirtyGuard's comment (2026-09-21).
+  const { isDirty, markClean } = useDirtyGuard(buildPayload, !loadingQuote);
+
+  const validate = () => {
+    if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
+      return "Add at least one line item (a header alone is not enough).";
+    }
+    return "";
+  };
+
+  const performSave = async () => {
+    if (isEdit) {
+      await api.updateQuote(id, buildPayload());
+      return null;
+    }
+    return api.createQuote(buildPayload());
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
-      setError("Add at least one line item (a header alone is not enough).");
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setSaving(true);
-    const payload = {
-      customer_id: customerId || null,
-      quote_date: quoteDate || null,
-      expiry_date: expiryDate || null,
-      reference: reference || null,
-      gst_treatment: gstTreatment,
-      notes: notes || null,
-      lineItems: lines.map((l) => ({ ...l, item_id: l.item_id || null })),
-    };
     try {
-      if (isEdit) {
-        await api.updateQuote(id, payload);
-        navigate(`/quotes/${id}`);
-      } else {
-        const quote = await api.createQuote(payload);
-        navigate(`/quotes/${quote.id}`);
-      }
+      const quote = await performSave();
+      markClean();
+      navigate(isEdit ? `/quotes/${id}` : `/quotes/${quote.id}`);
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  // Used by the unsaved-changes prompt's "Save & Leave" button: the same
+  // save, but it never navigates to the quote's own view page, since Save
+  // & Leave should land wherever the user was actually trying to go (2026-09-21).
+  const handleSaveAndLeave = async () => {
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      throw new Error(validationError);
+    }
+    setError("");
+    await performSave();
+    markClean();
   };
 
   if (loadingQuote) return <p className="muted">Loading...</p>;
@@ -157,6 +195,7 @@ export default function NewQuote() {
           items={items}
           canManageItems={canManageItems}
           onItemCreated={addCatalogItem}
+          onItemUpdated={updateCatalogItem}
           symbol="₹"
         />
 
@@ -174,6 +213,7 @@ export default function NewQuote() {
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : isEdit ? "Save Changes" : "Create Quote"}</button>
       </form>
+      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} />
     </div>
   );
 }

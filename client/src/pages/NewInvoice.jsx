@@ -7,6 +7,8 @@ import CustomerPicker from "../components/CustomerPicker";
 import LineItemsTable from "../components/LineItemsTable";
 import CollapsibleSection from "../components/CollapsibleSection";
 import InvoiceNumberSettingsModal from "../components/InvoiceNumberSettingsModal";
+import UnsavedChangesGuard from "../components/UnsavedChangesGuard";
+import { useDirtyGuard } from "../lib/useDirtyGuard";
 import { IconSettings } from "../components/Icons";
 import { GST_TREATMENTS } from "../lib/gst";
 import { CURRENCIES, currencySymbol } from "../lib/currencies";
@@ -81,10 +83,18 @@ export default function NewInvoice() {
   const [billablePurchases, setBillablePurchases] = useState([]);
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState([]);
   const [retainerApplied, setRetainerApplied] = useState("");
+  // Every one of the fetches below can set a field the unsaved-changes
+  // guard's snapshot depends on (currency and Terms & Conditions both get a
+  // default filled in asynchronously, for a brand-new invoice, once these
+  // land), so the guard has to wait on all of them together rather than just
+  // on isEdit's own loadingInvoice flag, or a slow request would land after
+  // the guard already took its baseline and the form would look dirty before
+  // the user ever touched anything (2026-09-21).
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
 
   useEffect(() => {
-    api.listCustomers().then(setCustomers);
-    api.listItems().then((list) => {
+    const customersPromise = api.listCustomers().then(setCustomers);
+    const itemsPromise = api.listItems().then((list) => {
       itemsRef.current = list;
       setItems(list);
     });
@@ -92,23 +102,23 @@ export default function NewInvoice() {
     // an edit in progress below overwrites this with the invoice's actual
     // currency once it loads, so this only matters for a genuinely new
     // invoice (2026-09-16).
-    api.getBusiness().then((b) => {
+    const businessPromise = api.getBusiness().then((b) => {
       setBusiness(b);
       if (!isEdit) setCurrency(b.default_currency || "INR");
     });
     // What the next invoice's number would be if saved right now. Not
     // meaningful for an edit, which already has its own number.
-    if (!isEdit) {
-      api.getNextInvoiceNumber().then(({ invoiceNumber, mode }) => {
-        setNextNumberPreview(invoiceNumber);
-        setInvoiceNumberMode(mode);
-        if (mode === "manual") setManualInvoiceNumber(invoiceNumber);
-      }).catch(() => {});
-    }
+    const nextNumberPromise = !isEdit
+      ? api.getNextInvoiceNumber().then(({ invoiceNumber, mode }) => {
+          setNextNumberPreview(invoiceNumber);
+          setInvoiceNumberMode(mode);
+          if (mode === "manual") setManualInvoiceNumber(invoiceNumber);
+        }).catch(() => {})
+      : Promise.resolve();
     // A brand new invoice starts on whichever saved Terms & Conditions
     // template is marked default (if any) — same "an edit overwrites this
     // once it loads" reasoning as currency above (2026-09-16).
-    api.listTermsTemplates().then((list) => {
+    const termsPromise = api.listTermsTemplates().then((list) => {
       setTermsTemplates(list);
       if (!isEdit) {
         const defaultTemplate = list.find((t) => t.is_default) || list[0];
@@ -118,6 +128,8 @@ export default function NewInvoice() {
         }
       }
     });
+    Promise.all([customersPromise, itemsPromise, businessPromise, nextNumberPromise, termsPromise])
+      .then(() => setInitialDataLoaded(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -309,6 +321,17 @@ export default function NewInvoice() {
     setItems((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
   };
 
+  // Editing an already-picked item's own catalog details (the new "Edit
+  // Item" icon on a selected line, 2026-09-21) updates the shared catalog so
+  // every other line referencing it sees the change too. Deliberately never
+  // touches this or any other line's own rate/tax/description, the same way
+  // re-picking an already-picked item doesn't clobber text a user already
+  // typed, editing an item's catalog price isn't the same as saying this
+  // specific line should now charge that price.
+  const updateCatalogItem = (item) => {
+    setItems((prev) => prev.map((it) => (String(it.id) === String(item.id) ? item : it)).sort((a, b) => a.name.localeCompare(b.name)));
+  };
+
   const rawTotals = computeTotals(lines);
   const { subTotal, discountTotal, taxTotal } = rawTotals;
   // Mirrors server/src/lib/gst.js: RCM and "no GST" don't add the tax to the
@@ -353,6 +376,12 @@ export default function NewInvoice() {
     }),
   });
 
+  // See useDirtyGuard's own comment: buildPayload is exactly the snapshot of
+  // "everything about this invoice that matters" the form already builds for
+  // saving, so it doubles as the dirty-check snapshot too, nothing new to
+  // keep in sync by hand as fields get added or removed later (2026-09-21).
+  const { isDirty, markClean } = useDirtyGuard(buildPayload, !loadingInvoice && !loadingClone && initialDataLoaded);
+
   // A new invoice is always saved as a real, numbered document the moment
   // it's created — "draft" vs "sent" is only ever a status label from here
   // on, never about whether it has a number yet. So all three actions below
@@ -363,34 +392,52 @@ export default function NewInvoice() {
   const selectedCustomer = customers.find((c) => String(c.id) === String(customerId));
   const customerHasEmail = Boolean(selectedCustomer?.email);
 
-  const submit = async (mode) => {
-    // mode: "draft" | "create" | "send"
-    setError("");
+  // mode: "draft" | "create" | "send" (ignored entirely in edit mode, which
+  // only ever has the one "Save Changes" action). Split out from submit()
+  // below so the unsaved-changes guard's own "Save & Leave" button can run
+  // the same validation and the same save, without also running submit()'s
+  // own post-save navigate() to the invoice's view page, since Save & Leave
+  // should land wherever the user was actually trying to go, not there.
+  const validate = (mode) => {
     // No more "walk-in / no customer" invoices — every BillItUp invoice is a
     // real GST document billed to someone, so a customer is required before
     // this ever reaches the server (which enforces the same rule).
-    if (!customerId) {
-      setError("Please select or add a customer before creating this invoice.");
-      return;
-    }
+    if (!customerId) return "Please select or add a customer before creating this invoice.";
     if (mode === "send" && !customerHasEmail) {
-      setError("This customer has no email on file — add one to their record, or use Create instead and send the invoice another way.");
-      return;
+      return "This customer has no email on file — add one to their record, or use Create instead and send the invoice another way.";
     }
     if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
-      setError("Add at least one line item (a header alone is not enough).");
+      return "Add at least one line item (a header alone is not enough).";
+    }
+    return "";
+  };
+
+  const performSave = async (mode) => {
+    if (isEdit) {
+      await api.updateInvoice(id, buildPayload());
+      return null;
+    }
+    const invoice = await api.createInvoice(buildPayload());
+    if (mode === "create") {
+      await api.setInvoiceStatus(invoice.id, "sent");
+    }
+    return invoice;
+  };
+
+  const submit = async (mode) => {
+    setError("");
+    const validationError = validate(mode);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setSaving(mode);
     try {
+      const invoice = await performSave(mode);
+      markClean();
       if (isEdit) {
-        await api.updateInvoice(id, buildPayload());
         navigate(`/invoices/${id}`);
         return;
-      }
-      const invoice = await api.createInvoice(buildPayload());
-      if (mode === "create") {
-        await api.setInvoiceStatus(invoice.id, "sent");
       }
       navigate(mode === "send" ? `/invoices/${invoice.id}?send=1` : `/invoices/${invoice.id}`);
     } catch (err) {
@@ -398,6 +445,24 @@ export default function NewInvoice() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // The default save used by "Save & Leave" on the unsaved-changes prompt: a
+  // brand-new invoice saves as a Draft (the least committal of the three
+  // actions, never sends anything), an edit just runs its one save action.
+  // Throws on failure (rather than setting `error` and swallowing it) so the
+  // prompt itself can show the problem and stay open instead of discarding
+  // the user's changes anyway.
+  const handleSaveAndLeave = async () => {
+    const mode = isEdit ? undefined : "draft";
+    const validationError = validate(mode);
+    if (validationError) {
+      setError(validationError);
+      throw new Error(validationError);
+    }
+    setError("");
+    await performSave(mode);
+    markClean();
   };
 
   const symbol = currencySymbol(currency);
@@ -497,6 +562,7 @@ export default function NewInvoice() {
                 items={items}
                 canManageItems={canManageItems}
                 onItemCreated={addCatalogItem}
+                onItemUpdated={updateCatalogItem}
                 showHsnUnit
                 symbol={symbol}
               />
@@ -701,6 +767,7 @@ export default function NewInvoice() {
           }}
         />
       )}
+      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} />
     </div>
   );
 }

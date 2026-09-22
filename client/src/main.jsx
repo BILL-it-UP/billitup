@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
@@ -23,12 +23,19 @@ window.addEventListener("unhandledrejection", (event) => {
   if (getUser()) api.reportClientError(event.reason?.message || String(event.reason), window.location.pathname);
 });
 
+// A data router instead of the plain <BrowserRouter> App used to sit inside
+// (2026-09-21). App keeps its own familiar <Routes>/<Route> tree entirely
+// unchanged below, mounted as this one router's single splat route, so this
+// swap is otherwise invisible, it exists only so UnsavedChangesGuard's
+// useBlocker (which needs a real data router to intercept in-app navigation,
+// unlike the browser's own beforeunload event, which fires regardless of
+// which router is used) has one to attach to.
+const router = createBrowserRouter([{ path: "*", Component: App }]);
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </ErrorBoundary>
   </StrictMode>,
 );

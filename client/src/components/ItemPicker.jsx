@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ItemFormModal from "./ItemFormModal";
+import { IconEdit } from "./Icons";
 
 // A single Zoho-style "Item Details" cell: before anything is picked it's
 // just a type-to-search combobox. Once an item is selected (or free-typed
@@ -9,6 +10,14 @@ import ItemFormModal from "./ItemFormModal";
 // separate always-visible fields. Owners/Admins also get an inline "+ Add
 // New Item" option in the dropdown so they can add to the catalog without
 // leaving the form.
+//
+// Once picked, the item's name is deliberately plain text, not its own
+// boxed field, matching Naveen's Zoho reference (2026-09-21): only the
+// description below is meant to read as a box. A small Edit icon next to it
+// (Owner/Admin only, and only for a real catalog pick, not free-typed
+// custom text) opens the same Add/Edit popup used everywhere else an item
+// can be edited, updating the shared catalog without touching this line's
+// own already-typed rate, tax, or description.
 export default function ItemPicker({
   items,
   itemId,
@@ -19,10 +28,12 @@ export default function ItemPicker({
   onTextChange,
   onDescriptionChange,
   onItemCreated,
+  onItemUpdated,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(itemName || "");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [dropdownRect, setDropdownRect] = useState(null);
   const wrapRef = useRef(null);
   // The dropdown now lives in a portal on <body>, outside wrapRef's own DOM
@@ -119,6 +130,9 @@ export default function ItemPicker({
   // name is later cleared — clearing the item should never hide text the
   // user already typed.
   const showDescription = confirmed || Boolean((description || "").trim());
+  // Only a real catalog item (picked from the dropdown, not free-typed
+  // custom text) has anything to edit here.
+  const pickedItem = itemId ? items.find((it) => String(it.id) === String(itemId)) : null;
 
   return (
     <div className="item-picker" ref={wrapRef}>
@@ -127,9 +141,22 @@ export default function ItemPicker({
           <button type="button" className="item-picker-locked-name" onClick={() => setOpen(true)}>
             {itemName}
           </button>
-          <button type="button" className="item-picker-locked-clear" onClick={handleClear} title="Clear item" aria-label="Clear item">
-            &times;
-          </button>
+          <div className="item-picker-locked-actions">
+            {canManage && pickedItem && (
+              <button
+                type="button"
+                className="icon-btn"
+                title="Edit item"
+                aria-label="Edit item"
+                onClick={() => setShowEditModal(true)}
+              >
+                <IconEdit size={14} />
+              </button>
+            )}
+            <button type="button" className="item-picker-locked-clear" onClick={handleClear} title="Clear item" aria-label="Clear item">
+              &times;
+            </button>
+          </div>
         </div>
       ) : (
         <input
@@ -203,6 +230,17 @@ export default function ItemPicker({
             setShowAddModal(false);
             setQuery(item.name);
             onItemCreated(item);
+          }}
+        />
+      )}
+      {showEditModal && pickedItem && (
+        <ItemFormModal
+          item={pickedItem}
+          onClose={() => setShowEditModal(false)}
+          onSaved={(item) => {
+            setShowEditModal(false);
+            setQuery(item.name);
+            onItemUpdated(item);
           }}
         />
       )}
