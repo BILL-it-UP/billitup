@@ -2,9 +2,109 @@ import { useEffect, useMemo, useState } from "react";
 import { api, getUser } from "../lib/api";
 import { exportSheet } from "../lib/exportExcel";
 import { INDIAN_STATES } from "../lib/gst";
+import { formatAddressLines } from "../lib/format";
 import ConfirmDialog from "../components/ConfirmDialog";
 
-const BLANK_CUSTOMER_FORM = { name: "", phone: "", email: "", billing_address: "", pincode: "", country: "India", gstin: "", state: "" };
+const BLANK_CUSTOMER_FORM = {
+  name: "", phone: "", email: "", gstin: "",
+  billing_address: "", billing_address_line2: "", billing_city: "", state: "", pincode: "", country: "India",
+  shipping_address: "", shipping_address_line2: "", shipping_city: "", shipping_state: "", shipping_pincode: "", shipping_country: "",
+};
+
+// One combined postal address line, used for the customer list's Address
+// column and the Excel export. Built from the same individual Street 1/
+// Street 2/City/State/Pin Code/Country fields (2026-09-22) that print as
+// separate lines on a document, joined back into the single readable line
+// those two spots already showed, rather than adding a wide run of
+// near-empty columns for each part.
+function joinAddress(address) {
+  return formatAddressLines(address).join(", ");
+}
+
+// Billing and Shipping each get the same Street 1/Street 2/City/State/Pin
+// Code/Country shape, matching Zoho's own customer form (Naveen's
+// reference, 2026-09-22). One shared component instead of writing the same
+// six fields out twice per modal (Add and Edit), so the two can't drift.
+function AddressFields({ title, values, onChange, extra, stateHint }) {
+  const set = (field) => (e) => onChange(field, e.target.value);
+  return (
+    <fieldset className="address-fields">
+      <legend>
+        <span>{title}</span>
+        {extra}
+      </legend>
+      <label className="block">
+        Street 1
+        <input value={values.line1} onChange={set("line1")} placeholder="Building, street, area..." />
+      </label>
+      <label className="block">
+        Street 2 (optional)
+        <input value={values.line2} onChange={set("line2")} />
+      </label>
+      <div className="form-row">
+        <label className="block">
+          City
+          <input value={values.city} onChange={set("city")} />
+        </label>
+        <label className="block">
+          PIN code
+          <input value={values.pincode} onChange={set("pincode")} />
+        </label>
+      </div>
+      <div className="form-row">
+        <label className="block">
+          State
+          <select value={values.state} onChange={set("state")}>
+            <option value="">{stateHint || "Select"}</option>
+            {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          Country
+          <input value={values.country} onChange={set("country")} />
+        </label>
+      </div>
+    </fieldset>
+  );
+}
+
+// Reads/writes a form's (either the Add form or the Edit form, both share
+// the same BLANK_CUSTOMER_FORM shape) Billing or Shipping fields through
+// the generic line1/line2/city/state/pincode/country shape AddressFields
+// speaks, so the same fieldset markup serves both address blocks and both
+// modals without repeating six field bindings four times over (2026-09-22).
+function billingFieldsProps(state, setter) {
+  const map = { line1: "billing_address", line2: "billing_address_line2", city: "billing_city", state: "state", pincode: "pincode", country: "country" };
+  return {
+    values: { line1: state.billing_address, line2: state.billing_address_line2, city: state.billing_city, state: state.state, pincode: state.pincode, country: state.country },
+    onChange: (field, value) => setter((prev) => ({ ...prev, [map[field]]: value })),
+  };
+}
+
+function shippingFieldsProps(state, setter) {
+  const map = { line1: "shipping_address", line2: "shipping_address_line2", city: "shipping_city", state: "shipping_state", pincode: "shipping_pincode", country: "shipping_country" };
+  return {
+    values: { line1: state.shipping_address, line2: state.shipping_address_line2, city: state.shipping_city, state: state.shipping_state, pincode: state.shipping_pincode, country: state.shipping_country },
+    onChange: (field, value) => setter((prev) => ({ ...prev, [map[field]]: value })),
+  };
+}
+
+// Zoho's own customer form has a "Copy billing address" shortcut under
+// Shipping Address (Naveen's reference screenshot, 2026-09-22) for the
+// common case where the two match. State intentionally maps to the
+// billing-only `state` field (the one that drives CGST/SGST vs IGST), not
+// `shipping_state`, since that's what "the billing state" means here.
+function copyBillingToShipping(setter) {
+  setter((prev) => ({
+    ...prev,
+    shipping_address: prev.billing_address,
+    shipping_address_line2: prev.billing_address_line2,
+    shipping_city: prev.billing_city,
+    shipping_state: prev.state,
+    shipping_pincode: prev.pincode,
+    shipping_country: prev.country,
+  }));
+}
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -61,11 +161,19 @@ export default function Customers() {
       name: c.name || "",
       phone: c.phone || "",
       email: c.email || "",
+      gstin: c.gstin || "",
       billing_address: c.billing_address || "",
+      billing_address_line2: c.billing_address_line2 || "",
+      billing_city: c.billing_city || "",
+      state: c.state || "",
       pincode: c.pincode || "",
       country: c.country || "India",
-      gstin: c.gstin || "",
-      state: c.state || "",
+      shipping_address: c.shipping_address || "",
+      shipping_address_line2: c.shipping_address_line2 || "",
+      shipping_city: c.shipping_city || "",
+      shipping_state: c.shipping_state || "",
+      shipping_pincode: c.shipping_pincode || "",
+      shipping_country: c.shipping_country || "",
     });
   };
 
@@ -206,7 +314,7 @@ export default function Customers() {
 
       {showAddModal && (
         <div className="modal-backdrop" onMouseDown={closeAddModal}>
-          <div className="modal-panel" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="modal-panel wide" onMouseDown={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Add Customer</h3>
               <button type="button" className="modal-close" onClick={closeAddModal} aria-label="Close">
@@ -229,37 +337,23 @@ export default function Customers() {
                 </label>
               </div>
               <label className="block">
-                Address
-                <textarea
-                  rows={2}
-                  placeholder="Building, street, area..."
-                  value={form.billing_address}
-                  onChange={(e) => setForm({ ...form, billing_address: e.target.value })}
-                />
+                GSTIN (optional)
+                <input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} />
               </label>
-              <div className="form-row">
-                <label className="block">
-                  PIN code
-                  <input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
-                </label>
-                <label className="block">
-                  Country
-                  <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
-                </label>
-              </div>
-              <div className="form-row">
-                <label className="block">
-                  GSTIN (optional)
-                  <input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} />
-                </label>
-                <label className="block">
-                  State
-                  <select value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })}>
-                    <option value="">Select (for CGST/SGST vs IGST)</option>
-                    {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </label>
-              </div>
+              <AddressFields
+                title="Billing Address"
+                stateHint="Select (for CGST/SGST vs IGST)"
+                {...billingFieldsProps(form, setForm)}
+              />
+              <AddressFields
+                title="Shipping Address (optional, if different)"
+                extra={
+                  <button type="button" className="link-btn" onClick={() => copyBillingToShipping(setForm)}>
+                    Copy billing address
+                  </button>
+                }
+                {...shippingFieldsProps(form, setForm)}
+              />
               {error && <p className="error">{error}</p>}
               <div className="modal-actions">
                 <button type="button" className="link-btn" onClick={closeAddModal}>Cancel</button>
@@ -272,7 +366,7 @@ export default function Customers() {
 
       {editTarget && (
         <div className="modal-backdrop" onMouseDown={cancelEdit}>
-          <div className="modal-panel" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="modal-panel wide" onMouseDown={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Edit Customer</h3>
               <button type="button" className="modal-close" onClick={cancelEdit} aria-label="Close">
@@ -295,37 +389,23 @@ export default function Customers() {
                 </label>
               </div>
               <label className="block">
-                Address
-                <textarea
-                  rows={2}
-                  placeholder="Building, street, area..."
-                  value={editForm.billing_address}
-                  onChange={(e) => setEditForm({ ...editForm, billing_address: e.target.value })}
-                />
+                GSTIN (optional)
+                <input value={editForm.gstin} onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value })} />
               </label>
-              <div className="form-row">
-                <label className="block">
-                  PIN code
-                  <input value={editForm.pincode} onChange={(e) => setEditForm({ ...editForm, pincode: e.target.value })} />
-                </label>
-                <label className="block">
-                  Country
-                  <input value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} />
-                </label>
-              </div>
-              <div className="form-row">
-                <label className="block">
-                  GSTIN (optional)
-                  <input value={editForm.gstin} onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value })} />
-                </label>
-                <label className="block">
-                  State
-                  <select value={editForm.state} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}>
-                    <option value="">Select (for CGST/SGST vs IGST)</option>
-                    {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </label>
-              </div>
+              <AddressFields
+                title="Billing Address"
+                stateHint="Select (for CGST/SGST vs IGST)"
+                {...billingFieldsProps(editForm, setEditForm)}
+              />
+              <AddressFields
+                title="Shipping Address (optional, if different)"
+                extra={
+                  <button type="button" className="link-btn" onClick={() => copyBillingToShipping(setEditForm)}>
+                    Copy billing address
+                  </button>
+                }
+                {...shippingFieldsProps(editForm, setEditForm)}
+              />
               <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>Portal access is turned on or off from the Portal column, not here.</p>
               {editError && <p className="error">{editError}</p>}
               <div className="modal-actions">
@@ -374,7 +454,7 @@ export default function Customers() {
             return (
               <tr key={c.id}>
                 <td>{c.name}</td><td>{c.phone}</td><td>{c.email}</td>
-                <td>{[c.billing_address, c.pincode, c.country].filter(Boolean).join(", ")}</td>
+                <td>{joinAddress({ line1: c.billing_address, line2: c.billing_address_line2, city: c.billing_city, state: c.state, pincode: c.pincode, country: c.country })}</td>
                 <td>{c.gstin}</td><td>{c.state}</td>
                 <td>
                   {c.portal_status === "no_email" && (
@@ -467,9 +547,8 @@ function exportCustomersToExcel(customers) {
     Name: c.name,
     Phone: c.phone || "",
     Email: c.email || "",
-    "Billing Address": c.billing_address || "",
-    "PIN Code": c.pincode || "",
-    Country: c.country || "",
+    "Billing Address": joinAddress({ line1: c.billing_address, line2: c.billing_address_line2, city: c.billing_city, state: c.state, pincode: c.pincode, country: c.country }),
+    "Shipping Address": joinAddress({ line1: c.shipping_address, line2: c.shipping_address_line2, city: c.shipping_city, state: c.shipping_state, pincode: c.shipping_pincode, country: c.shipping_country }),
     GSTIN: c.gstin || "",
     State: c.state || "",
     "Retainer Balance": Number(c.retainer_balance || 0),

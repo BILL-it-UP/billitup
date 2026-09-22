@@ -51,11 +51,14 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     email_subject_receipt, email_body_receipt,
     reminders_enabled, reminder_days_before_due, reminder_overdue_repeat_days,
     require_invoice_approval, rbi_bank_rate, annual_turnover,
-    invoice_number_mode, next_invoice_number,
+    invoice_number_mode, next_invoice_number, default_print_copies,
   } = req.body;
 
   if (invoice_number_mode && !["auto", "manual"].includes(invoice_number_mode)) {
     return res.status(400).json({ error: "Invalid invoice_number_mode" });
+  }
+  if (default_print_copies !== undefined && default_print_copies !== null && default_print_copies !== "" && ![1, 2, 3].includes(Number(default_print_copies))) {
+    return res.status(400).json({ error: "default_print_copies must be 1, 2, or 3" });
   }
 
   db.prepare(
@@ -108,7 +111,8 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
       rbi_bank_rate = COALESCE(?, rbi_bank_rate),
       annual_turnover = COALESCE(?, annual_turnover),
       invoice_number_mode = COALESCE(?, invoice_number_mode),
-      next_invoice_number = COALESCE(?, next_invoice_number)
+      next_invoice_number = COALESCE(?, next_invoice_number),
+      default_print_copies = COALESCE(?, default_print_copies)
     WHERE id = ?`
   ).run(
     name, address, pincode, country, phone, email, website, gstin, state,
@@ -154,6 +158,11 @@ router.put("/me", requireRole("owner", "admin"), (req, res) => {
     invoice_number_mode === undefined || invoice_number_mode === null || invoice_number_mode === "" ? undefined : invoice_number_mode,
     next_invoice_number === undefined || next_invoice_number === null || next_invoice_number === "" || Number(next_invoice_number) <= 0
       ? undefined : Number(next_invoice_number),
+    // How many copies an invoice prints by default (2026-09-22, see
+    // db.js's own comment). Validated to 1/2/3 above; same "leave alone
+    // unless a real value was sent" convention as the rest of this route.
+    default_print_copies === undefined || default_print_copies === null || default_print_copies === ""
+      ? undefined : Number(default_print_copies),
     req.auth.businessId
   );
 

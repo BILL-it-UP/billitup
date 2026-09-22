@@ -27,6 +27,19 @@ function cleanText(v) {
   return s || null;
 }
 
+// Zoho's own "Payment Terms Label" column reads "Custom" whenever the
+// original invoice used a manually chosen due date instead of a named preset
+// (Net 15, Due on Receipt, and so on), that's an artifact of Zoho's own UI,
+// not real terms text meant to be printed. The due date itself is already
+// imported and shown on its own line, so importing "Custom" literally only
+// ever produced a confusing "Terms : Custom" on the printed invoice, found
+// 2026-09-22 comparing an imported invoice against its own PDF. A real
+// preset name still imports as-is.
+function cleanTermsLabel(v) {
+  const s = cleanText(v);
+  return s && s.toLowerCase() === "custom" ? null : s;
+}
+
 // Same totals math as routes/invoices.js's computeLineTotals, duplicated
 // rather than exported from there, so importing never risks changing how a
 // normal, hand-typed invoice is created.
@@ -274,7 +287,7 @@ function importInvoices(business, user, csvText, { byZohoId, itemsByName, recrea
       const result = insertInvoice.run(
         business.id, customerId, invoiceNumber,
         header["Invoice Date"] || new Date().toISOString().slice(0, 10), cleanText(header["Due Date"]),
-        cleanText(header["Payment Terms Label"]), cleanText(header["PurchaseOrder"]), cleanText(header["Subject"]),
+        cleanTermsLabel(header["Payment Terms Label"]), cleanText(header["PurchaseOrder"]), cleanText(header["Subject"]),
         cleanText(header["CF.GST NUMBER"]) || customer?.gstin || null, status,
         round2(subTotal), round2(discountTotal), round2(taxTotal), round2(total), balanceDue,
         cleanText(header["Notes"]), cleanText(header["Terms & Conditions"]),

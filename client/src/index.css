@@ -315,6 +315,17 @@ textarea { resize: vertical; }
 .modal-close:hover { color: var(--ink); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 
+/* Billing/Shipping address block in the Add/Edit Customer modals
+   (Customers.jsx's AddressFields, 2026-09-22): its own bordered group,
+   same pattern as .eway-fieldset, with the legend stretched to also hold
+   the "Copy billing address" link on the Shipping instance. */
+.address-fields { border: 1px solid var(--border); border-radius: 8px; padding: 4px 16px 12px; margin: 0 0 16px; }
+.address-fields legend {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.address-fields label.block { max-width: none; }
+
 .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
 .badge-draft { background: #eee; color: #555; }
 .badge-sent { background: #dbeafe; color: #1e40af; }
@@ -570,6 +581,16 @@ textarea { resize: vertical; }
 }
 .invoice-doc.invoice-full { padding: 16mm 14mm; }
 
+/* One .print-copy wraps each printed copy (Original/Duplicate/Triplicate,
+   2026-09-22, InvoiceDetail.jsx's copies selector). On screen only the
+   first is shown as a preview; the rest exist purely for actual printing,
+   see the @media print rules below. */
+.print-copy:not(:first-child) { display: none; }
+.print-copy-label {
+  text-align: center; font-weight: 700; font-size: 12px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted); padding: 4px 0 8px;
+}
+
 .doc-cancelled-stamp {
   position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-18deg);
   font-size: 64px; font-weight: 800; letter-spacing: 0.1em; color: #d33; opacity: 0.28;
@@ -587,6 +608,12 @@ textarea { resize: vertical; }
 .doc-brand-right p { margin: 4px 0 0; font-size: 12px; }
 
 .invoice-parties { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 24px; font-size: 14px; }
+/* Bill To plus an optional Ship To (2026-09-22), grouped so the pair stays
+   one flex child of .invoice-parties and the Invoice Date/Terms/Due Date
+   column on the right keeps its own place regardless of whether Ship To
+   is present. */
+.invoice-bill-ship { display: flex; gap: 24px; flex-wrap: wrap; }
+.invoice-bill-ship p { margin: 2px 0; }
 .invoice-dates { min-width: 220px; }
 .invoice-dates div { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; font-size: 13px; }
 .invoice-dates span:first-child { color: var(--muted); }
@@ -795,23 +822,42 @@ textarea { resize: vertical; }
   body { background: white; }
   main { max-width: none; padding: 0; margin: 0; }
   body * { visibility: hidden; }
-  .invoice-doc, .invoice-doc * { visibility: visible; }
+  .invoice-doc, .invoice-doc *, .print-copy-label { visibility: visible; }
   .invoice-doc {
     position: absolute; top: 0; left: 0; width: 100% !important;
     max-width: none !important; border: none; margin: 0; box-shadow: none;
   }
   .invoice-doc.invoice-full { padding: 0; }
-  /* Blank-page bug, found 2026-09-21: .invoice-doc-wrap (added later, for
-     the status ribbon) is "position: relative; overflow: hidden", sized to
-     fit its only in-flow child. Pulling .invoice-doc out to
-     "position: absolute" above removes it from that flow, so the wrap
-     collapses to zero height, and its own overflow: hidden then clips the
-     absolutely positioned invoice to nothing, an entirely blank printed
-     page. Neutralizing the wrap here, and the master-detail pane's own
-     scroll box above it, restores the "pulled out to the page origin"
-     behavior this block was written for. */
-  .invoice-doc-wrap { position: static !important; overflow: visible !important; height: auto !important; }
+  /* Blank-page bug, found 2026-09-21: .invoice-doc-wrap (added for the
+     status ribbon) is "position: relative; overflow: hidden", sized to fit
+     its only in-flow child. Pulling .invoice-doc out to "position:
+     absolute" above removes it from that flow, so the wrap collapses to
+     zero height, and its own overflow: hidden then clips the absolutely
+     positioned invoice to nothing, an entirely blank printed page.
+     Neutralizing the wrap's own overflow/height here restores the "pulled
+     out to the page origin" behavior this block was written for.
+     Multiple print copies (2026-09-22, GST Rule 48(6) Original/Duplicate/
+     Triplicate) changed how that escape happens for InvoiceDetail.jsx
+     specifically: it always wraps each printed copy's .invoice-doc in its
+     own .print-copy, even when there's only one. Escaping every
+     .invoice-doc individually to top:0/left:0 (the rule above, still
+     needed as-is for the Quote/Credit Note/public invoice views, none of
+     which have this wrapper) would stack every copy on the very same spot
+     instead of one page each, so here the escape happens once, at
+     .invoice-doc-wrap itself, and each .print-copy/.invoice-doc pair stays
+     in normal document flow beneath it, paginated with
+     page-break-after. */
+  .invoice-doc-wrap {
+    position: absolute; top: 0; left: 0; width: 100%;
+    overflow: visible !important; height: auto !important;
+  }
+  .invoice-doc-wrap .invoice-doc { position: static; }
   .invoice-detail-pane { overflow: visible !important; height: auto !important; }
+  .print-copy {
+    display: block !important;
+    page-break-after: always; break-after: page;
+  }
+  .print-copy:last-child { page-break-after: auto; break-after: auto; }
 }
 
 /* ---- Public (no-login) invoice view ---- */

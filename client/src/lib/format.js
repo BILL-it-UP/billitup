@@ -41,3 +41,15 @@ export function formatDate(value, format) {
       return `${dd}/${mm}/${yyyy}`;
   }
 }
+
+// Formats a customer's Billing or Shipping address (the structured Street
+// 1/Street 2/City/State/Pin Code/Country fields, 2026-09-22) as an array of
+// display lines, one per printed line, for the Bill To/Ship To block on an
+// invoice, quote, or credit note. A blank city/state/pincode row, or a
+// country line when it's just "India", is left out rather than printed
+// empty. Also used by Customers.jsx's own joinAddress for its single-line
+// list/Excel view of the same fields.
+export function formatAddressLines({ line1, line2, city, state, pincode, country } = {}) {
+  const cityStatePin = [city, state].filter(Boolean).join(", ") + (pincode ? ` - ${pincode}` : "");
+  return [line1, line2, cityStatePin || null, country && country !== "India" ? country : null].filter(Boolean);
+}

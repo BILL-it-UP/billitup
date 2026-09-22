@@ -38,6 +38,16 @@ function dataUrlToBuffer(dataUrl) {
   return match ? Buffer.from(match[1], "base64") : null;
 }
 
+// Same shape as the client's formatAddressLines (client/src/lib/format.js),
+// kept as its own copy since server and client don't share a lib folder,
+// turning a Billing or Shipping address's Street 1/Street 2/City/State/Pin
+// Code/Country fields (2026-09-22) into the printed lines for this PDF's
+// party block.
+function formatAddressLines({ line1, line2, city, state, pincode, country } = {}) {
+  const cityStatePin = [city, state].filter(Boolean).join(", ") + (pincode ? ` - ${pincode}` : "");
+  return [line1, line2, cityStatePin || null, country && country !== "India" ? country : null].filter(Boolean);
+}
+
 // Renders a document (invoice, quote, or credit note all share the same
 // shape: branding header/parties/line-items/totals/footer) into a PDF
 // buffer, mirroring the on-screen print layout as closely as pdfkit allows.
@@ -91,7 +101,30 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
 
     doc.fontSize(10).text(partyLabel, 40, doc.y, { underline: true });
     doc.text(party?.name || "—");
-    if (party?.billing_address) doc.text(party.billing_address);
+    const billingLines = formatAddressLines({
+      line1: party?.billing_address, line2: party?.billing_address_line2,
+      city: party?.billing_city, state: party?.state,
+      pincode: party?.pincode, country: party?.country,
+    });
+    for (const line of billingLines) doc.text(line);
+
+    // Ship To only on an actual Invoice (matching the on-screen view,
+    // 2026-09-22). Quotes, Credit Notes and Receipts have no goods-movement
+    // concept of their own to ship anything against, and only prints when
+    // the customer actually has a shipping address on file.
+    if (docLabel === "Invoice") {
+      const shippingLines = formatAddressLines({
+        line1: party?.shipping_address, line2: party?.shipping_address_line2,
+        city: party?.shipping_city, state: party?.shipping_state,
+        pincode: party?.shipping_pincode, country: party?.shipping_country,
+      });
+      if (shippingLines.length > 0) {
+        doc.moveDown(0.5);
+        doc.fontSize(9).fillColor("#555").text("Ship To", 40, doc.y);
+        doc.fontSize(10).fillColor("#000");
+        for (const line of shippingLines) doc.text(line);
+      }
+    }
     doc.moveDown(1);
 
     // Older invoices (and every Quote/Credit Note/Receipt, which never carry
@@ -100,12 +133,29 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
     // this stays the shared renderer for every document type without any of
     // them needing their own copy of this table (2026-09-17).
     const showHsn = lineItems.some((l) => l.hsn_sac_code);
+    // Zoho's own printed invoices leave the Discount column off entirely once
+    // a business never uses it, rather than a column of "0.00"s on every
+    // line. Already applied to the on-screen/browser-printed view
+    // (FullInvoice.jsx / QuoteView.jsx / CreditNoteView.jsx, 2026-09-21), but
+    // never carried over to this renderer, so the actual emailed/downloaded
+    // PDF kept showing it unconditionally, found 2026-09-22 comparing the
+    // two. Columns are now built from one filtered list instead of two
+    // hand-written variants, so a third toggle later won't need its own
+    // combinatorial branch.
+    const showDiscount = lineItems.some((l) => Number(l.discount) > 0);
+    const columns = [
+      { header: "#", width: showHsn ? 30 : 40 },
+      { header: "Description", width: showHsn ? 160 : 220 },
+      ...(showHsn ? [{ header: "HSN/SAC", width: 70 }] : []),
+      { header: "Qty", width: 60 },
+      { header: "Rate", width: 80 },
+      ...(showDiscount ? [{ header: "Discount", width: 80 }] : []),
+      { header: "Amount", width: 80 },
+    ];
     const tableTop = doc.y;
     doc.rect(40, tableTop, 520, 20).fill("#2b2f38");
-    const cols = showHsn ? [30, 160, 70, 60, 80, 80, 80] : [40, 220, 60, 80, 80, 80];
-    const headers = showHsn
-      ? ["#", "Description", "HSN/SAC", "Qty", "Rate", "Discount", "Amount"]
-      : ["#", "Description", "Qty", "Rate", "Discount", "Amount"];
+    const cols = columns.map((c) => c.width);
+    const headers = columns.map((c) => c.header);
     let x = 40;
     doc.fillColor("#fff").fontSize(9);
     headers.forEach((h, i) => { doc.text(h, x + 4, tableTop + 6, { width: cols[i] - 4 }); x += cols[i]; });
@@ -130,10 +180,18 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       }
       itemNumber += 1;
       x = 40;
-      const qtyWithUnit = line.unit ? `${line.qty} ${line.unit}` : String(line.qty);
-      const cells = showHsn
-        ? [String(itemNumber), line.description, line.hsn_sac_code || "", qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`]
-        : [String(itemNumber), line.description, qtyWithUnit, `${prefix} ${Number(line.rate).toFixed(2)}`, `${prefix} ${Number(line.discount).toFixed(2)}`, `${prefix} ${Number(line.amount).toFixed(2)}`];
+      // Qty prints as a plain number, unit was never meant to read as part
+      // of the number itself ("3.00 job" as clutter next to it, especially
+      // for a service line, 2026-09-22).
+      const cells = [
+        String(itemNumber),
+        line.description,
+        ...(showHsn ? [line.hsn_sac_code || ""] : []),
+        String(line.qty),
+        `${prefix} ${Number(line.rate).toFixed(2)}`,
+        ...(showDiscount ? [`${prefix} ${Number(line.discount).toFixed(2)}`] : []),
+        `${prefix} ${Number(line.amount).toFixed(2)}`,
+      ];
       cells.forEach((c, ci) => { doc.fontSize(9).text(c, x, y, { width: cols[ci] }); x += cols[ci]; });
       y += 18;
     });

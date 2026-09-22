@@ -935,3 +935,13 @@ ensureColumn("credit_notes", "deleted_at", "deleted_at TEXT");
 ensureColumn("purchases", "deleted_at", "deleted_at TEXT");
 ensureColumn("invoices", "deleted_at", "deleted_at TEXT");
 ensureColumn("recurring_invoices", "deleted_at", "deleted_at TEXT");
+
+// One-time cleanup: any invoice imported from Zoho before 2026-09-22 may have
+// picked up the literal word "Custom" as its Payment Terms, an artifact of
+// Zoho's own UI (see zohoImport.js's cleanTermsLabel comment) rather than
+// real terms text, printing as a confusing "Terms : Custom" on the invoice.
+// Unlike the earlier missing-item-title import bug, nothing here needs the
+// original CSV to correct, "Custom" is unambiguous evidence of the bug on
+// its own, so it's safe to just clear it. Runs harmlessly every startup once
+// there's nothing left matching.
+db.prepare("UPDATE invoices SET terms = NULL WHERE terms = 'Custom'").run();

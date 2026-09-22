@@ -37,8 +37,18 @@ router.get("/", (req, res) => {
 
 // Cashiers can look up customers to bill against, but only Owner/Admin
 // maintain the customer master list (edits here affect every future invoice).
+// Every field below (Billing and Shipping, each Street 1/Street 2/City/
+// State/Pin Code/Country) matches Zoho's own customer form (Naveen's
+// reference, 2026-09-22). billing_address/shipping_address are each
+// address's Street 1, kept under their original column names since they
+// already existed; everything else is new. state/pincode/country stay the
+// BILLING address's own, state in particular still drives CGST/SGST vs IGST
+// on invoices, that's unchanged.
 router.post("/", requireRole("owner", "admin"), (req, res) => {
-  const { name, phone, billing_address, shipping_address, pincode, country, gstin, state } = req.body;
+  const {
+    name, phone, billing_address, billing_address_line2, billing_city, pincode, country, gstin, state,
+    shipping_address, shipping_address_line2, shipping_city, shipping_state, shipping_pincode, shipping_country,
+  } = req.body;
   // Normalized (trimmed + lowercased) before it's ever stored — see
   // lib/normalizeEmail.js. Without this, a stray trailing space or a
   // capital letter here silently breaks the customer's portal login later,
@@ -48,25 +58,44 @@ router.post("/", requireRole("owner", "admin"), (req, res) => {
   const portalToken = randomUUID().replace(/-/g, "");
   const result = db
     .prepare(
-      `INSERT INTO customers (business_id, name, phone, email, billing_address, shipping_address, pincode, country, gstin, state, portal_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO customers
+        (business_id, name, phone, email, billing_address, billing_address_line2, billing_city, pincode, country,
+         gstin, state, shipping_address, shipping_address_line2, shipping_city, shipping_state, shipping_pincode,
+         shipping_country, portal_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(req.auth.businessId, name, phone, email, billing_address, shipping_address, pincode || null, country || "India", gstin, state || null, portalToken);
+    .run(
+      req.auth.businessId, name, phone, email, billing_address, billing_address_line2, billing_city,
+      pincode || null, country || "India", gstin, state || null,
+      shipping_address, shipping_address_line2, shipping_city, shipping_state, shipping_pincode, shipping_country,
+      portalToken
+    );
   const created = db.prepare("SELECT * FROM customers WHERE id = ?").get(result.lastInsertRowid);
   res.status(201).json(withPortalStatus(created));
 });
 
 router.put("/:id", requireRole("owner", "admin"), (req, res) => {
-  const { name, phone, billing_address, shipping_address, pincode, country, gstin, state } = req.body;
+  const {
+    name, phone, billing_address, billing_address_line2, billing_city, pincode, country, gstin, state,
+    shipping_address, shipping_address_line2, shipping_city, shipping_state, shipping_pincode, shipping_country,
+  } = req.body;
   const email = normalizeEmail(req.body.email);
   db.prepare(
     `UPDATE customers SET
       name = COALESCE(?, name), phone = COALESCE(?, phone), email = COALESCE(?, email),
-      billing_address = COALESCE(?, billing_address), shipping_address = COALESCE(?, shipping_address),
+      billing_address = COALESCE(?, billing_address), billing_address_line2 = COALESCE(?, billing_address_line2),
+      billing_city = COALESCE(?, billing_city),
       pincode = COALESCE(?, pincode), country = COALESCE(?, country),
-      gstin = COALESCE(?, gstin), state = COALESCE(?, state)
+      gstin = COALESCE(?, gstin), state = COALESCE(?, state),
+      shipping_address = COALESCE(?, shipping_address), shipping_address_line2 = COALESCE(?, shipping_address_line2),
+      shipping_city = COALESCE(?, shipping_city), shipping_state = COALESCE(?, shipping_state),
+      shipping_pincode = COALESCE(?, shipping_pincode), shipping_country = COALESCE(?, shipping_country)
      WHERE id = ? AND business_id = ? AND deleted_at IS NULL`
-  ).run(name, phone, email, billing_address, shipping_address, pincode, country, gstin, state, req.params.id, req.auth.businessId);
+  ).run(
+    name, phone, email, billing_address, billing_address_line2, billing_city, pincode, country, gstin, state,
+    shipping_address, shipping_address_line2, shipping_city, shipping_state, shipping_pincode, shipping_country,
+    req.params.id, req.auth.businessId
+  );
   const updated = db.prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?").get(req.params.id, req.auth.businessId);
   if (!updated) return res.status(404).json({ error: "Not found" });
   res.json(withPortalStatus(updated));

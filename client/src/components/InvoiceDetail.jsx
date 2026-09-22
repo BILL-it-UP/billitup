@@ -19,6 +19,14 @@ const GST_IMS_STATUSES = [
   { value: "rejected", label: "Rejected" },
 ];
 
+// Standard GST Rule 48(6) copy labels for a tax invoice: 1 copy needs no
+// label at all, 2 is the services convention (no Transporter copy), 3 is
+// the goods-movement convention. Naveen's own ask, 2026-09-22.
+const PRINT_COPY_LABELS = {
+  2: ["ORIGINAL FOR RECIPIENT", "DUPLICATE FOR SUPPLIER"],
+  3: ["ORIGINAL FOR RECIPIENT", "DUPLICATE FOR TRANSPORTER", "TRIPLICATE FOR SUPPLIER"],
+};
+
 // The invoice detail pane: toolbar (Edit / Send / Share / Reminder /
 // Print-PDF / Record Payment) plus the actual A4 document. Used both by the
 // standalone /invoices/:id page and embedded as the right-hand pane of the
@@ -45,6 +53,12 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
   const [searchParams, setSearchParams] = useSearchParams();
   const autoSendConsumed = useRef(false);
 
+  // How many copies "Print / Save PDF" renders (Original/Duplicate/
+  // Triplicate, per GST Rule 48(6)), starting from the business's own
+  // default_print_copies setting but adjustable per print (Naveen's own
+  // ask, 2026-09-22). Invoice-only, same as the Ship To address above.
+  const [printCopies, setPrintCopies] = useState(1);
+
   // Returns the freshly-loaded invoice too, not just via state — recordPayment
   // needs the up-to-date customer email right after a payment, before the
   // next render, to decide whether to offer a receipt.
@@ -59,6 +73,14 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId]);
+
+  // Picks up the business's default once this invoice has loaded. Keyed on
+  // invoice.id rather than the whole invoice object, so re-fetching the same
+  // invoice (after recording a payment, say) never overwrites a copies count
+  // Naveen has already changed by hand for this print.
+  useEffect(() => {
+    if (invoice?.business?.default_print_copies) setPrintCopies(invoice.business.default_print_copies);
+  }, [invoice?.id, invoice?.business?.default_print_copies]);
 
   // Only for the standalone /invoices/:id page, not the embedded pane in the
   // Dashboard's master-detail list, the tab there is the Dashboard's own,
@@ -355,6 +377,16 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         )}
         {canEdit && <Link className="toolbar-btn" to={`/invoices/${invoiceId}/edit`}>Edit</Link>}
         <Link className="toolbar-btn" to={`/invoices/new?cloneFrom=${invoiceId}`} title="Start a new invoice pre-filled from this one">Clone</Link>
+        <select
+          className="toolbar-btn no-print"
+          value={printCopies}
+          onChange={(e) => setPrintCopies(Number(e.target.value))}
+          title="How many copies to print (Original/Duplicate/Triplicate)"
+        >
+          <option value={1}>1 copy</option>
+          <option value={2}>2 copies</option>
+          <option value={3}>3 copies</option>
+        </select>
         <button type="button" className="toolbar-btn" onClick={() => window.print()}>Print / Save PDF</button>
         {invoice.approval_status !== "pending" && (
           <button type="button" className={toolbarBtnClass("Email to Customer")} onClick={() => setShowSendModal(true)}>
@@ -456,9 +488,14 @@ export default function InvoiceDetail({ invoiceId, onChanged, standalone = false
         {ribbonTone && (
           <span className={`status-ribbon status-ribbon-${ribbonTone} no-print`}>{RIBBON_TEXT[ribbonTone]}</span>
         )}
-        <div className="invoice-doc invoice-full" style={{ width: standalone ? "210mm" : "100%", maxWidth: "210mm" }}>
-          <FullInvoice invoice={invoice} />
-        </div>
+        {(PRINT_COPY_LABELS[printCopies] || [null]).map((label, i) => (
+          <div className="print-copy" key={i}>
+            {label && <div className="print-copy-label">{label}</div>}
+            <div className="invoice-doc invoice-full" style={{ width: standalone ? "210mm" : "100%", maxWidth: "210mm" }}>
+              <FullInvoice invoice={invoice} />
+            </div>
+          </div>
+        ))}
       </div>
 
       <InvoiceComments

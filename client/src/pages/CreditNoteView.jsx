@@ -8,7 +8,7 @@ import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { GstBreakdown, GstNote } from "../components/GstBreakdown";
-import { formatMoney, formatQty, formatDate } from "../lib/format";
+import { formatMoney, formatQty, formatDate, formatAddressLines } from "../lib/format";
 
 export default function CreditNoteView() {
   const { id } = useParams();
@@ -96,7 +96,11 @@ export default function CreditNoteView() {
           <div>
             <strong>To</strong>
             <p>{customer?.name || "—"}</p>
-            {customer?.billing_address && <p>{customer.billing_address}</p>}
+            {formatAddressLines({
+              line1: customer?.billing_address, line2: customer?.billing_address_line2,
+              city: customer?.billing_city, state: customer?.state,
+              pincode: customer?.pincode, country: customer?.country,
+            }).map((line, i) => <p key={i}>{line}</p>)}
           </div>
           <div className="invoice-dates">
             <div><span>Date :</span><span>{formatDate(creditNote.credit_note_date, creditNote.business?.date_format)}</span></div>

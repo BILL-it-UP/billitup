@@ -1,7 +1,7 @@
 import DocumentBrandHeader from "./DocumentBrandHeader";
 import DocumentFooter from "./DocumentFooter";
 import { GstBreakdown, GstNote } from "./GstBreakdown";
-import { formatMoney, formatQty, formatDate } from "../lib/format";
+import { formatMoney, formatQty, formatDate, formatAddressLines } from "../lib/format";
 import { currencySymbol } from "../lib/currencies";
 
 // The actual A4 invoice document — shared by the authenticated Invoice
@@ -10,6 +10,22 @@ import { currencySymbol } from "../lib/currencies";
 export default function FullInvoice({ invoice }) {
   const { business, customer, lineItems } = invoice;
   const symbol = currencySymbol(invoice.currency);
+
+  // The full structured Billing/Shipping address (2026-09-22), not just the
+  // one flat billing_address line this used to print. Ship To only appears
+  // when the customer actually has a shipping address on file, matching how
+  // Zoho itself leaves Ship To off a customer that never set one.
+  const billingLines = formatAddressLines({
+    line1: customer?.billing_address, line2: customer?.billing_address_line2,
+    city: customer?.billing_city, state: customer?.state,
+    pincode: customer?.pincode, country: customer?.country,
+  });
+  const shippingLines = formatAddressLines({
+    line1: customer?.shipping_address, line2: customer?.shipping_address_line2,
+    city: customer?.shipping_city, state: customer?.shipping_state,
+    pincode: customer?.shipping_pincode, country: customer?.shipping_country,
+  });
+
   return (
     <>
       {invoice.status === "cancelled" && <div className="doc-cancelled-stamp">CANCELLED</div>}
@@ -19,11 +35,19 @@ export default function FullInvoice({ invoice }) {
       />
 
       <div className="invoice-parties">
-        <div>
-          <strong>Bill To</strong>
-          <p>{customer?.name || "Walk-in customer"}</p>
-          {customer?.billing_address && <p>{customer.billing_address}</p>}
-          {(invoice.gstin || customer?.gstin) && <p>GSTIN: {invoice.gstin || customer.gstin}</p>}
+        <div className="invoice-bill-ship">
+          <div>
+            <strong>Bill To</strong>
+            <p>{customer?.name || "Walk-in customer"}</p>
+            {billingLines.map((line, i) => <p key={i}>{line}</p>)}
+            {(invoice.gstin || customer?.gstin) && <p>GSTIN: {invoice.gstin || customer.gstin}</p>}
+          </div>
+          {shippingLines.length > 0 && (
+            <div>
+              <strong>Ship To</strong>
+              {shippingLines.map((line, i) => <p key={i}>{line}</p>)}
+            </div>
+          )}
         </div>
         <div className="invoice-dates">
           <div><span>Invoice Date :</span><span>{formatDate(invoice.invoice_date, invoice.business?.date_format)}</span></div>
@@ -80,6 +104,11 @@ export default function FullInvoice({ invoice }) {
         // actually has a discount on it.
         const showDiscount = lineItems.some((l) => Number(l.discount) > 0);
         const colCount = 5 + (showHsn ? 1 : 0) + (showDiscount ? 1 : 0);
+        // Qty prints as a plain number, never with its unit appended
+        // ("3.00 job" read as clutter rather than useful detail, especially
+        // for a service line, Naveen's own comparison against Zoho's own
+        // cleaner invoices, 2026-09-22). Unit is still captured and still
+        // editable per line, it just isn't printed next to the quantity.
         // A running count of real, billable lines only, skipping section
         // headers (see db.js's line_type comment) so a header never takes a
         // number of its own, the same way Zoho's own printed documents leave
@@ -123,7 +152,7 @@ export default function FullInvoice({ invoice }) {
                       ))}
                     </td>
                     {showHsn && <td>{line.hsn_sac_code || ""}</td>}
-                    <td>{formatQty(line.qty)}{line.unit ? ` ${line.unit}` : ""}</td>
+                    <td>{formatQty(line.qty)}</td>
                     <td>{symbol}{formatMoney(line.rate)}</td>
                     {showDiscount && <td>{symbol}{formatMoney(line.discount)}</td>}
                     <td>{symbol}{formatMoney(line.amount)}</td>

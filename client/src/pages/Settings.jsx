@@ -194,6 +194,16 @@ export default function Settings() {
                 <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-09-09)</option>
               </select>
             </label>
+            <label>Copies to print by default (adjustable per print too)
+              <select
+                value={business.default_print_copies || 1}
+                onChange={(e) => setBusiness({ ...business, default_print_copies: Number(e.target.value) })}
+              >
+                <option value={1}>1 copy</option>
+                <option value={2}>2 copies (Original for Recipient, Duplicate for Supplier)</option>
+                <option value={3}>3 copies (Original for Recipient, Duplicate for Transporter, Triplicate for Supplier)</option>
+              </select>
+            </label>
             <label>Default currency (what a new invoice starts with, changeable per invoice)
               <select
                 value={business.default_currency || "INR"}
