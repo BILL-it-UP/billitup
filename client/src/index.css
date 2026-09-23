@@ -584,8 +584,16 @@ textarea { resize: vertical; }
 /* One .print-copy wraps each printed copy (Original/Duplicate/Triplicate,
    2026-09-22, InvoiceDetail.jsx's copies selector). On screen only the
    first is shown as a preview; the rest exist purely for actual printing,
-   see the @media print rules below. */
-.print-copy:not(:first-child) { display: none; }
+   see the @media print rules below.
+   Bug fixed 2026-09-22, found from Naveen's screenshot showing the whole
+   invoice document had gone missing: :not(:first-child) counts every
+   sibling in .invoice-doc-wrap, not just other .print-copy elements, and
+   the status ribbon's own <span> (whenever an invoice actually has a
+   status ribbon, i.e. almost always) sits before .print-copy as its first
+   child, which made even the one and only .print-copy never actually be
+   the first child, hiding it always. :first-of-type only counts siblings
+   of the same tag (div), so it correctly ignores the ribbon's <span>. */
+.print-copy:not(:first-of-type) { display: none; }
 .print-copy-label {
   text-align: center; font-weight: 700; font-size: 12px; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--muted); padding: 4px 0 8px;
@@ -857,7 +865,11 @@ textarea { resize: vertical; }
     display: block !important;
     page-break-after: always; break-after: page;
   }
-  .print-copy:last-child { page-break-after: auto; break-after: auto; }
+  /* :last-of-type for the same reason the screen rule above uses
+     :first-of-type: robust regardless of the status ribbon's own <span>
+     sibling, even though in practice the ribbon always sits before every
+     .print-copy so :last-child would happen to also work here. */
+  .print-copy:last-of-type { page-break-after: auto; break-after: auto; }
 }
 
 /* ---- Public (no-login) invoice view ---- */
