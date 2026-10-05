@@ -680,6 +680,23 @@ ensureColumn("customers", "state", "state TEXT");
 ensureColumn("customers", "pincode", "pincode TEXT");
 ensureColumn("customers", "country", "country TEXT DEFAULT 'India'");
 
+// Full Billing/Shipping address split, matching Zoho's own customer form
+// (2026-09-22). The existing billing_address/state/pincode/country columns
+// keep meaning the billing address's own Street 1/State/Pin/Country, so
+// nothing that already reads them (state drives CGST/SGST vs IGST) changes.
+// shipping_address already exists from the original table definition.
+ensureColumn("customers", "billing_address_line2", "billing_address_line2 TEXT");
+ensureColumn("customers", "billing_city", "billing_city TEXT");
+ensureColumn("customers", "shipping_address_line2", "shipping_address_line2 TEXT");
+ensureColumn("customers", "shipping_city", "shipping_city TEXT");
+ensureColumn("customers", "shipping_state", "shipping_state TEXT");
+ensureColumn("customers", "shipping_pincode", "shipping_pincode TEXT");
+ensureColumn("customers", "shipping_country", "shipping_country TEXT");
+
+// How many copies an invoice prints by default (1, 2 or 3: Original,
+// Duplicate, Triplicate per GST Rule 48(6)). Adjustable per print too.
+ensureColumn("businesses", "default_print_copies", "default_print_copies INTEGER DEFAULT 1");
+
 // vendors — pincode/country added alongside the address split above; state
 // already existed on vendors from when the table was first created.
 ensureColumn("vendors", "pincode", "pincode TEXT");
