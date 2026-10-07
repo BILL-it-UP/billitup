@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { emptyLine, computeTotals, isHeaderLine } from "../lib/lineItemMath";
@@ -24,6 +24,8 @@ export default function NewCreditNote() {
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Blocks a second click landing before React re-renders the disabled button (2026-10-07).
+  const savingRef = useRef(false);
   const [loadingCreditNote, setLoadingCreditNote] = useState(isEdit);
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export default function NewCreditNote() {
           return {
             line_type: li.line_type || "item",
             item_id: li.item_id || "",
-            item_name: match ? match.name : "",
+            item_name: li.item_name || (match ? match.name : ""),
             description: li.description || "",
             qty: li.qty, rate: li.rate, discount: li.discount, tax_rate: li.tax_rate,
           };
@@ -124,7 +126,7 @@ export default function NewCreditNote() {
 
   // buildPayload doubles as the unsaved-changes guard's own dirty-check
   // snapshot, see useDirtyGuard's comment (2026-09-21).
-  const { isDirty, markClean } = useDirtyGuard(buildPayload, !loadingCreditNote);
+  const { isDirty, markClean, suppressRef } = useDirtyGuard(buildPayload, !loadingCreditNote);
 
   const validate = () => {
     if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
@@ -143,12 +145,14 @@ export default function NewCreditNote() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingRef.current) return;
     setError("");
     const validationError = validate();
     if (validationError) {
       setError(validationError);
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     try {
       const creditNote = await performSave();
@@ -157,6 +161,7 @@ export default function NewCreditNote() {
     } catch (err) {
       setError(err.message);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -240,7 +245,7 @@ export default function NewCreditNote() {
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : isEdit ? "Save Changes" : "Create Credit Note"}</button>
       </form>
-      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} />
+      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} suppressRef={suppressRef} />
     </div>
   );
 }

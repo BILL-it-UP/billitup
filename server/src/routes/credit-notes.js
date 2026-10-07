@@ -145,8 +145,8 @@ router.post("/", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type, item_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const bumpCreditNoteNumber = db.prepare("UPDATE businesses SET next_credit_note_number = next_credit_note_number + 1 WHERE id = ?");
 
@@ -159,7 +159,7 @@ router.post("/", (req, res) => {
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
-      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item", line.line_type === "header" ? null : (String(line.item_name || "").trim() || null));
     }
     bumpCreditNoteNumber.run(req.auth.businessId);
     if (invoice) applyCreditNoteEffect(invoice.id, total);
@@ -205,8 +205,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertLine = db.prepare(
-    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO credit_note_line_items (credit_note_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type, item_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   db.transaction(() => {
@@ -227,7 +227,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
     );
     db.prepare("DELETE FROM credit_note_line_items WHERE credit_note_id = ?").run(creditNote.id);
     for (const line of computedLines) {
-      insertLine.run(creditNote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
+      insertLine.run(creditNote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item", line.line_type === "header" ? null : (String(line.item_name || "").trim() || null));
     }
 
     if (invoice) applyCreditNoteEffect(invoice.id, total);

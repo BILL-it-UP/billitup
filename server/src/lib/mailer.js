@@ -43,6 +43,22 @@ function dataUrlToBuffer(dataUrl) {
 // turning a Billing or Shipping address's Street 1/Street 2/City/State/Pin
 // Code/Country fields (2026-09-22) into the printed lines for this PDF's
 // party block.
+// Splits one line item into its printed heading and the lines under it
+// (2026-10-07). A line that has a saved item_name prints that name as the
+// heading with the whole description beneath it as plain text (the name is
+// not repeated if the description already starts with it). A line from before
+// item names were saved keeps the old behaviour: the first line of the
+// description is the heading.
+function lineHeadingAndDetail(line) {
+  const name = String(line.item_name || "").trim();
+  const parts = String(line.description || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  if (name) {
+    const rest = parts.length > 0 && parts[0].toLowerCase() === name.toLowerCase() ? parts.slice(1) : parts;
+    return { heading: name, detail: rest };
+  }
+  return { heading: parts[0] || "", detail: parts.slice(1) };
+}
+
 function formatAddressLines({ line1, line2, city, state, pincode, country } = {}) {
   const cityStatePin = [city, state].filter(Boolean).join(", ") + (pincode ? ` - ${pincode}` : "");
   return [line1, line2, cityStatePin || null, country && country !== "India" ? country : null].filter(Boolean);
@@ -183,17 +199,42 @@ export function renderDocumentPdf({ docLabel, docNumber, docDate, extraMeta = []
       // Qty prints as a plain number, unit was never meant to read as part
       // of the number itself ("3.00 job" as clutter next to it, especially
       // for a service line, 2026-09-22).
-      const cells = [
-        String(itemNumber),
-        line.description,
+      const otherCells = [
         ...(showHsn ? [line.hsn_sac_code || ""] : []),
         String(line.qty),
         `${prefix} ${Number(line.rate).toFixed(2)}`,
         ...(showDiscount ? [`${prefix} ${Number(line.discount).toFixed(2)}`] : []),
         `${prefix} ${Number(line.amount).toFixed(2)}`,
       ];
-      cells.forEach((c, ci) => { doc.fontSize(9).text(c, x, y, { width: cols[ci] }); x += cols[ci]; });
-      y += 18;
+      // The item name prints as the bold heading and the description sits
+      // below it as plain, smaller text, so a long multi line description is
+      // never bolded or squeezed into the fixed row height this table used to
+      // have (2026-10-07). The row grows to fit whatever the description needs.
+      const { heading, detail } = lineHeadingAndDetail(line);
+      const descWidth = cols[1] - 4;
+      const detailText = detail.join("\n");
+      doc.font("Helvetica-Bold").fontSize(9);
+      const headingHeight = heading ? doc.heightOfString(heading, { width: descWidth }) : 0;
+      doc.font("Helvetica").fontSize(8);
+      const detailHeight = detailText ? doc.heightOfString(detailText, { width: descWidth }) : 0;
+      const rowHeight = Math.max(18, headingHeight + detailHeight + (detailText ? 3 : 0) + 8);
+      if (y + rowHeight > 780) {
+        doc.addPage();
+        y = 40;
+      }
+      doc.font("Helvetica").fontSize(9).fillColor("#000").text(String(itemNumber), x, y, { width: cols[0] });
+      x += cols[0];
+      doc.font("Helvetica-Bold").fontSize(9).text(heading, x, y, { width: descWidth });
+      if (detailText) {
+        doc.font("Helvetica").fontSize(8).fillColor("#555").text(detailText, x, y + headingHeight + 3, { width: descWidth });
+      }
+      doc.fillColor("#000").font("Helvetica");
+      x += cols[1];
+      otherCells.forEach((cell, ci) => {
+        doc.fontSize(9).text(cell, x, y, { width: cols[ci + 2] });
+        x += cols[ci + 2];
+      });
+      y += rowHeight;
     });
 
     doc.moveTo(40, y + 4).lineTo(560, y + 4).strokeColor("#ddd").stroke();

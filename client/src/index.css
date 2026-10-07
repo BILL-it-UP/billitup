@@ -214,6 +214,8 @@ textarea { resize: vertical; }
 .line-item-table input, .line-item-table select, .line-item-table textarea { margin-top: 0; }
 .line-item-table td { padding: 4px; vertical-align: top; }
 .line-item-table textarea { resize: vertical; min-height: 38px; font-size: 14px; }
+/* Grows to fit its own text (see ItemPicker.jsx), so no scrollbar or manual dragging is needed. */
+.line-item-table .item-picker-description { overflow-y: hidden; resize: none; }
 /* The item picker is the WHOLE "Item & Description" cell — one combined
    widget (search box, or the confirmed name + its description), matching how
    Zoho's item table has one combined column instead of two cramped

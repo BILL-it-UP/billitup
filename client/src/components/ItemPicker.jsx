@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ItemFormModal from "./ItemFormModal";
 import { IconEdit } from "./Icons";
@@ -36,6 +36,7 @@ export default function ItemPicker({
   const [showEditModal, setShowEditModal] = useState(false);
   const [dropdownRect, setDropdownRect] = useState(null);
   const wrapRef = useRef(null);
+  const descriptionRef = useRef(null);
   // The dropdown now lives in a portal on <body>, outside wrapRef's own DOM
   // subtree — "click outside" has to check this ref too, or clicking an
   // option or "+ Add New Item" would itself count as an outside click and
@@ -99,6 +100,24 @@ export default function ItemPicker({
       window.removeEventListener("resize", updatePosition);
     };
   }, [open]);
+
+  // The description box grows to fit whatever is typed in it (2026-10-07), so
+  // a long multi line description never has to be dragged taller to read.
+  // Re-measured on every change to the text, when the box first appears, and
+  // when the window is resized (a narrower box wraps onto more lines).
+  const fitDescriptionBox = () => {
+    const el = descriptionRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  };
+  useLayoutEffect(() => {
+    fitDescriptionBox();
+  }, [description, itemName, open]);
+  useEffect(() => {
+    window.addEventListener("resize", fitDescriptionBox);
+    return () => window.removeEventListener("resize", fitDescriptionBox);
+  }, []);
 
   const filtered = items.filter((it) =>
     it.name.toLowerCase().includes(query.trim().toLowerCase())
@@ -215,6 +234,7 @@ export default function ItemPicker({
       )}
       {showDescription && (
         <textarea
+          ref={descriptionRef}
           className="item-picker-description"
           rows={2}
           value={description}

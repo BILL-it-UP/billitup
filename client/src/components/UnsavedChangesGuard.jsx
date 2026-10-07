@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 // onSaveAndLeave is called for the in-app dialog's own "Save & Leave" button
 // and should save the form and throw (or reject) on failure so the dialog
 // can show the error and stay open rather than losing the user's work.
-export default function UnsavedChangesGuard({ isDirty, onSaveAndLeave }) {
+export default function UnsavedChangesGuard({ isDirty, onSaveAndLeave, suppressRef }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
@@ -27,7 +27,8 @@ export default function UnsavedChangesGuard({ isDirty, onSaveAndLeave }) {
   }, [isDirty]);
 
   const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => isDirty && currentLocation.pathname !== nextLocation.pathname
+    ({ currentLocation, nextLocation }) =>
+      isDirty && !suppressRef?.current && currentLocation.pathname !== nextLocation.pathname
   );
 
   useEffect(() => {

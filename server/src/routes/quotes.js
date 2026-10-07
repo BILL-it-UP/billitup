@@ -101,8 +101,8 @@ router.post("/", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type, item_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const bumpQuoteNumber = db.prepare("UPDATE businesses SET next_quote_number = next_quote_number + 1 WHERE id = ?");
 
@@ -115,7 +115,7 @@ router.post("/", (req, res) => {
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
-      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item", line.line_type === "header" ? null : (String(line.item_name || "").trim() || null));
     }
     bumpQuoteNumber.run(req.auth.businessId);
     return id;
@@ -149,8 +149,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const computedLines = adjustLineAmountsForTreatment(rawComputedLines, treatment);
 
   const insertLine = db.prepare(
-    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO quote_line_items (quote_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type, item_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   db.transaction(() => {
@@ -166,7 +166,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
     );
     db.prepare("DELETE FROM quote_line_items WHERE quote_id = ?").run(quote.id);
     for (const line of computedLines) {
-      insertLine.run(quote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
+      insertLine.run(quote.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item", line.line_type === "header" ? null : (String(line.item_name || "").trim() || null));
     }
   })();
 
@@ -225,8 +225,8 @@ router.post("/:id/convert", (req, res) => {
      VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, line_type, item_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const bumpInvoiceNumber = db.prepare("UPDATE businesses SET next_invoice_number = next_invoice_number + 1 WHERE id = ?");
   const markConverted = db.prepare("UPDATE quotes SET status = 'converted', converted_invoice_id = ? WHERE id = ?");
@@ -244,7 +244,7 @@ router.post("/:id/convert", (req, res) => {
     // survives the conversion instead of flattening back into one plain list
     // (2026-09-21).
     for (const line of lineItems) {
-      insertLine.run(id, line.item_id, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item");
+      insertLine.run(id, line.item_id, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.line_type || "item", line.item_name || null);
     }
     bumpInvoiceNumber.run(req.auth.businessId);
     markConverted.run(id, quote.id);

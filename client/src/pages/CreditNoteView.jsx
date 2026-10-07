@@ -8,7 +8,7 @@ import DocumentBrandHeader from "../components/DocumentBrandHeader";
 import DocumentFooter from "../components/DocumentFooter";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { GstBreakdown, GstNote } from "../components/GstBreakdown";
-import { formatMoney, formatQty, formatDate, formatAddressLines } from "../lib/format";
+import { formatMoney, formatQty, formatDate, formatAddressLines, splitLineDescription } from "../lib/format";
 
 export default function CreditNoteView() {
   const { id } = useParams();
@@ -130,15 +130,14 @@ export default function CreditNoteView() {
                   );
                 }
                 itemNumber += 1;
-                const descLines = String(line.description || "").split("\n").filter(Boolean);
+                const { heading, detail } = splitLineDescription(line);
                 return (
                   <tr key={line.id}>
                     <td>{itemNumber}</td>
                     <td>
-                      {descLines.map((part, idx) => (
-                        <div key={idx} className={idx === 0 ? "doc-line-desc-title" : "doc-line-desc-detail"}>
-                          {part}
-                        </div>
+                      {heading && <div className="doc-line-desc-title">{heading}</div>}
+                      {detail.map((part, idx) => (
+                        <div key={idx} className="doc-line-desc-detail">{part}</div>
                       ))}
                     </td>
                     <td>{formatQty(line.qty)}</td>

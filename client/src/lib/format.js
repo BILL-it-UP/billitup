@@ -53,3 +53,18 @@ export function formatAddressLines({ line1, line2, city, state, pincode, country
   const cityStatePin = [city, state].filter(Boolean).join(", ") + (pincode ? ` - ${pincode}` : "");
   return [line1, line2, cityStatePin || null, country && country !== "India" ? country : null].filter(Boolean);
 }
+
+// Splits one line item into its printed heading and the lines under it
+// (2026-10-07). A line with a saved item_name prints that name as the heading
+// and the whole description below it as plain text (the name is not repeated
+// when the description already starts with it). A line saved before item names
+// existed keeps the old behaviour: the first description line is the heading.
+export function splitLineDescription(line = {}) {
+  const name = String(line.item_name || "").trim();
+  const parts = String(line.description || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  if (name) {
+    const rest = parts.length > 0 && parts[0].toLowerCase() === name.toLowerCase() ? parts.slice(1) : parts;
+    return { heading: name, detail: rest };
+  }
+  return { heading: parts[0] || "", detail: parts.slice(1) };
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, getUser } from "../lib/api";
 import { emptyLine, computeTotals, isHeaderLine } from "../lib/lineItemMath";
@@ -24,6 +24,8 @@ export default function NewQuote() {
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Blocks a second click landing before React re-renders the disabled button (2026-10-07).
+  const savingRef = useRef(false);
   const [loadingQuote, setLoadingQuote] = useState(isEdit);
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export default function NewQuote() {
           return {
             line_type: li.line_type || "item",
             item_id: li.item_id || "",
-            item_name: match ? match.name : "",
+            item_name: li.item_name || (match ? match.name : ""),
             description: li.description || "",
             qty: li.qty, rate: li.rate, discount: li.discount, tax_rate: li.tax_rate,
           };
@@ -102,7 +104,7 @@ export default function NewQuote() {
 
   // buildPayload doubles as the unsaved-changes guard's own dirty-check
   // snapshot, see useDirtyGuard's comment (2026-09-21).
-  const { isDirty, markClean } = useDirtyGuard(buildPayload, !loadingQuote);
+  const { isDirty, markClean, suppressRef } = useDirtyGuard(buildPayload, !loadingQuote);
 
   const validate = () => {
     if (lines.filter((l) => !isHeaderLine(l)).length === 0) {
@@ -121,12 +123,14 @@ export default function NewQuote() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingRef.current) return;
     setError("");
     const validationError = validate();
     if (validationError) {
       setError(validationError);
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     try {
       const quote = await performSave();
@@ -135,6 +139,7 @@ export default function NewQuote() {
     } catch (err) {
       setError(err.message);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -213,7 +218,7 @@ export default function NewQuote() {
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={saving}>{saving ? "Saving..." : isEdit ? "Save Changes" : "Create Quote"}</button>
       </form>
-      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} />
+      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} suppressRef={suppressRef} />
     </div>
   );
 }

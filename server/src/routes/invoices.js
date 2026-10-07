@@ -122,7 +122,7 @@ router.post("/", (req, res) => {
     customer_id, invoice_date, due_date, terms, terms_and_conditions, reference, subject, gstin, notes, lineItems, gst_treatment,
     eway_bill_number, eway_transporter_name, eway_transporter_id, eway_vehicle_number, eway_distance_km,
     currency, project_name, milestone_label, project_total_amount,
-    retainer_applied, time_entry_ids, billable_purchase_ids, invoice_number,
+    retainer_applied, time_entry_ids, billable_purchase_ids, invoice_number, client_request_id,
   } = req.body;
   // A section header alone doesn't count as a line item. It carries no
   // quantity or rate, so an invoice made up of nothing but headers would
@@ -136,6 +136,17 @@ router.post("/", (req, res) => {
   // from the New Invoice form (2026-09-15).
   if (!customer_id) {
     return res.status(400).json({ error: "A customer is required" });
+  }
+
+  // Double submit guard (2026-10-07): the same form session sends the same
+  // client_request_id every time, so a second arrival is a repeat of a save
+  // that already went through, not a new invoice. Hand back the existing one.
+  const requestId = typeof client_request_id === "string" ? client_request_id.trim().slice(0, 64) : "";
+  if (requestId) {
+    const already = db
+      .prepare("SELECT * FROM invoices WHERE business_id = ? AND client_request_id = ?")
+      .get(req.auth.businessId, requestId);
+    if (already) return res.status(200).json(already);
   }
 
   const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.auth.businessId);
@@ -210,8 +221,8 @@ router.post("/", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code, line_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code, line_type, item_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const invoiceId = db.transaction(() => {
@@ -228,9 +239,10 @@ router.post("/", (req, res) => {
     );
     const id = result.lastInsertRowid;
     for (const line of computedLines) {
-      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null, line.line_type || "item");
+      insertLine.run(id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null, line.line_type || "item", line.line_type === "header" ? null : (String(line.item_name || "").trim() || null));
     }
     commitInvoiceNumber();
+    if (requestId) db.prepare("UPDATE invoices SET client_request_id = ? WHERE id = ?").run(requestId, id);
 
     if (retainerApplied > 0) {
       db.prepare("UPDATE customers SET retainer_balance = retainer_balance - ? WHERE id = ?").run(retainerApplied, customer_id);
@@ -323,8 +335,8 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
   const editorUser = db.prepare("SELECT name FROM users WHERE id = ?").get(req.auth.userId);
 
   const insertLine = db.prepare(
-    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code, line_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoice_line_items (invoice_id, item_id, description, qty, rate, discount, tax_rate, amount, unit, hsn_sac_code, line_type, item_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   db.transaction(() => {
@@ -367,7 +379,7 @@ router.put("/:id", requireRole("owner", "admin"), (req, res) => {
 
     db.prepare("DELETE FROM invoice_line_items WHERE invoice_id = ?").run(invoice.id);
     for (const line of computedLines) {
-      insertLine.run(invoice.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null, line.line_type || "item");
+      insertLine.run(invoice.id, line.item_id || null, line.description, line.qty, line.rate, line.discount, line.tax_rate, line.amount, line.unit || null, line.hsn_sac_code || null, line.line_type || "item", line.line_type === "header" ? null : (String(line.item_name || "").trim() || null));
     }
   })();
 

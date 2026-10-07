@@ -13,6 +13,17 @@ import { IconSettings } from "../components/Icons";
 import { GST_TREATMENTS } from "../lib/gst";
 import { CURRENCIES, currencySymbol } from "../lib/currencies";
 
+// One time id for this form session, sent with the create call (see the
+// double save note inside the component).
+function newRequestId() {
+  try {
+    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+  } catch {
+    // fall through to the simple id below
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export default function NewInvoice() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -54,6 +65,15 @@ export default function NewInvoice() {
   const [lines, setLines] = useState([emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Double save protection (2026-10-07). savingRef blocks a second click that
+  // lands before React has re-rendered the disabled buttons. requestIdRef is
+  // sent with the create call so the server returns the same invoice for a
+  // repeat of it instead of numbering a new one. createdInvoiceRef remembers
+  // an invoice this form already created, so a retry after a partial failure
+  // (created, but marking it Sent failed) never creates a second invoice.
+  const savingRef = useRef(false);
+  const requestIdRef = useRef(null);
+  const createdInvoiceRef = useRef(null);
   const [loadingInvoice, setLoadingInvoice] = useState(isEdit);
   const [loadingClone, setLoadingClone] = useState(Boolean(cloneFromId));
   // Invoice# preview + "Configure Invoice Number Preferences" (the gear icon
@@ -170,7 +190,7 @@ export default function NewInvoice() {
             // Resolved right now from whatever's already in itemsRef. If the
             // item catalog hasn't loaded yet, the effect below (keyed on
             // `items`) backfills it once it does.
-            item_name: match ? match.name : "",
+            item_name: li.item_name || (match ? match.name : ""),
             description: li.description || "",
             qty: li.qty,
             rate: li.rate,
@@ -220,7 +240,7 @@ export default function NewInvoice() {
             // is what was missing before, leaving a cloned line's item
             // picker showing an empty search box even though its qty/rate/
             // amount were all correctly copied (2026-09-20).
-            item_name: match ? match.name : "",
+            item_name: li.item_name || (match ? match.name : ""),
             description: li.description || "",
             qty: li.qty,
             rate: li.rate,
@@ -380,7 +400,7 @@ export default function NewInvoice() {
   // "everything about this invoice that matters" the form already builds for
   // saving, so it doubles as the dirty-check snapshot too, nothing new to
   // keep in sync by hand as fields get added or removed later (2026-09-21).
-  const { isDirty, markClean } = useDirtyGuard(buildPayload, !loadingInvoice && !loadingClone && initialDataLoaded);
+  const { isDirty, markClean, suppressRef } = useDirtyGuard(buildPayload, !loadingInvoice && !loadingClone && initialDataLoaded);
 
   // A new invoice is always saved as a real, numbered document the moment
   // it's created — "draft" vs "sent" is only ever a status label from here
@@ -417,7 +437,16 @@ export default function NewInvoice() {
       await api.updateInvoice(id, buildPayload());
       return null;
     }
-    const invoice = await api.createInvoice(buildPayload());
+    let invoice = createdInvoiceRef.current;
+    if (!invoice) {
+      if (!requestIdRef.current) requestIdRef.current = newRequestId();
+      invoice = await api.createInvoice({ ...buildPayload(), client_request_id: requestIdRef.current });
+      createdInvoiceRef.current = invoice;
+    } else if (["owner", "admin"].includes(getUser()?.role)) {
+      // This form already created the invoice on an earlier attempt that did
+      // not finish. Apply whatever has changed since to that same invoice.
+      await api.updateInvoice(invoice.id, buildPayload());
+    }
     if (mode === "create") {
       await api.setInvoiceStatus(invoice.id, "sent");
     }
@@ -425,12 +454,14 @@ export default function NewInvoice() {
   };
 
   const submit = async (mode) => {
+    if (savingRef.current) return;
     setError("");
     const validationError = validate(mode);
     if (validationError) {
       setError(validationError);
       return;
     }
+    savingRef.current = true;
     setSaving(mode);
     try {
       const invoice = await performSave(mode);
@@ -443,6 +474,7 @@ export default function NewInvoice() {
     } catch (err) {
       setError(err.message);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -460,9 +492,15 @@ export default function NewInvoice() {
       setError(validationError);
       throw new Error(validationError);
     }
+    if (savingRef.current) throw new Error("A save is already in progress. Wait a moment, then try again.");
     setError("");
-    await performSave(mode);
-    markClean();
+    savingRef.current = true;
+    try {
+      await performSave(mode);
+      markClean();
+    } finally {
+      savingRef.current = false;
+    }
   };
 
   const symbol = currencySymbol(currency);
@@ -767,7 +805,7 @@ export default function NewInvoice() {
           }}
         />
       )}
-      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} />
+      <UnsavedChangesGuard isDirty={isDirty} onSaveAndLeave={handleSaveAndLeave} suppressRef={suppressRef} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import DocumentBrandHeader from "./DocumentBrandHeader";
 import DocumentFooter from "./DocumentFooter";
 import { GstBreakdown, GstNote } from "./GstBreakdown";
-import { formatMoney, formatQty, formatDate, formatAddressLines } from "../lib/format";
+import { formatMoney, formatQty, formatDate, formatAddressLines, splitLineDescription } from "../lib/format";
 import { currencySymbol } from "../lib/currencies";
 
 // The actual A4 invoice document — shared by the authenticated Invoice
@@ -133,22 +133,22 @@ export default function FullInvoice({ invoice }) {
                   );
                 }
                 itemNumber += 1;
-                // A description can be more than one line: the item's own
-                // name on top, further detail (part numbers, a bundle's
-                // contents) below it, the same shape Zoho prints, with the
-                // first line carrying the weight. Rendered as real block
-                // elements rather than relying on a literal "\n" and
-                // white-space CSS, so it reads the same on screen, in the
-                // printed PDF, and in the emailed copy (2026-09-21).
-                const descLines = String(line.description || "").split("\n").filter(Boolean);
+                // The item's own name is the bold heading and the description
+                // sits below it as plain text, however many lines it has
+                // (2026-10-07). A line saved before item names were stored
+                // falls back to bolding the first description line, see
+                // splitLineDescription. Rendered as real block elements
+                // rather than relying on a literal newline and white-space
+                // CSS, so it reads the same on screen, in the printed PDF,
+                // and in the emailed copy.
+                const { heading, detail } = splitLineDescription(line);
                 return (
                   <tr key={line.id}>
                     <td>{itemNumber}</td>
                     <td>
-                      {descLines.map((part, idx) => (
-                        <div key={idx} className={idx === 0 ? "doc-line-desc-title" : "doc-line-desc-detail"}>
-                          {part}
-                        </div>
+                      {heading && <div className="doc-line-desc-title">{heading}</div>}
+                      {detail.map((part, idx) => (
+                        <div key={idx} className="doc-line-desc-detail">{part}</div>
                       ))}
                     </td>
                     {showHsn && <td>{line.hsn_sac_code || ""}</td>}

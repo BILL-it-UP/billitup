@@ -897,6 +897,24 @@ ensureColumn("invoice_line_items", "line_type", "line_type TEXT DEFAULT 'item'")
 ensureColumn("quote_line_items", "line_type", "line_type TEXT DEFAULT 'item'");
 ensureColumn("credit_note_line_items", "line_type", "line_type TEXT DEFAULT 'item'");
 
+// The item's own name, saved on each line as its printed heading (2026-10-07).
+// Until now only description was stored, and the printed document treated
+// the first line of the description as the heading, so a multi line
+// description (a list of design numbers, say) had its first line bolded as
+// if it were the item name. With the name stored separately, the heading is
+// the real item name and the description prints below it as plain text.
+// Older lines have no item_name and keep printing the old way.
+ensureColumn("invoice_line_items", "item_name", "item_name TEXT");
+ensureColumn("quote_line_items", "item_name", "item_name TEXT");
+ensureColumn("credit_note_line_items", "item_name", "item_name TEXT");
+
+// A one time id the New Invoice form generates when it opens, sent with the
+// create call. If the same id arrives twice (a double click, or a retry after
+// a slow network) the server hands back the invoice it already made instead
+// of creating a second one with the next number (2026-10-07).
+ensureColumn("invoices", "client_request_id", "client_request_id TEXT");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_client_request ON invoices(business_id, client_request_id) WHERE client_request_id IS NOT NULL");
+
 // Backfill: any invoice created before public_token existed (or before this
 // migration ran) won't have one yet — give every such row a token so the
 // "Copy shareable link" button always has something to share, not just

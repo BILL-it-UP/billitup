@@ -25,12 +25,24 @@ export function useDirtyGuard(getSnapshot, ready) {
 
   const isDirty = ready && baselineRef.current !== null && JSON.stringify(getSnapshot()) !== baselineRef.current;
 
+  // Set the instant a save succeeds and cleared again as soon as the form
+  // changes after that. This is what actually stops the "Leave this page?"
+  // prompt from appearing right after a successful first save (2026-10-07):
+  // markClean() moves the baseline, but isDirty above is only recomputed on
+  // the NEXT render, and the router's blocker still holds the isDirty value
+  // from the previous render when the post-save navigate() fires a moment
+  // later, so it blocked the very navigation the save was making. The blocker
+  // now also reads this ref, which is updated immediately.
+  const suppressRef = useRef(false);
+  if (isDirty) suppressRef.current = false;
+
   // Called right after a successful save, before navigating anywhere, so the
   // form is no longer considered dirty by the time any post-save navigate()
   // call runs (otherwise that navigate would immediately trip its own guard).
   const markClean = () => {
     baselineRef.current = JSON.stringify(getSnapshot());
+    suppressRef.current = true;
   };
 
-  return { isDirty, markClean };
+  return { isDirty, markClean, suppressRef };
 }
